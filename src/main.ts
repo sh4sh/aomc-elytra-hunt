@@ -17,7 +17,7 @@ const ISSUES_URL = 'https://github.com/sh4sh/aomc-elytra-hunt/issues';
  * Address of the relay that files looted-city submissions as GitHub issues (see relay/README.md).
  * While empty, the Submit button is hidden and players are pointed at GitHub instead.
  */
-const SUBMIT_URL = '';
+const SUBMIT_URL = 'https://aomc-looted-relay.sh4sh.workers.dev';
 const DEFAULT_FILTERS: Filters = { minDist: 10000, maxDist: 50000, diagonalDeg: 45, quadrants: ['NE', 'NW', 'SE', 'SW'] };
 const STORE = 'end-cities:state';
 
