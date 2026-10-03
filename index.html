@@ -206,7 +206,7 @@
         </p>
         <h3>2. Get the waypoints into your map mod</h3>
         <p>
-          With a batch open, choose <em>Xaero's Minimap</em> to download a waypoint file, or
+          With a batch open, choose <em>Xaero's Minimap</em> to copy waypoints to paste into its waypoint file, or
           <em>JourneyMap / Other</em> to copy chat lines that become clickable waypoints.
         </p>
         <h3>3. Tick cities off as you loot them</h3>
@@ -246,13 +246,19 @@
 
         <div id="xaeroPanel" class="panel">
           <div class="row">
-            <button id="download" type="button">Download waypoints</button>
-            <button id="copy" type="button">Copy lines</button>
+            <button id="copy" type="button" class="primary">Copy waypoints</button>
           </div>
+          <ol class="steps">
+            <li>Press <em>Copy waypoints</em>. Looted cities are left out.</li>
+            <li>Close Minecraft.</li>
+            <li>
+              Open the waypoint file in <code>.minecraft/xaero/minimap/&lt;your server&gt;/dim%1/</code> and paste at
+              the end of it.
+            </li>
+          </ol>
           <p class="hint">
-            Looted cities are left out. Close Minecraft, then paste the lines at the end of the waypoint file in
-            <code>.minecraft/xaero/minimap/&lt;your server&gt;/dim%1/</code> (keep the downloaded file as-is if that
-            folder is empty).
+            No waypoint file in that folder yet?
+            <button id="download" type="button" class="textlink">Download one</button> and put it there instead.
           </p>
         </div>
 

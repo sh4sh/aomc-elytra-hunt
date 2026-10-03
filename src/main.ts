@@ -447,13 +447,10 @@ function renderDetail(): void {
 
 /** Easter egg: sketch the constellation this batch most resembles over its cities. */
 function renderStars(batch: City[], batchColor: string): void {
-  // Lines are all the same sliver shape, so the comparison is only offered for clusters.
-  const clusters = state.batchShape === 'cluster';
-  $('starBtn').hidden = !clusters;
   // Matching against a few hundred figures takes a moment, so reuse the answer while the batch is unchanged.
   const key = batch.map(cityId).join(';');
-  if (showStars && clusters && starCache?.key !== key) starCache = { key, match: lookalike(batch, skyFigures ?? []) };
-  const match = showStars && clusters ? starCache!.match : null;
+  if (showStars && starCache?.key !== key) starCache = { key, match: lookalike(batch, skyFigures ?? []) };
+  const match = showStars ? starCache!.match : null;
   $('stars').hidden = !match;
   if (!match) return;
   const source = document.createElement('a');

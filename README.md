@@ -17,9 +17,10 @@ The same steps are in the app under **How to use**.
    Pick one there, select any city on the map, or type your position into the
    box on the map and press **Nearest batch**. **Go to batch #** jumps to a batch by number.
 2. **Get the waypoints into your map mod.** With a batch open, choose one:
-   - **Xaero's Minimap:** press **Download waypoints**, close Minecraft, and
-     paste the lines at the end of the waypoint file in
+   - **Xaero's Minimap:** press **Copy waypoints**, close Minecraft, and paste
+     at the end of the waypoint file in
      `.minecraft/xaero/minimap/<your server>/dim%1/`. Back that file up first.
+     If the folder has no waypoint file yet, use **Download one** instead.
    - **JourneyMap / Other:** enter your username, press **Copy all chat lines**,
      and paste them into chat one at a time while in the End. They are whispers
      to yourself, and JourneyMap makes each one clickable. If you also have

@@ -44,6 +44,8 @@ code { font-size: 12px; background: var(--panel-2); padding: 1px 4px; border-rad
 .stats { font-variant-numeric: tabular-nums; }
 .empty { display: flex; flex-direction: column; gap: 10px; }
 .empty[hidden] { display: none; }
+.steps { list-style: decimal; padding-left: 20px; gap: 4px; color: var(--muted); font-size: 12px; }
+.steps em { font-style: normal; color: var(--text); }
 .empty h3 { margin: 6px 0 0; font-size: 13px; }
 .empty p, .empty li { color: var(--muted); font-size: 13px; }
 .empty em { font-style: normal; color: var(--text); }
@@ -51,8 +53,8 @@ code { font-size: 12px; background: var(--panel-2); padding: 1px 4px; border-rad
 #helpBack { align-self: flex-start; }
 .warning { border: 1px solid #e0a84a; border-radius: 6px; padding: 8px 10px; font-size: 13px; background: rgba(224, 168, 74, 0.08); }
 .warning[hidden] { display: none; }
-.jump { border: 0; background: none; padding: 0; font: inherit; color: var(--accent); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
-.jump:hover { color: var(--text); }
+.jump, .textlink { border: 0; background: none; padding: 0; font: inherit; color: var(--accent); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.jump:hover, .textlink:hover { color: var(--text); }
 .flash { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
 header button { margin-top: 8px; padding: 3px 10px; font-size: 12px; }
 
