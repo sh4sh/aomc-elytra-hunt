@@ -24,15 +24,6 @@
           <label>To <input id="maxDist" type="number" min="1000" step="500" required /></label>
         </div>
         <p class="hint">Blocks from 0,0 along the longer axis.</p>
-        <label>
-          <span>Stay within <output id="diagOut"></output> of
-            <select id="angleFrom" aria-label="Measure the angle from">
-              <option value="diagonal">a diagonal</option>
-              <option value="axis">an axis</option>
-            </select>
-          </span>
-          <input id="diag" type="range" min="5" max="45" step="5" />
-        </label>
         <fieldset id="quadrants">
           <legend>Quadrants</legend>
           <label><input type="checkbox" value="NW" /> NW <small>−x −z</small></label>
@@ -65,6 +56,16 @@
         <p id="exploredNote" class="hint aomc-only"></p>
         <details id="advanced">
           <summary>Advanced</summary>
+          <label>
+            <span>Stay within <output id="diagOut"></output> of
+              <select id="angleFrom" aria-label="Measure the angle from">
+                <option value="diagonal">a diagonal</option>
+                <option value="axis">an axis</option>
+              </select>
+            </span>
+            <input id="diag" type="range" min="5" max="45" step="5" />
+          </label>
+          <p class="hint">Narrows the search to directions near the diagonals or near the axes. 45° searches every direction.</p>
           <label>World seed <input id="seed" inputmode="numeric" autocomplete="off" spellcheck="false" /></label>
           <p class="hint">
             Set to the About Oliver server's seed. With any other seed, press <em>Find cities</em> to search; searches

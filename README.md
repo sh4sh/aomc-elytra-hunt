@@ -41,13 +41,15 @@ The same steps are in the app under **How to use**.
 considered and how they are grouped:
 
 - **From / To:** how far from 0,0 to look, measured along the longer axis.
-- **Angle and quadrants:** stay near the diagonals or near the axes, or search every direction.
+- **Quadrants:** which quarters of the map to search.
 - **Cities per batch:** 27 fills one shulker box.
 - **Batch shape:** compact clusters, or lines heading outward. For lines you can also set
   how far a line may stray to either side of straight.
 - **Longest flight between cities:** no hop inside a batch is longer than this.
   Cities that can't be reached in a full batch are left unbatched.
 - **Leave out cities already on the webmap.**
+- **Advanced → Angle:** stay near the diagonals or near the axes, or search
+  every direction (the default).
 - **Advanced → World seed:** for using the app with another world. Everything
   specific to the About Oliver server (the webmap filter and shading, the shared
   looted list and submitting to it) is hidden for other seeds.
