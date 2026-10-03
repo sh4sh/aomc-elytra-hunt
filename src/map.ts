@@ -43,8 +43,8 @@ export class EndMap {
   onPick: (c: MapCity) => void = () => {};
   /** Called with the zoom level, 0 (furthest out) to 1 (closest in), whenever it changes. */
   onZoom: (level: number) => void = () => {};
-  /** Right-click on a city. */
-  onMenu: (c: MapCity, px: number, py: number) => void = () => {};
+  /** Right-click (or press and hold) on the map: the city under the pointer, if any, and the block position. */
+  onMenu: (c: MapCity | null, px: number, py: number, pos: { x: number; z: number }) => void = () => {};
   /** Block position under the cursor, or null when it leaves the map. */
   onCursor: (pos: { x: number; z: number } | null) => void = () => {};
 
@@ -102,6 +102,14 @@ export class EndMap {
 
   private sx = (x: number) => (x - this.cx) * this.scale + this.w / 2;
   private sy = (z: number) => (z - this.cz) * this.scale + this.h / 2;
+
+  /** Block coordinates under a point on the canvas. */
+  private blockAt(px: number, py: number): { x: number; z: number } {
+    return {
+      x: Math.round((px - this.w / 2) / this.scale + this.cx),
+      z: Math.round((py - this.h / 2) / this.scale + this.cz),
+    };
+  }
 
   private cityAt(px: number, py: number): MapCity | null {
     if (!this.scene) return null;
@@ -177,11 +185,9 @@ export class EndMap {
       if (e.pointerType !== 'mouse') {
         const { offsetX, offsetY } = e;
         hold = setTimeout(() => {
-          const hit = this.cityAt(offsetX, offsetY);
-          if (!hit) return;
-          // The finger lifting afterwards must not also count as a tap on the city.
+          // The finger lifting afterwards must not also count as a tap on a city.
           drag = null;
-          this.onMenu(hit, offsetX, offsetY);
+          this.onMenu(this.cityAt(offsetX, offsetY), offsetX, offsetY, this.blockAt(offsetX, offsetY));
         }, 550);
       }
       drag = { x: e.offsetX, y: e.offsetY, moved: false };
@@ -229,8 +235,7 @@ export class EndMap {
     });
     el.addEventListener('contextmenu', (e) => {
       e.preventDefault();
-      const hit = this.cityAt(e.offsetX, e.offsetY);
-      if (hit) this.onMenu(hit, e.offsetX, e.offsetY);
+      this.onMenu(this.cityAt(e.offsetX, e.offsetY), e.offsetX, e.offsetY, this.blockAt(e.offsetX, e.offsetY));
     });
     el.addEventListener('pointerleave', () => {
       this.onHover(null, 0, 0);

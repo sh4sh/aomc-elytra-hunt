@@ -1254,9 +1254,9 @@ function rebuildKeeping(id: string | null): void {
   render();
 }
 
-map.onMenu = (c, px, py) => {
+/** The right-click choices for a city: looted marks and batch membership. */
+function addCityItems(c: MapCity, items: [string, () => void][]): void {
   const id = cityId(c.city);
-  const items: [string, () => void][] = [];
   // After a change the batches are rebuilt; keep the same one open afterwards.
   const openCustom = selected !== null && isCustom(selected) ? selected - generatedCount : -1;
   const keep = selected !== null && openCustom < 0 && batches[selected].length ? cityId(batches[selected][0]) : null;
@@ -1329,10 +1329,23 @@ map.onMenu = (c, px, py) => {
       rebuildKeeping(keep === id ? null : keep);
     }]);
   }
+}
+
+map.onMenu = (c, px, py, pos) => {
+  const items: [string, () => void][] = [];
+  if (c) addCityItems(c, items);
+  // On a city, "here" is the city itself rather than the exact pixel that was clicked.
+  const here = c ? { x: c.city.x, z: c.city.z } : pos;
+  items.push(['Set my position here', () => {
+    you = here;
+    locateInput.value = xzText(here);
+    locateNote.textContent = '';
+    renderMap();
+  }]);
 
   const title = document.createElement('div');
   title.className = 'menu-title';
-  title.textContent = `${c.batch >= 0 ? waypointName(c.batch, c.order) + ' · ' : ''}${xzText(c.city)}`;
+  title.textContent = c ? `${c.batch >= 0 ? waypointName(c.batch, c.order) + ' · ' : ''}${xzText(c.city)}` : xzText(pos);
   menu.replaceChildren(
     title,
     ...items.map(([label, run]) => {
