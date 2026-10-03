@@ -199,3 +199,32 @@ describe('shared looted list', async () => {
     expect(tracker.has(shared)).toBe(true);
   });
 });
+
+describe('looted submission relay', async () => {
+  const { parseSubmission, issueFor, MAX_CITIES } = await import('../relay/src/validate');
+
+  it('accepts coordinates and a username, dropping duplicates', () => {
+    const r = parseSubmission({ name: 'Steve_01', cities: ['10264,3864', '-500,9000', '10264,3864'] });
+    expect(r).toEqual({ ok: true, value: { name: 'Steve_01', cities: ['10264,3864', '-500,9000'] } });
+  });
+
+  it('refuses anything that is not plain coordinates', () => {
+    for (const cities of [['1,2; drop'], ['[link](http://x)'], ['1,2,3'], [12], [], 'nope']) {
+      expect(parseSubmission({ name: 'x', cities }).ok).toBe(false);
+    }
+    expect(parseSubmission({ cities: Array.from({ length: MAX_CITIES + 1 }, (_, i) => `${i},0`) }).ok).toBe(false);
+  });
+
+  it('strips a name down to username characters, so it cannot carry markup or mentions', () => {
+    const r = parseSubmission({ name: '@everyone **hi** <script>', cities: ['1,2'] });
+    expect(r.ok && r.value.name).toBe('everyonehiscript');
+    expect(parseSubmission({ cities: ['1,2'] })).toMatchObject({ value: { name: 'anonymous' } });
+  });
+
+  it('writes an issue the merge script can read back', () => {
+    const { title, body } = issueFor({ name: 'Steve_01', cities: ['10264,3864', '-500,9000'] });
+    expect(title).toBe('Looted cities from Steve_01 (2)');
+    const rows = body.split('\n').filter((l) => /^\s*-?\d+\s*,\s*-?\d+/.test(l));
+    expect(rows).toEqual(['10264,3864', '-500,9000']);
+  });
+});

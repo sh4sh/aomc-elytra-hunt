@@ -1,0 +1,9 @@
+name = "aomc-looted-relay"
+main = "src/index.ts"
+compatibility_date = "2026-01-01"
+
+[vars]
+REPO = "sh4sh/aomc-elytra-hunt"
+ALLOWED_ORIGIN = "https://sh4sh.github.io"
+
+# GITHUB_TOKEN is a secret: set it with `npx wrangler secret put GITHUB_TOKEN`.
