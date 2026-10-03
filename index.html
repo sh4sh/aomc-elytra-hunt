@@ -54,9 +54,9 @@
         <div id="lineDeviationBox" class="panel" hidden>
           <label>Stray from a straight line, up to <input id="lineDeviation" type="number" min="0" step="250" /></label>
           <p class="hint">
-            In blocks, to either side of the line from 0,0 through the batch's first city. The default is 0, which
-            means no limit. Tight values leave most cities unbatched: ships are sparse, so try 2,000 or more, or
-            smaller batches. Needs a longest flight to be set.
+            In blocks, to either side of the line from 0,0 through the batch's first city. The default is 1,000; 0
+            means no limit. Tight values leave most cities unbatched: ships are sparse, so if you get few batches, try
+            2,000 or more, or smaller batches. Needs a longest flight to be set.
           </p>
         </div>
         <label>Longest flight between cities <input id="maxHop" type="number" min="0" step="250" /></label>

@@ -18,6 +18,8 @@ const ISSUES_URL = 'https://github.com/sh4sh/aomc-elytra-hunt/issues';
  * While empty, the Submit button is hidden and players are pointed at GitHub instead.
  */
 const SUBMIT_URL = 'https://aomc-looted-relay.sh4sh.workers.dev';
+/** How far a line batch may stray to either side of straight, in blocks, unless the player changes it. */
+const DEFAULT_LINE_DEVIATION = 1000;
 const DEFAULT_FILTERS: Filters = { minDist: 10000, maxDist: 50000, diagonalDeg: 45, quadrants: ['NE', 'NW', 'SE', 'SW'] };
 const STORE = 'end-cities:state';
 
@@ -56,7 +58,7 @@ function load(): Saved {
   try {
     const s = JSON.parse(localStorage.getItem(STORE) ?? 'null');
     if (s?.seed && s.filters) {
-      const saved: Saved = { found: [], imported: [], skipMapped: true, shipsOnly: true, batchSize: BATCH_SIZE, batchShape: 'cluster', maxHop: DEFAULT_MAX_HOP, lineDeviation: 0, excluded: [], moved: {}, custom: [], chatName: '', mapMod: 'xaero', ...s };
+      const saved: Saved = { found: [], imported: [], skipMapped: true, shipsOnly: true, batchSize: BATCH_SIZE, batchShape: 'cluster', maxHop: DEFAULT_MAX_HOP, lineDeviation: DEFAULT_LINE_DEVIATION, excluded: [], moved: {}, custom: [], chatName: '', mapMod: 'xaero', ...s };
       // Fixed since the setting for it was removed.
       saved.shipsOnly = true;
       // Results saved before ships were tracked have no ship flag: search again.
@@ -66,7 +68,7 @@ function load(): Saved {
   } catch {
     // Fall through to defaults.
   }
-  return { seed: DEFAULT_SEED, filters: DEFAULT_FILTERS, found: [], imported: [], skipMapped: true, shipsOnly: true, batchSize: BATCH_SIZE, batchShape: 'cluster', maxHop: DEFAULT_MAX_HOP, lineDeviation: 0, excluded: [], moved: {}, custom: [], chatName: '', mapMod: 'xaero' };
+  return { seed: DEFAULT_SEED, filters: DEFAULT_FILTERS, found: [], imported: [], skipMapped: true, shipsOnly: true, batchSize: BATCH_SIZE, batchShape: 'cluster', maxHop: DEFAULT_MAX_HOP, lineDeviation: DEFAULT_LINE_DEVIATION, excluded: [], moved: {}, custom: [], chatName: '', mapMod: 'xaero' };
 }
 
 const state = load();
