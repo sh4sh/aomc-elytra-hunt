@@ -30,12 +30,10 @@ an issue for a maintainer to review and merge.
 ## Getting notified
 
 Issues filed by the relay are created with your token, so GitHub counts them as
-your own activity and does not email you about them by default. Either:
-
-- turn on **Include your own updates** under GitHub → Settings → Notifications →
-  Email, or
-- create the token from a second GitHub account that has been invited to the
-  repository, so the issues come from that account.
+your own activity and does not notify you about them. The workflow in
+`.github/workflows/notify-submission.yml` gets round that: when an issue with
+the `map-submission` label is opened, the Actions bot comments on it and
+mentions the repository owner, which does send a notification.
 
 ## Handling a submission
 

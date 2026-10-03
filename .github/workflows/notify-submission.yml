@@ -1,0 +1,26 @@
+name: Notify about looted-city submissions
+
+# Submissions from the app are filed by the relay using the repository owner's
+# token, and GitHub does not notify people about their own issues. A comment
+# from the Actions bot that mentions the owner does notify them.
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  issues: write
+
+jobs:
+  notify:
+    if: contains(github.event.issue.labels.*.name, 'map-submission')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mention the owner
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.issue.number }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          gh issue comment "$NUMBER" --body "@$OWNER a player submitted looted cities. To accept them, run \`npm run looted -- --issue $NUMBER\`, then commit and push, and close this issue."
