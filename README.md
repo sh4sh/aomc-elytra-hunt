@@ -1,4 +1,6 @@
-# End City Runs
+# AOMC End Runs
+
+Find Elytra on the About Oliver Minecraft Server.
 
 **Use it here: https://sh4sh.github.io/aomc-elytra-hunt/**
 
@@ -9,21 +11,55 @@ load into Xaero's Minimap as waypoints.
 
 ## Using it
 
-1. Set how far out to search and how close to the diagonals to stay. Cities
-   that are already on the community webmap are left out.
-2. Pick a batch from the list, or type your position and press **Nearest batch**.
-3. Press **Download waypoints**, close Minecraft, and paste the lines at the end
-   of the waypoint file in `.minecraft/xaero/minimap/<your server>/dim%1/`.
-   Back that file up first.
-4. Tick cities off as you loot them. Right-click a city on the map to mark it,
-   or to add it to the batch you have open.
+The same steps are in the app under **How to use**.
 
-Progress is saved in your browser. **Share progress** exports it as a file that
-others can import.
+1. **Pick a batch.** Batches are listed on the left, numbered outward from 0,0.
+   Click one, click any city on the map, or type your position above the map
+   and press **Nearest batch**. **Go to batch #** jumps to a batch by number.
+2. **Get the waypoints into your map mod.** With a batch open, choose one:
+   - **Xaero's Minimap:** press **Download waypoints**, close Minecraft, and
+     paste the lines at the end of the waypoint file in
+     `.minecraft/xaero/minimap/<your server>/dim%1/`. Back that file up first.
+   - **JourneyMap / Other:** enter your username, press **Copy all chat lines**,
+     and paste them into chat one at a time while in the End. They are whispers
+     to yourself, and JourneyMap makes each one clickable. If you also have
+     Xaero's waypoints for the server, JourneyMap's Waypoint Manager can import
+     them with **Import External**. Other map mods that read coordinates from
+     chat may pick the lines up too; that is untested.
+3. **Tick cities off as you loot them**, with the checkboxes in the batch or by
+   right-clicking a city on the map. Looted cities are left out of exports.
+4. **Share what you looted.** Your ticks are saved in your browser only. To mark
+   them for everyone, open **Share progress** and send them in (or, until the
+   submit button is switched on, press **Export looted** and attach the file to
+   a [GitHub issue](https://github.com/sh4sh/aomc-elytra-hunt/issues)). Once
+   accepted onto the shared list, those cities show as looted for all players.
+   You can also send the file to a friend, who can **Import looted**.
 
-On the map, filled dots are cities in a batch, an × is a looted city, a small
-faint diamond is a city that is not in any batch, and green shading is terrain
-already on the webmap.
+### Changing the search
+
+**Search settings** (fold it open on the left) controls which cities are
+considered and how they are grouped:
+
+- **From / To:** how far from 0,0 to look, measured along the longer axis.
+- **Angle and quadrants:** stay near the diagonals or near the axes, or search every direction.
+- **Cities per batch:** 27 fills one shulker box.
+- **Batch shape:** compact clusters, or lines heading outward.
+- **Longest flight between cities:** no hop inside a batch is longer than this.
+  Cities that can't be reached in a full batch are left unbatched.
+- **Only cities with a ship** and **leave out cities already on the webmap**.
+
+### On the map
+
+- Filled dots are cities in a batch, coloured by batch.
+- An × is a looted city.
+- A small faint diamond is a city with a ship that is not in any batch.
+  Right-click it to add it to the batch you have open.
+- Green shading is terrain already on the community webmap.
+- Drag to pan; scroll or use the slider to zoom. Drag the dividers beside the
+  map to resize the panels.
+
+**Re-batch without looted** regroups the remaining cities into fresh batches
+once some have been looted.
 
 ## Things to know
 
@@ -50,7 +86,15 @@ Data files, regenerate when needed:
 npm run precompute # public/cities.json: every End City for the seed, out to 100,000 blocks
 npm run explored   # public/explored.json: areas already on the webmap
 npm run sky        # public/skycultures/: sky cultures for the constellation easter egg
+npm run looted -- file.csv   # add a player's exported looted cities to public/looted.json
 ```
+
+`public/looted.json` is the shared looted list every visitor gets. When a player
+sends an exported file, run `npm run looted` on it, then commit and push.
+
+`relay/` is a small Cloudflare Worker that lets players submit their looted
+cities from the app without a GitHub account; it files each submission as an
+issue. Setup and handling are in [relay/README.md](relay/README.md).
 
 It is a static site: TypeScript, no framework, no backend. Pushing to `main`
 builds and publishes it to GitHub Pages.

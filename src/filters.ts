@@ -16,7 +16,11 @@ export function diagonalOffset(x: number, z: number): number {
 export function passes(x: number, z: number, f: Filters): boolean {
   const d = Math.max(Math.abs(x), Math.abs(z));
   if (d < f.minDist || d > f.maxDist) return false;
-  if (f.diagonalDeg < 45 && diagonalOffset(x, z) > f.diagonalDeg) return false;
+  if (f.diagonalDeg < 45) {
+    // Diagonals and axes are 45° apart, so the angle off the nearest axis is what's left of 45.
+    const off = f.angleFrom === 'axis' ? 45 - diagonalOffset(x, z) : diagonalOffset(x, z);
+    if (off > f.diagonalDeg) return false;
+  }
   return f.quadrants.includes(quadrantOf(x, z));
 }
 

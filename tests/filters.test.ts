@@ -18,6 +18,15 @@ describe('filters', () => {
     expect(passes(12000, 2000, { ...all, diagonalDeg: 10 })).toBe(false);
   });
 
+  it('can keep positions near an axis instead', () => {
+    const nearAxis = { ...all, diagonalDeg: 10, angleFrom: 'axis' as const };
+    expect(passes(12000, 1000, nearAxis)).toBe(true);
+    expect(passes(-1000, -12000, nearAxis)).toBe(true);
+    expect(passes(12000, 12000, nearAxis)).toBe(false);
+    // 45 degrees keeps everything, whichever lines it is measured from.
+    expect(passes(12000, 12000, { ...nearAxis, diagonalDeg: 45 })).toBe(true);
+  });
+
   it('treats -z as north', () => {
     expect(quadrantOf(5, -5)).toBe('NE');
     expect(quadrantOf(-5, 5)).toBe('SW');
@@ -143,5 +152,50 @@ describe('sky culture figures', async () => {
     }
     const cities = Array.from({ length: 27 }, (_, i) => ({ x: ((i * 7919) % 500) * 16, z: ((i * 104729) % 400) * 16 }));
     expect(lookalike(cities, all)).not.toBeNull();
+  });
+});
+
+describe('JourneyMap chat lines', async () => {
+  const { chatLine, chatLines, cleanUsername } = await import('../src/journeymap');
+  const a: City = { x: 12040, z: -11832, source: 'seed' };
+  const b: City = { x: -500, z: 9000, source: 'seed' };
+
+  it('writes a location JourneyMap can pick out of chat', () => {
+    expect(chatLine(a, 'EC 3-07')).toBe('[x:12040, y:70, z:-11832, name:EC 3-07]');
+  });
+
+  it('keeps commas, quotes and brackets out of the name, since they would break the format', () => {
+    expect(chatLine(a, 'my "base", [old]')).not.toMatch(/name:.*[,"\[]/);
+  });
+
+  it('becomes a whisper when a username is given', () => {
+    expect(chatLine(a, 'EC 3-07', 'Steve_01')).toBe('/msg Steve_01 [x:12040, y:70, z:-11832, name:EC 3-07]');
+    expect(chatLines([a, b], 2, () => false, 'Steve_01')[1]).toBe('/msg Steve_01 [x:-500, y:70, z:9000, name:EC 3-02]');
+  });
+
+  it('drops characters a username cannot contain', () => {
+    expect(cleanUsername(' Steve 01; /op me')).toBe('Steve01opme');
+  });
+
+  it('leaves out cities to skip but keeps the route numbering', () => {
+    expect(chatLines([a, b], 2, (c) => c === a)).toEqual(['[x:-500, y:70, z:9000, name:EC 3-02]']);
+  });
+});
+
+describe('shared looted list', async () => {
+  const { Tracker } = await import('../src/tracker');
+
+  it('counts as looted for everyone, on top of a visitor\'s own marks', () => {
+    const tracker = new Tracker('test-seed');
+    const shared = { x: 10264, z: 3864 };
+    const other = { x: -500, z: 9000 };
+    expect(tracker.has(shared)).toBe(false);
+    tracker.setShared(['10264,3864']);
+    expect(tracker.has(shared)).toBe(true);
+    expect(tracker.isShared(shared)).toBe(true);
+    expect(tracker.has(other)).toBe(false);
+    // Unticking locally does not remove a city from the shared list.
+    tracker.set(shared, false);
+    expect(tracker.has(shared)).toBe(true);
   });
 });

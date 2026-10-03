@@ -1,8 +1,13 @@
 import { cityId } from './types';
 
-/** Which cities have been looted, kept in localStorage per world seed. */
+/**
+ * Which cities have been looted. A visitor's own marks are kept in localStorage
+ * per world seed. On top of those sits the shared list published with the
+ * site, which counts as looted for everyone and cannot be unticked locally.
+ */
 export class Tracker {
   private visited = new Map<string, string>();
+  private shared = new Set<string>();
   private readonly key: string;
 
   constructor(seed: string) {
@@ -24,7 +29,25 @@ export class Tracker {
   }
 
   has(c: { x: number; z: number }): boolean {
-    return this.visited.has(cityId(c));
+    return this.visited.has(cityId(c)) || this.shared.has(cityId(c));
+  }
+
+  /** Looted according to the shared list, whatever this visitor has marked. */
+  isShared(c: { x: number; z: number }): boolean {
+    return this.shared.has(cityId(c));
+  }
+
+  setShared(ids: string[]): void {
+    this.shared = new Set(ids);
+  }
+
+  /** This visitor's own marks that are not on the shared list yet, as "x,z". */
+  ownNew(): string[] {
+    return [...this.visited.keys()].filter((id) => !this.shared.has(id));
+  }
+
+  get sharedCount(): number {
+    return this.shared.size;
   }
 
   set(c: { x: number; z: number }, visited: boolean): void {

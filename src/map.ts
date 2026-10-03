@@ -23,6 +23,9 @@ export interface MapScene {
 }
 
 const HIT_RADIUS = 9;
+// Pixels per block at the two ends of the zoom range.
+const MIN_SCALE = 0.0005;
+const MAX_SCALE = 2;
 
 /** Pannable, zoomable top-down view of the End. North (-z) is up. */
 export class EndMap {
@@ -36,6 +39,8 @@ export class EndMap {
   private h = 0;
   onHover: (c: MapCity | null, px: number, py: number) => void = () => {};
   onPick: (c: MapCity) => void = () => {};
+  /** Called with the zoom level, 0 (furthest out) to 1 (closest in), whenever it changes. */
+  onZoom: (level: number) => void = () => {};
   /** Right-click on a city. */
   onMenu: (c: MapCity, px: number, py: number) => void = () => {};
   /** Block position under the cursor, or null when it leaves the map. */
@@ -65,8 +70,22 @@ export class EndMap {
     this.cx = (x0 + x1) / 2;
     this.cz = (z0 + z1) / 2;
     const span = Math.max(x1 - x0, z1 - z0, 500);
-    this.scale = (Math.min(this.w, this.h) * 0.8) / span;
+    this.scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, (Math.min(this.w, this.h) * 0.8) / span));
     this.draw();
+    this.onZoom(this.zoom);
+  }
+
+  /** Zoom level from 0 (furthest out) to 1 (closest in). Each step along it multiplies the scale by the same amount. */
+  get zoom(): number {
+    return Math.log(this.scale / MIN_SCALE) / Math.log(MAX_SCALE / MIN_SCALE);
+  }
+
+  /** Zoom about the centre of the view. */
+  setZoom(level: number): void {
+    const t = Math.min(1, Math.max(0, level));
+    this.scale = MIN_SCALE * (MAX_SCALE / MIN_SCALE) ** t;
+    this.draw();
+    this.onZoom(this.zoom);
   }
 
   private resize(): void {
@@ -152,10 +171,11 @@ export class EndMap {
         // Keep the block under the cursor fixed while zooming.
         const wx = (e.offsetX - this.w / 2) / this.scale + this.cx;
         const wz = (e.offsetY - this.h / 2) / this.scale + this.cz;
-        this.scale = Math.min(2, Math.max(0.0005, this.scale * k));
+        this.scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, this.scale * k));
         this.cx = wx - (e.offsetX - this.w / 2) / this.scale;
         this.cz = wz - (e.offsetY - this.h / 2) / this.scale;
         this.draw();
+        this.onZoom(this.zoom);
       },
       { passive: false },
     );

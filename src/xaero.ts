@@ -17,7 +17,7 @@ export const OUTSIDE_COLOR = '#9d94b3';
 export const batchColor = (batchIndex: number): number => USABLE[batchIndex % USABLE.length];
 
 /** End Cities sit on top of the islands; this is a sensible height to aim for when flying in. */
-const WAYPOINT_Y = 70;
+export const WAYPOINT_Y = 70;
 
 const pad = (n: number): string => String(n).padStart(2, '0');
 

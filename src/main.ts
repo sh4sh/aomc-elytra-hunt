@@ -3,6 +3,7 @@ import { Explored } from './explored';
 import { BATCH_SIZE, DEFAULT_MAX_HOP, makeBatches, route, type BatchShape } from './filters';
 import type { FindRequest, FindResponse, FoundCity } from './generation/worker';
 import { chunkbaseUrl, parseCoordinates } from './import';
+import { chatLine, chatLines, cleanUsername } from './journeymap';
 import { EndMap, type MapCity } from './map';
 import { Precomputed } from './precomputed';
 import { loadSkyFigures } from './sky-cultures';
@@ -11,6 +12,12 @@ import { cityId, type City, type Filters, type Quadrant } from './types';
 import { OUTSIDE_COLOR, XAERO_COLORS, batchColor, waypointFile, waypointLines, waypointName } from './xaero';
 
 const DEFAULT_SEED = '856461443495910397';
+const ISSUES_URL = 'https://github.com/sh4sh/aomc-elytra-hunt/issues';
+/**
+ * Address of the relay that files looted-city submissions as GitHub issues (see relay/README.md).
+ * While empty, the Submit button is hidden and players are pointed at GitHub instead.
+ */
+const SUBMIT_URL = '';
 const DEFAULT_FILTERS: Filters = { minDist: 10000, maxDist: 50000, diagonalDeg: 45, quadrants: ['NE', 'NW', 'SE', 'SW'] };
 const STORE = 'end-cities:state';
 
@@ -33,6 +40,10 @@ interface Saved {
   excluded: string[];
   /** Cities moved by hand: city id -> id of a city in the batch it was added to. */
   moved: Record<string, string>;
+  /** Minecraft username to whisper JourneyMap chat lines to, or empty to write them for public chat. */
+  chatName: string;
+  /** Which map mod the export controls are shown for. */
+  mapMod: 'xaero' | 'journeymap';
 }
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -41,7 +52,7 @@ function load(): Saved {
   try {
     const s = JSON.parse(localStorage.getItem(STORE) ?? 'null');
     if (s?.seed && s.filters) {
-      const saved: Saved = { found: [], imported: [], skipMapped: true, shipsOnly: true, batchSize: BATCH_SIZE, batchShape: 'cluster', maxHop: DEFAULT_MAX_HOP, excluded: [], moved: {}, ...s };
+      const saved: Saved = { found: [], imported: [], skipMapped: true, shipsOnly: true, batchSize: BATCH_SIZE, batchShape: 'cluster', maxHop: DEFAULT_MAX_HOP, excluded: [], moved: {}, chatName: '', mapMod: 'xaero', ...s };
       // Results saved before ships were tracked have no ship flag: search again.
       if (saved.found.some((c) => c.length < 3)) saved.found = [];
       return saved;
@@ -49,7 +60,7 @@ function load(): Saved {
   } catch {
     // Fall through to defaults.
   }
-  return { seed: DEFAULT_SEED, filters: DEFAULT_FILTERS, found: [], imported: [], skipMapped: true, shipsOnly: true, batchSize: BATCH_SIZE, batchShape: 'cluster', maxHop: DEFAULT_MAX_HOP, excluded: [], moved: {} };
+  return { seed: DEFAULT_SEED, filters: DEFAULT_FILTERS, found: [], imported: [], skipMapped: true, shipsOnly: true, batchSize: BATCH_SIZE, batchShape: 'cluster', maxHop: DEFAULT_MAX_HOP, excluded: [], moved: {}, chatName: '', mapMod: 'xaero' };
 }
 
 const state = load();
@@ -62,11 +73,13 @@ let explored: Explored | null = null;
 let precomputed: Precomputed | null = null;
 let you: { x: number; z: number } | null = null;
 let showStars = false;
+/** Whether the instructions are showing in place of the open batch. */
+let helpOpen = false;
 /** Figures from the world's sky cultures, fetched the first time the sketch is opened. */
 let skyFigures: Constellation[] | null = null;
 let starCache: { key: string; match: ReturnType<typeof lookalike> } | null = null;
 /** Batches shown per page of the list. */
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 5;
 let page = 0;
 /** The selection the list last jumped to, so paging by hand isn't undone on the next redraw. */
 let pageFollowed: number | null = null;
@@ -185,7 +198,21 @@ function renderMap(): void {
   });
 }
 
+/** One-line description of the current search, shown while the settings are folded away. */
+function renderSettingsSummary(): void {
+  const f = state.filters;
+  $('settingsSummary').textContent = [
+    `${fmt(f.minDist)}–${fmt(f.maxDist)} blocks out`,
+    f.diagonalDeg >= 45 ? 'any angle' : `within ${f.diagonalDeg}° of ${f.angleFrom === 'axis' ? 'an axis' : 'a diagonal'}`,
+    f.quadrants.length === 4 ? 'all quadrants' : f.quadrants.join(' '),
+    `${state.batchSize} per batch`,
+    state.batchShape === 'line' ? 'lines outward' : 'clusters',
+    state.maxHop ? `flights up to ${fmt(state.maxHop)}` : 'any flight length',
+  ].join(' · ');
+}
+
 function renderBatches(): void {
+  renderSettingsSummary();
   const total = batches.reduce((n, b) => n + b.length, 0);
   const done = batches.reduce((n, b) => n + looted(b), 0);
   $('stats').textContent = total
@@ -213,6 +240,7 @@ function renderBatches(): void {
   $('pageText').textContent = `Batches ${first + 1}–${Math.min(first + PAGE_SIZE, batches.length)} of ${batches.length}`;
   $<HTMLButtonElement>('pagePrev').disabled = page === 0;
   $<HTMLButtonElement>('pageNext').disabled = page === pages - 1;
+  $<HTMLInputElement>('gotoBatch').max = String(batches.length);
 
   const list = $('batches');
   list.replaceChildren(
@@ -241,9 +269,14 @@ function renderBatches(): void {
 }
 
 function renderDetail(): void {
-  const has = selected !== null;
-  $('detailEmpty').hidden = has;
-  $('detailBody').hidden = !has;
+  // Help sits over the batch without closing it, so the batch is still there to go back to.
+  const showBatch = selected !== null && !helpOpen;
+  $('detailEmpty').hidden = showBatch;
+  $('detailBody').hidden = !showBatch;
+  const back = $('helpBack');
+  back.hidden = selected === null;
+  if (selected !== null) back.textContent = `← Back to batch ${selected + 1}`;
+  $('help').textContent = selected !== null && helpOpen ? 'Close help' : 'How to use';
   if (selected === null) return;
   const batch = batches[selected];
   const i = selected;
@@ -273,6 +306,11 @@ function renderDetail(): void {
       const box = document.createElement('input');
       box.type = 'checkbox';
       box.checked = tracker.has(c);
+      if (tracker.isShared(c)) {
+        // On the shared list: looted for everyone, so it can't be unticked here.
+        box.disabled = true;
+        label.title += ' · on the shared looted list';
+      }
       box.addEventListener('change', () => {
         tracker.set(c, box.checked);
         render();
@@ -286,7 +324,20 @@ function renderDetail(): void {
       const hop = document.createElement('span');
       hop.className = 'hop';
       hop.textContent = k ? `+${fmt(Math.round(Math.hypot(c.x - batch[k - 1].x, c.z - batch[k - 1].z)))}` : '';
+      const chat = document.createElement('button');
+      chat.type = 'button';
+      chat.className = 'chat';
+      chat.textContent = 'chat';
+      chat.title = 'Copy this city as a JourneyMap chat location';
+      chat.addEventListener('click', async (e) => {
+        // Inside the row's label: don't let the click tick the looted box.
+        e.preventDefault();
+        e.stopPropagation();
+        chat.textContent = (await copyText(chatLine(c, waypointName(i, k), state.chatName))) ? 'copied' : 'failed';
+        setTimeout(() => (chat.textContent = 'chat'), 1500);
+      });
       label.append(box, n, xz, hop);
+      if (state.mapMod === 'journeymap') label.append(chat);
       label.addEventListener('mouseenter', () => setHot(c));
       label.addEventListener('mouseleave', () => setHot(null));
       li.append(label);
@@ -366,6 +417,8 @@ function setHot(c: City | null): void {
 
 function select(i: number | null, zoom = false): void {
   selected = i;
+  // Opening a batch, from the list or the map, puts the help away.
+  if (i !== null) helpOpen = false;
   render();
   if (zoom && i !== null) map.fit(batches[i], state.filters.maxDist);
 }
@@ -377,6 +430,7 @@ const seedInput = $<HTMLInputElement>('seed');
 const minInput = $<HTMLInputElement>('minDist');
 const maxInput = $<HTMLInputElement>('maxDist');
 const diagInput = $<HTMLInputElement>('diag');
+const angleFromSelect = $<HTMLSelectElement>('angleFrom');
 const quadBoxes = [...document.querySelectorAll<HTMLInputElement>('#quadrants input')];
 const findBtn = $<HTMLButtonElement>('find');
 const progress = $<HTMLProgressElement>('progress');
@@ -386,6 +440,7 @@ function fillForm(): void {
   minInput.value = String(state.filters.minDist);
   maxInput.value = String(state.filters.maxDist);
   diagInput.value = String(state.filters.diagonalDeg);
+  angleFromSelect.value = state.filters.angleFrom ?? 'diagonal';
   for (const b of quadBoxes) b.checked = state.filters.quadrants.includes(b.value as Quadrant);
   showDiag();
   $<HTMLAnchorElement>('chunkbase').href = chunkbaseUrl(state.seed);
@@ -393,7 +448,8 @@ function fillForm(): void {
 
 function showDiag(): void {
   const v = Number(diagInput.value);
-  $('diagOut').textContent = v >= 45 ? 'any angle' : `${v}°`;
+  // At 45° every direction is within range of both, so the choice of lines no longer matters.
+  $('diagOut').textContent = v >= 45 ? '45° (every direction)' : `${v}°`;
 }
 diagInput.addEventListener('input', showDiag);
 
@@ -406,6 +462,7 @@ function applyResult(seed: string, filters: Filters, cities: FoundCity[]): void 
     state.excluded = [];
     state.moved = {};
     tracker = new Tracker(seed);
+    tracker.setShared(seed === DEFAULT_SEED ? sharedLooted : []);
   }
   state.seed = seed;
   state.filters = filters;
@@ -417,6 +474,8 @@ function applyResult(seed: string, filters: Filters, cities: FoundCity[]): void 
   showExploredNote();
   render();
   if (refit) map.fit([], filters.maxDist);
+  if (foldWhenDone && cities.length) settings.open = false;
+  foldWhenDone = false;
 }
 
 function endSearch(): void {
@@ -426,6 +485,10 @@ function endSearch(): void {
   progress.hidden = true;
 }
 
+const settings = $<HTMLDetailsElement>('settings');
+/** Set when the search button itself was pressed, so the settings fold away once the results are in. */
+let foldWhenDone = false;
+
 form.addEventListener('submit', (e) => {
   e.preventDefault();
   // While a search is running the button cancels it; the previous results stay as they were.
@@ -433,10 +496,13 @@ form.addEventListener('submit', (e) => {
     if (confirm('Cancel the search? The cities already shown will stay as they are.')) endSearch();
     return;
   }
+  // Changing a control re-runs an instant search with no submitter; only fold for a deliberate press.
+  foldWhenDone = e.submitter !== null;
   const filters: Filters = {
     minDist: Number(minInput.value),
     maxDist: Number(maxInput.value),
     diagonalDeg: Number(diagInput.value),
+    angleFrom: angleFromSelect.value as Filters['angleFrom'],
     quadrants: quadBoxes.filter((b) => b.checked).map((b) => b.value as Quadrant),
   };
   if (filters.maxDist <= filters.minDist) {
@@ -457,7 +523,10 @@ form.addEventListener('submit', (e) => {
     return;
   }
 
-  worker = new Worker(new URL('./generation/worker.ts', import.meta.url), { type: 'module' });
+  // The built worker is a plain script, which every browser can start. Only the dev server serves it as a module.
+  worker = import.meta.env.DEV
+    ? new Worker(new URL('./generation/worker.ts', import.meta.url), { type: 'module' })
+    : new Worker(new URL('./generation/worker.ts', import.meta.url));
   findBtn.textContent = 'Cancel search';
   progress.hidden = false;
   progress.value = 0;
@@ -483,11 +552,19 @@ function formCovered(): boolean {
   const maxDist = Number(maxInput.value);
   return !!precomputed && !worker && precomputed.covers(seedInput.value.trim(), { ...state.filters, maxDist });
 }
-for (const el of [minInput, maxInput, diagInput, ...quadBoxes]) {
+for (const el of [minInput, maxInput, diagInput, angleFromSelect, ...quadBoxes]) {
   el.addEventListener('change', () => {
     if (formCovered() && form.checkValidity()) form.requestSubmit();
   });
 }
+
+const gotoBatch = $<HTMLInputElement>('gotoBatch');
+gotoBatch.addEventListener('change', () => {
+  const n = Math.round(Number(gotoBatch.value));
+  gotoBatch.value = '';
+  // Out-of-range numbers go to the nearest end of the list.
+  if (Number.isFinite(n) && batches.length) select(Math.min(batches.length, Math.max(1, n)) - 1, true);
+});
 
 $('pagePrev').addEventListener('click', () => {
   page--;
@@ -655,16 +732,68 @@ $('download').addEventListener('click', () => {
   if (selected !== null) download(`end-cities-batch-${selected + 1}.txt`, waypointFile(selectedLines()));
 });
 
-$('copy').addEventListener('click', async () => {
-  const btn = $('copy');
+async function copyText(text: string): Promise<boolean> {
   try {
-    await navigator.clipboard.writeText(selectedLines().join('\n') + '\n');
-    btn.textContent = 'Copied';
+    await navigator.clipboard.writeText(text);
+    return true;
   } catch {
-    btn.textContent = 'Copy failed';
+    return false;
   }
-  setTimeout(() => (btn.textContent = 'Copy lines'), 1500);
+}
+
+/** Copy on click, with the button briefly reporting how it went. */
+function copyButton(id: string, text: () => string): void {
+  const btn = $(id);
+  const label = btn.textContent;
+  btn.addEventListener('click', async () => {
+    btn.textContent = (await copyText(text())) ? 'Copied' : 'Copy failed';
+    setTimeout(() => (btn.textContent = label), 1500);
+  });
+}
+
+copyButton('copy', () => selectedLines().join('\n') + '\n');
+copyButton('copyChat', () =>
+  selected === null ? '' : chatLines(batches[selected], selected, (c) => tracker.has(c), state.chatName).join('\n') + '\n',
+);
+
+const modRadios = [...document.querySelectorAll<HTMLInputElement>('input[name="mapMod"]')];
+function showMapMod(): void {
+  for (const r of modRadios) {
+    r.checked = r.value === state.mapMod;
+    // A class, not the CSS :has() selector, so the highlight also works in browsers from before 2023.
+    r.parentElement!.classList.toggle('on', r.checked);
+  }
+  $('xaeroPanel').hidden = state.mapMod !== 'xaero';
+  $('journeymapPanel').hidden = state.mapMod !== 'journeymap';
+}
+for (const r of modRadios) {
+  r.addEventListener('change', () => {
+    state.mapMod = r.value as Saved['mapMod'];
+    save();
+    showMapMod();
+    renderDetail();
+  });
+}
+showMapMod();
+
+const chatNameInput = $<HTMLInputElement>('chatName');
+function showChatHint(): void {
+  const example = chatLine({ x: 12040, z: -11832, source: 'seed' }, 'EC 1-01', state.chatName);
+  $('chatHint').replaceChildren(
+    state.chatName
+      ? 'Lines are whispers to you, so only you see them: '
+      : 'Without a username the lines go to public chat, where everyone sees them: ',
+    Object.assign(document.createElement('code'), { textContent: example }),
+  );
+}
+chatNameInput.value = state.chatName;
+chatNameInput.addEventListener('input', () => {
+  state.chatName = cleanUsername(chatNameInput.value);
+  if (chatNameInput.value !== state.chatName) chatNameInput.value = state.chatName;
+  save();
+  showChatHint();
 });
+showChatHint();
 
 function markAll(v: boolean): void {
   if (selected === null) return;
@@ -689,6 +818,66 @@ $('visitedReset').addEventListener('click', () => {
   selected = null;
   rebuild();
   render();
+});
+
+function showSharedNote(): void {
+  $('sharedNote').textContent = tracker.sharedCount
+    ? `${fmt(tracker.sharedCount)} cities are on the shared list and show as looted for everyone.`
+    : 'The shared list is empty so far.';
+}
+showSharedNote();
+
+// ---------- submit looted ----------
+
+const submitName = $<HTMLInputElement>('submitName');
+const submitBtn = $<HTMLButtonElement>('submitLooted');
+const submitNote = $('submitNote');
+$('submitBox').hidden = !SUBMIT_URL;
+$('submitFallback').hidden = !!SUBMIT_URL;
+// The JourneyMap username is the same person: start with it.
+submitName.value = state.chatName;
+submitName.addEventListener('input', () => {
+  submitName.value = cleanUsername(submitName.value);
+});
+
+submitBtn.addEventListener('click', async () => {
+  if (state.seed !== DEFAULT_SEED) {
+    submitNote.textContent = 'The shared list is only for the default server seed.';
+    return;
+  }
+  const cities = tracker.ownNew();
+  if (!cities.length) {
+    submitNote.textContent = 'Nothing new to submit: mark some cities as looted first.';
+    return;
+  }
+  if (!confirm(`Send ${fmt(cities.length)} looted ${cities.length === 1 ? 'city' : 'cities'} for review? Once accepted they show as looted for everyone.`)) return;
+  submitBtn.disabled = true;
+  submitNote.textContent = 'Sending…';
+  try {
+    const res = await fetch(SUBMIT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: submitName.value, cities }),
+    });
+    const body = await res.json().catch(() => ({}));
+    submitNote.textContent = res.ok
+      ? `Sent ${fmt(cities.length)} for review. They will show as looted for everyone once accepted.`
+      : (body.error ?? 'That did not go through. Please try again later.');
+  } catch {
+    submitNote.textContent = 'Could not reach the submission service. Please try again later.';
+  } finally {
+    submitBtn.disabled = false;
+  }
+});
+
+$('help').addEventListener('click', () => {
+  helpOpen = selected !== null && !helpOpen;
+  renderDetail();
+  $('detail').scrollIntoView({ block: 'start', behavior: 'smooth' });
+});
+$('helpBack').addEventListener('click', () => {
+  helpOpen = false;
+  renderDetail();
 });
 
 $('visitedExport').addEventListener('click', () => download('end-cities-looted.csv', tracker.toCsv()));
@@ -745,7 +934,7 @@ map.onHover = (c, px, py) => {
   tooltip.style.top = `${py + 14}px`;
 };
 map.onPick = (c) => {
-  if (c.batch >= 0) select(c.batch);
+  if (c.batch >= 0) select(c.batch, true);
 };
 
 // ---------- right-click menu ----------
@@ -773,7 +962,11 @@ map.onMenu = (c, px, py) => {
   const items: [string, () => void][] = [];
   const keep = selected !== null ? cityId(batches[selected][0]) : null;
 
-  if (c.visited) {
+  if (tracker.isShared(c.city)) {
+    items.push(['On the shared looted list. Wrong? Report it on GitHub', () => {
+      window.open(ISSUES_URL, '_blank', 'noopener');
+    }]);
+  } else if (c.visited) {
     items.push(['Mark as not looted', () => {
       if (!confirm(`Mark the city at ${c.city.x}, ${c.city.z} as not looted?`)) return;
       tracker.set(c.city, false);
@@ -831,10 +1024,105 @@ map.onMenu = (c, px, py) => {
   menu.style.top = `${py + 4}px`;
 };
 
+const zoomSlider = $<HTMLInputElement>('zoomSlider');
+map.onZoom = (level) => {
+  zoomSlider.value = String(Math.round(level * 1000));
+};
+zoomSlider.addEventListener('input', () => map.setZoom(Number(zoomSlider.value) / 1000));
+$('zoomOut').addEventListener('click', () => map.setZoom(map.zoom - 0.05));
+$('zoomIn').addEventListener('click', () => map.setZoom(map.zoom + 0.05));
+
 const cursor = $('cursor');
 map.onCursor = (pos) => {
   cursor.textContent = pos ? `x ${fmt(pos.x)}  z ${fmt(pos.z)}` : '';
 };
+
+// ---------- resizable panels ----------
+
+const LAYOUT_STORE = 'end-cities:layout';
+const PANEL_MIN = 220;
+const PANEL_DEFAULT = { left: 300, right: 320 };
+type Side = keyof typeof PANEL_DEFAULT;
+
+const panelWidth: Record<Side, number> = { ...PANEL_DEFAULT };
+try {
+  Object.assign(panelWidth, JSON.parse(localStorage.getItem(LAYOUT_STORE) ?? '{}'));
+} catch {
+  // Keep the defaults.
+}
+
+function setPanel(side: Side, width: number, persist = true): void {
+  // Leave the map at least as much room as a panel's minimum.
+  const max = Math.max(PANEL_MIN, window.innerWidth - panelWidth[side === 'left' ? 'right' : 'left'] - PANEL_MIN);
+  panelWidth[side] = Math.round(Math.min(max, Math.max(PANEL_MIN, width)));
+  document.body.style.setProperty(`--${side}`, `${panelWidth[side]}px`);
+  if (!persist) return;
+  try {
+    localStorage.setItem(LAYOUT_STORE, JSON.stringify(panelWidth));
+  } catch {
+    // The size still applies for this visit.
+  }
+}
+
+for (const handle of document.querySelectorAll<HTMLElement>('.resizer')) {
+  const side = handle.dataset.side as Side;
+  setPanel(side, panelWidth[side], false);
+  const fromPointer = (e: PointerEvent) => (side === 'left' ? e.clientX : window.innerWidth - e.clientX);
+  handle.addEventListener('pointerdown', (e) => {
+    handle.setPointerCapture(e.pointerId);
+    handle.classList.add('dragging');
+    e.preventDefault();
+  });
+  handle.addEventListener('pointermove', (e) => {
+    if (handle.hasPointerCapture(e.pointerId)) setPanel(side, fromPointer(e));
+  });
+  handle.addEventListener('pointerup', () => handle.classList.remove('dragging'));
+  handle.addEventListener('dblclick', () => setPanel(side, PANEL_DEFAULT[side]));
+  handle.addEventListener('keydown', (e) => {
+    // Arrow keys move the divider itself, whichever panel it belongs to.
+    const step = e.key === 'ArrowLeft' ? -16 : e.key === 'ArrowRight' ? 16 : 0;
+    if (!step) return;
+    e.preventDefault();
+    setPanel(side, panelWidth[side] + (side === 'left' ? step : -step));
+  });
+}
+
+// ---------- goose ----------
+
+// The goose emoji only exists on systems from 2022 onwards; elsewhere it shows as an empty box.
+// Those get the nearest bird their system does have: the swan (2018), then the duck (2016).
+const GOOSE_STAND_INS = ['🦢', '🦆'];
+
+/** Whether this system can draw the emoji in colour, as opposed to a blank or a monochrome box. */
+function drawsEmoji(emoji: string): boolean {
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 32;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return true;
+    ctx.textBaseline = 'top';
+    ctx.font = '24px sans-serif';
+    ctx.fillText(emoji, 2, 2);
+    const px = ctx.getImageData(0, 0, 32, 32).data;
+    for (let i = 0; i < px.length; i += 4) {
+      // A missing glyph is drawn in the text colour; a real emoji has coloured pixels.
+      if (px[i + 3] > 0 && (Math.abs(px[i] - px[i + 1]) > 16 || Math.abs(px[i + 1] - px[i + 2]) > 16)) return true;
+    }
+    return false;
+  } catch {
+    // Can't tell (e.g. canvas reading blocked): leave the emoji alone.
+    return true;
+  }
+}
+
+if (!drawsEmoji('🪿')) {
+  const bird = GOOSE_STAND_INS.find(drawsEmoji) ?? '';
+  $('gooseEmoji').textContent = bird;
+  const icon = $<HTMLLinkElement>('favicon');
+  // With no bird at all, drop the icon rather than show an empty box in the tab.
+  if (bird) icon.href = icon.href.replace(encodeURIComponent('🪿'), encodeURIComponent(bird)).replace('🪿', bird);
+  else icon.remove();
+}
 
 // ---------- start ----------
 
@@ -842,9 +1130,26 @@ fillForm();
 rebuild();
 render();
 map.fit([], state.filters.maxDist);
-Promise.all([Explored.load(), Precomputed.load()]).then(([e, p]) => {
+// With results from last time, start with the settings folded so the batches are in view.
+settings.open = state.found.length === 0;
+
+/** Looted cities published with the site, for the default server's world only. */
+let sharedLooted: string[] = [];
+async function loadSharedLooted(): Promise<string[]> {
+  try {
+    const res = await fetch('./looted.json');
+    return res.ok ? ((await res.json()).cities ?? []) : [];
+  } catch {
+    return [];
+  }
+}
+
+Promise.all([Explored.load(), Precomputed.load(), loadSharedLooted()]).then(([e, p, looted]) => {
   explored = e;
   precomputed = p;
+  sharedLooted = looted;
+  if (state.seed === DEFAULT_SEED) tracker.setShared(sharedLooted);
+  showSharedNote();
   showExploredNote();
   rebuild();
   render();

@@ -10,7 +10,8 @@
     "test": "vitest run",
     "explored": "node scripts/fetch-explored.mjs",
     "precompute": "vite-node scripts/precompute-cities.ts",
-    "sky": "node scripts/fetch-sky-cultures.mjs"
+    "sky": "node scripts/fetch-sky-cultures.mjs",
+    "looted": "node scripts/merge-looted.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.6.4",

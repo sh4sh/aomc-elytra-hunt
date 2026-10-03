@@ -3,16 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>End City Runs</title>
+    <title>AOMC End Runs</title>
+    <link id="favicon" rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🪿</text></svg>" />
+    <meta name="description" content="Find Elytra on the About Oliver Minecraft Server." />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
     <aside id="sidebar">
       <header>
-        <h1>End City Runs</h1>
-        <p>Find untouched End Cities, one shulker box at a time.</p>
+        <h1>AOMC End Runs</h1>
+        <p>Find Elytra on the About Oliver Minecraft Server.</p>
+        <button id="help" type="button">How to use</button>
       </header>
 
+      <details id="settings" open>
+        <summary><span class="settings-title">Search settings</span> <span id="settingsSummary"></span></summary>
       <form id="search">
         <label>World seed <input id="seed" inputmode="numeric" autocomplete="off" required pattern="-?\d+" /></label>
         <div class="row">
@@ -21,7 +26,12 @@
         </div>
         <p class="hint">Blocks from 0,0 along the longer axis.</p>
         <label>
-          Stay within <output id="diagOut"></output> of a diagonal
+          <span>Stay within <output id="diagOut"></output> of
+            <select id="angleFrom" aria-label="Measure the angle from">
+              <option value="diagonal">a diagonal</option>
+              <option value="axis">an axis</option>
+            </select>
+          </span>
           <input id="diag" type="range" min="5" max="45" step="5" />
         </label>
         <fieldset id="quadrants">
@@ -50,6 +60,7 @@
         <button id="find" type="submit" class="primary">Find cities</button>
         <progress id="progress" max="1" value="0" hidden></progress>
       </form>
+      </details>
 
       <p id="stats" class="stats"></p>
       <div class="row">
@@ -61,6 +72,7 @@
         <button id="pagePrev" type="button" aria-label="Previous page">‹</button>
         <span id="pageText" class="count"></span>
         <button id="pageNext" type="button" aria-label="Next page">›</button>
+        <input id="gotoBatch" type="number" min="1" step="1" placeholder="Go to batch #" title="Type a batch number and press Enter" aria-label="Go to batch number" />
       </div>
 
       <details>
@@ -78,7 +90,26 @@
 
       <details>
         <summary>Share progress</summary>
-        <p class="hint">Looted cities are saved in this browser. Export them to share with others or move devices; importing merges.</p>
+        <p class="hint">
+          The cities you mark as looted are saved in this browser only. Send them in and, once accepted, they show as
+          looted for all players.
+        </p>
+        <div id="submitBox" class="panel" hidden>
+          <label class="field">
+            <strong>Your Minecraft username</strong>
+            <input id="submitName" autocomplete="off" spellcheck="false" maxlength="16" placeholder="Optional" />
+          </label>
+          <div class="row">
+            <button id="submitLooted" type="button">Submit looted for everyone</button>
+          </div>
+          <p id="submitNote" class="hint"></p>
+        </div>
+        <p id="submitFallback" class="hint">
+          To send them in, press <em>Export looted</em> and attach the file to
+          <a href="https://github.com/sh4sh/aomc-elytra-hunt/issues/new?title=Looted%20cities&amp;body=Attach%20your%20exported%20end-cities-looted.csv%20file%20here." target="_blank" rel="noopener">a new GitHub issue</a>.
+        </p>
+        <p id="sharedNote" class="hint"></p>
+        <p class="hint">You can also send the file to a friend, or move it to another device: <em>Import looted</em> merges it in.</p>
         <div class="row">
           <button id="visitedExport" type="button">Export looted</button>
           <button id="visitedImport" type="button">Import looted</button>
@@ -87,7 +118,14 @@
         </div>
         <input id="visitedFile" type="file" accept=".csv,text/csv,text/plain" hidden />
       </details>
+
+      <p class="hint feedback">
+        Found a problem or have an idea?
+        <a href="https://github.com/sh4sh/aomc-elytra-hunt/issues" target="_blank" rel="noopener">Report it on GitHub</a>.
+        <span class="goose" title="honk">Made by sunngoose <span id="gooseEmoji">🪿</span></span>
+      </p>
     </aside>
+    <div class="resizer" data-side="left" role="separator" aria-orientation="vertical" aria-label="Resize the left panel" tabindex="0" title="Drag to resize. Double-click to reset."></div>
 
     <main>
       <canvas id="map"></canvas>
@@ -97,6 +135,11 @@
         <button id="locateClear" type="button" aria-label="Clear position">×</button>
         <span id="locateNote"></span>
       </form>
+      <div id="zoom">
+        <button id="zoomOut" type="button" aria-label="Zoom out">−</button>
+        <input id="zoomSlider" type="range" min="0" max="1000" step="1" aria-label="Zoom" />
+        <button id="zoomIn" type="button" aria-label="Zoom in">+</button>
+      </div>
       <div id="tooltip" hidden></div>
       <div id="menu" hidden></div>
       <footer id="mapbar">
@@ -104,13 +147,45 @@
         <span class="key"><i class="cross">×</i> looted</span>
         <span class="key"><i class="dot diamond"></i> not in a batch</span>
         <span class="key"><i class="dot square green"></i> already on the webmap</span>
-        <span class="controls">Drag to pan · scroll to zoom · click a city to open its batch · right-click for options</span>
+        <span class="controls">Drag to pan · scroll or use the slider to zoom · click a city to open its batch · right-click for options</span>
         <span id="cursor"></span>
       </footer>
     </main>
+    <div class="resizer" data-side="right" role="separator" aria-orientation="vertical" aria-label="Resize the right panel" tabindex="0" title="Drag to resize. Double-click to reset."></div>
 
     <section id="detail">
-      <div id="detailEmpty" class="empty">Pick a batch to see its route and export it to Xaero's Minimap.</div>
+      <div id="detailEmpty" class="empty">
+        <button id="helpBack" type="button" hidden></button>
+        <h2>How to use</h2>
+        <h3>1. Pick a batch</h3>
+        <p>
+          Batches are in the list on the left, numbered outward from 0,0. Click one, click any city on the map, or type
+          your position above the map and press <em>Nearest batch</em>. Can't see the list? Fold away the search
+          settings or scroll that panel.
+        </p>
+        <h3>2. Get the waypoints into your map mod</h3>
+        <p>
+          With a batch open, choose <em>Xaero's Minimap</em> to download a waypoint file, or
+          <em>JourneyMap / Other</em> to copy chat lines that become clickable waypoints.
+        </p>
+        <h3>3. Tick cities off as you loot them</h3>
+        <p>
+          Use the checkboxes in the batch, or right-click a city on the map. Looted cities turn into an × and are left
+          out of exports.
+        </p>
+        <h3>4. Share what you looted</h3>
+        <p>
+          Your ticks stay in this browser. To mark them for everyone, open <em>Share progress</em> on the left and
+          send them in. Once accepted onto the shared list, those cities show as looted for all players.
+        </p>
+        <h3>Good to know</h3>
+        <ul>
+          <li>Small faint diamonds are cities with a ship that didn't fit a batch. Right-click one to add it to the batch you have open.</li>
+          <li>Green shading is terrain already on the community webmap; cities there are left out of batches.</li>
+          <li><em>Search settings</em> on the left changes the distance, angle, batch size and longest flight.</li>
+          <li>Drag the dividers beside the map to resize the panels.</li>
+        </ul>
+      </div>
       <div id="detailBody" hidden>
         <h2><span id="detailTitle"></span> <button id="starBtn" type="button" title="Which constellation does this batch look like?">seen in the stars?</button></h2>
         <div id="stars" hidden>
@@ -119,15 +194,47 @@
           <p id="starCredit" class="hint credit"></p>
         </div>
         <p id="detailMeta" class="hint"></p>
-        <div class="row">
-          <button id="download" type="button" class="primary">Download waypoints</button>
-          <button id="copy" type="button">Copy lines</button>
+        <div class="segmented" role="radiogroup" aria-label="Map mod">
+          <label><input type="radio" name="mapMod" value="xaero" /> Xaero's Minimap</label>
+          <label><input type="radio" name="mapMod" value="journeymap" /> JourneyMap / Other</label>
         </div>
-        <p class="hint">
-          Looted cities are left out. Close Minecraft, then paste the lines at the end of the waypoint file in
-          <code>.minecraft/xaero/minimap/&lt;your server&gt;/dim%1/</code> (keep the downloaded file as-is if that
-          folder is empty).
-        </p>
+
+        <div id="xaeroPanel" class="panel">
+          <div class="row">
+            <button id="download" type="button">Download waypoints</button>
+            <button id="copy" type="button">Copy lines</button>
+          </div>
+          <p class="hint">
+            Looted cities are left out. Close Minecraft, then paste the lines at the end of the waypoint file in
+            <code>.minecraft/xaero/minimap/&lt;your server&gt;/dim%1/</code> (keep the downloaded file as-is if that
+            folder is empty).
+          </p>
+        </div>
+
+        <div id="journeymapPanel" class="panel" hidden>
+          <label class="field">
+            <strong>Your Minecraft username</strong>
+            <input id="chatName" autocomplete="off" spellcheck="false" maxlength="16" placeholder="Type your username here, e.g. Steve_01" />
+          </label>
+          <div class="row">
+            <button id="copyChat" type="button">Copy all chat lines</button>
+          </div>
+          <p class="hint">
+            Looted cities are left out. Paste the lines into chat one at a time while in the End. JourneyMap makes each
+            one clickable, and clicking it creates the waypoint. Each city below also has its own <em>chat</em> button.
+          </p>
+          <p id="chatHint" class="hint"></p>
+          <p class="hint">
+            <strong>Other map mods:</strong> these lines are written for JourneyMap. Mods that pick coordinates out of
+            chat may read them too, but that hasn't been tested. Failing that, each line still shows the city's
+            x, y and z to enter by hand.
+          </p>
+          <p class="hint">
+            Already have Xaero's Minimap waypoints for this server? JourneyMap can read them: add the batch the Xaero
+            way, then press <em>Import External</em> in JourneyMap's Waypoint Manager.
+          </p>
+        </div>
+
         <div class="row">
           <button id="markAll" type="button">Mark all looted</button>
           <button id="markNone" type="button">Clear</button>
