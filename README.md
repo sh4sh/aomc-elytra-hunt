@@ -53,6 +53,13 @@ npm run sky        # public/skycultures/: sky cultures for the constellation eas
 It is a static site: TypeScript, no framework, no backend. Pushing to `main`
 builds and publishes it to GitHub Pages.
 
+## How this was made
+
+This project was built with [Claude Code](https://claude.com/claude-code),
+Anthropic's AI coding assistant. Claude wrote the code, tests and documentation
+under the direction of sh4sh, who designed the features and checked the results
+in game.
+
 ## Credits
 
 See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
