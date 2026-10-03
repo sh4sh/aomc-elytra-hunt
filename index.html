@@ -125,9 +125,18 @@
 
       <details id="share">
         <summary>Share progress</summary>
+        <div class="aomc-only webmap-first">
+          <strong>Best way: update the webmap</strong>
+          <p class="hint">
+            After a trip, upload your map of the End to the
+            <a href="https://map.diorite.xyz/?dim=the_end" target="_blank" rel="noopener">community webmap</a> using
+            its upload button. Everything you explored then shows there for everyone, and by default this app leaves
+            cities in mapped areas out of the batches the next time its webmap data is refreshed.
+          </p>
+        </div>
         <p class="hint aomc-only">
-          The cities you mark as looted are saved in this browser only. Send them in and, once accepted, they show as
-          looted for all players.
+          <strong>Or send your looted list:</strong> the cities you mark as looted are saved in this browser only. Send
+          them in and, once accepted, they show as looted for all players.
         </p>
         <p class="hint other-only">
           The cities you mark as looted are saved in this browser only. Sending them in for everyone is only available
@@ -215,10 +224,16 @@
           out of exports.
         </p>
         <div class="aomc-only help-step">
-        <h3>4. Share what you looted</h3>
+        <h3>4. Share where you have been</h3>
         <p>
-          Your ticks stay in this browser. To mark them for everyone, open <button type="button" class="jump" data-target="share">Share progress</button> and
-          send them in. Once accepted onto the shared list, those cities show as looted for all players.
+          The best way is to upload your map of the End to the
+          <a href="https://map.diorite.xyz/?dim=the_end" target="_blank" rel="noopener">community webmap</a>. By
+          default, areas on the webmap are left out of the batches once this app's webmap data is refreshed.
+        </p>
+        <p>
+          Your looted ticks stay in this browser. You can also send them in from
+          <button type="button" class="jump" data-target="share">Share progress</button>; once accepted, those cities
+          show as looted for all players.
         </p>
         </div>
         <h3>Good to know</h3>
@@ -226,7 +241,7 @@
           <li>Small faint diamonds are cities with a ship that didn't fit a batch. Right-click one to add it to the batch you have open.</li>
           <li>Far from 0,0? In <button type="button" class="jump" data-target="settings">Search settings</button>, choose <em>Around a position</em> to search a circle around your coordinates.</li>
           <li>Want your own route? Right-click any city and choose <em>Start a custom batch with this city</em>, then right-click others to add them. Custom batches sit at the top of the batch list.</li>
-          <li class="aomc-only">Green shading is terrain already on the community webmap; cities there are left out of batches.</li>
+          <li class="aomc-only">Green shading is terrain already on the community webmap; by default, cities there are left out of batches.</li>
           <li><button type="button" class="jump" data-target="settings">Search settings</button> changes the distance, angle, batch size and longest flight.</li>
           <li class="wide-only">Drag the dividers either side of the map to resize the panels.</li>
         </ul>

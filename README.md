@@ -29,12 +29,13 @@ The same steps are in the app under **How to use**.
      chat may pick the lines up too; that is untested.
 3. **Tick cities off as you loot them**, with the checkboxes in the batch or by
    right-clicking a city on the map. Looted cities are left out of exports.
-4. **Share what you looted.** Your ticks are saved in your browser only. To mark
-   them for everyone, open **Share progress** and send them in (or, until the
-   submit button is switched on, press **Export looted** and attach the file to
-   a [GitHub issue](https://github.com/sh4sh/aomc-elytra-hunt/issues)). Once
-   accepted onto the shared list, those cities show as looted for all players.
-   You can also send the file to a friend, who can **Import looted**.
+4. **Share where you have been.** The best way is to upload your map of the End
+   to the [community webmap](https://map.diorite.xyz/?dim=the_end) with its
+   upload button: by default, areas on the webmap are left out of the batches
+   once the app's webmap data is refreshed. Your looted ticks are saved in your
+   browser only; you can also send them in from **Share progress**, and once
+   accepted those cities show as looted for all players. Or send the exported
+   file to a friend, who can **Import looted**.
 
 ### Changing the search
 
