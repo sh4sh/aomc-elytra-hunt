@@ -102,6 +102,8 @@ let pageFollowed: number | null = null;
 let skipped = 0;
 /** Cities left out because they have no ship. */
 let shipless = 0;
+/** Cities per batch actually used: the setting, or fewer when no batch that large could be made. */
+let usedBatchSize = BATCH_SIZE;
 /** How many of `batches` were generated; the player's custom batches follow them. */
 let generatedCount = 0;
 
@@ -164,6 +166,12 @@ function rebuild(): void {
     else cities.push(entry.city);
   }
   batches = makeBatches(cities, state.batchSize, state.batchShape, state.maxHop, state.lineDeviation);
+  // If not even one batch of the wanted size fits, settle for the largest size that gives one, down to pairs.
+  usedBatchSize = state.batchSize;
+  while (!batches.length && cities.length >= 2 && usedBatchSize > 2) {
+    usedBatchSize--;
+    batches = makeBatches(cities, usedBatchSize, state.batchShape, state.maxHop, state.lineDeviation);
+  }
   const centre = state.filters.around;
   if (centre) {
     // Searching around a position: number the batches outward from there rather than from 0,0.
@@ -287,10 +295,13 @@ function renderBatches(): void {
     ? `${fmt(total)} cities · ${fmt(batches.length)} batches · ${fmt(done)} looted` +
       (shipless ? ` · ${fmt(shipless)} without a ship left out` : '') +
       (skipped ? ` · ${fmt(skipped)} left out as already mapped` : '') +
+      (usedBatchSize < state.batchSize && generatedCount
+        ? ` · no batch of ${state.batchSize} fits here, so batches of ${usedBatchSize} were made`
+        : '') +
       (unbatched ? ` · ${fmt(unbatched)} unbatched` : '') +
       (state.excluded.length ? ` · ${fmt(state.excluded.length)} looted removed from batches` : '')
     : unbatched
-      ? `No full batches: ${fmt(unbatched)} cities, none reachable in a full batch. Raise the longest flight or lower the batch size.`
+      ? `No batches: ${fmt(unbatched)} cities, but no two are within the longest flight of each other. Raise the longest flight.`
       : 'No cities yet. Set a range and press Find cities.';
 
   $<HTMLButtonElement>('regroup').disabled = done === 0;
@@ -381,7 +392,7 @@ function renderDetail(): void {
   $('detailMeta').textContent =
     `${batch.length} cities · ${looted(batch)} looted · about ${fmt(Math.round(length / 100) * 100)} blocks of flying` +
     ` · longest flight ${fmt(Math.round(longest))}` +
-    (!isCustom(i) && batch.length < state.batchSize ? ' · short batch' : '') +
+    (!isCustom(i) && batch.length < usedBatchSize ? ' · short batch' : '') +
     (isCustom(i) && !batch.length ? ' · right-click a city on the map to add it' : '');
 
   $('cities').replaceChildren(
@@ -615,7 +626,7 @@ function applyResult(seed: string, filters: Filters, cities: FoundCity[]): void 
     const pos = locateAfterSearch;
     locateAfterSearch = null;
     if (!openNearest(pos, 'Searched around your position. ')) {
-      locateNote.textContent = 'No full batch near your position. Try a larger radius, or add the diamonds to a custom batch.';
+      locateNote.textContent = 'No batch near your position. Try a larger radius or a longer flight limit.';
       renderMap();
     }
   }
@@ -748,6 +759,23 @@ seedReset.addEventListener('click', () => {
 for (const el of [minInput, maxInput, diagInput, angleFromSelect, aroundPos, aroundRadius, ...quadBoxes]) {
   el.addEventListener('input', renderMap);
 }
+// A typed number snaps to the nearest step its field accepts (500 blocks for distances and the radius,
+// 250 for flight limits), so an in-between value never blocks the search. Listening in the capture
+// phase means this runs before the handlers that read the value.
+form.addEventListener(
+  'change',
+  (e) => {
+    const field = e.target;
+    if (!(field instanceof HTMLInputElement) || field.type !== 'number' || field.value.trim() === '') return;
+    const step = Number(field.step) || 1;
+    const min = field.min === '' ? -Infinity : Number(field.min);
+    const max = field.max === '' ? Infinity : Number(field.max);
+    const typed = Number(field.value);
+    if (!Number.isFinite(typed)) return;
+    field.value = String(Math.min(max, Math.max(min, Math.round(typed / step) * step)));
+  },
+  true,
+);
 for (const el of [aroundPos, aroundRadius]) el.addEventListener('input', () => el.setCustomValidity(''));
 for (const r of modeRadios) {
   r.addEventListener('change', () => {

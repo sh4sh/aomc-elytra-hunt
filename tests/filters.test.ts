@@ -271,3 +271,29 @@ describe('waypoint names', async () => {
     setBatchTags([]);
   });
 });
+
+describe('typed coordinates', async () => {
+  const { parseCoordinates } = await import('../src/import');
+  const at = (text: string) => {
+    const p = parseCoordinates(text)[0];
+    return p && [p.x, p.z];
+  };
+
+  it('reads x: and z: labels, with or without spaces, in either order', () => {
+    expect(at('x:100000, z:200000')).toEqual([100000, 200000]);
+    expect(at('x: 100000, z: -200000')).toEqual([100000, -200000]);
+    expect(at('z: -200 x: 100')).toEqual([100, -200]);
+    expect(at('X=12 Y=64 Z=-34')).toEqual([12, -34]);
+  });
+
+  it('reads bare numbers, treating a middle number as y', () => {
+    expect(at('100000,200000')).toEqual([100000, 200000]);
+    expect(at('100000, -200000')).toEqual([100000, -200000]);
+    expect(at('-5 70 9')).toEqual([-5, 9]);
+  });
+
+  it('rejects text without two numbers', () => {
+    expect(at('hello')).toBeUndefined();
+    expect(at('x: 5')).toBeUndefined();
+  });
+});

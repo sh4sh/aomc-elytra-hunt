@@ -49,7 +49,8 @@ considered and how they are grouped:
 - **Batch shape:** compact clusters, or lines heading outward. For lines you can also set
   how far a line may stray to either side of straight.
 - **Longest flight between cities:** no hop inside a batch is longer than this.
-  Cities that can't be reached in a full batch are left unbatched.
+  Cities that can't be reached in a full batch are left unbatched. If no batch of the
+  chosen size fits at all, smaller batches are made, down to 2 cities.
 - **Leave out cities already on the webmap.**
 - **Advanced → Angle:** stay near the diagonals or near the axes, or search
   every direction (the default).

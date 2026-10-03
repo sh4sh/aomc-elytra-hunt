@@ -25,11 +25,11 @@
         </div>
         <div id="aroundBox" class="panel around-only">
           <label>Position <input id="aroundPos" autocomplete="off" spellcheck="false" placeholder="x: 100000, z: 200000" /></label>
-          <label>Radius, in blocks <input id="aroundRadius" type="number" min="100" step="500" value="10000" /></label>
+          <label>Radius, in blocks <input id="aroundRadius" type="number" min="500" step="500" value="10000" /></label>
           <div class="row">
             <button id="aroundUseMap" type="button">Use my position from the map</button>
           </div>
-          <p class="hint">Finds cities within that distance of the position, in any direction. A small radius may hold too few cities for a full batch; they then show as unbatched diamonds.</p>
+          <p class="hint">Finds cities within that distance of the position, in any direction. If a small radius holds too few cities for a full batch, smaller batches are made instead.</p>
         </div>
         <div id="bandBox" class="panel band-only">
         <div class="row" id="distanceBox">
@@ -65,7 +65,7 @@
           </p>
         </div>
         <label>Longest flight between cities <input id="maxHop" type="number" min="0" step="250" /></label>
-        <p class="hint">In blocks. Cities that can't be reached in a full batch within this are left unbatched (small faint diamonds on the map); right-click one to add it to a batch. 0 means no limit.</p>
+        <p class="hint">In blocks. Cities that can't be reached in a full batch within this are left unbatched (small faint diamonds on the map); right-click one to add it to a batch. 0 means no limit. If no batch of the chosen size fits at all, smaller batches are made, down to 2 cities.</p>
         <label class="check aomc-only"><input id="skipMapped" type="checkbox" /> Leave out cities already on the webmap</label>
         <p id="exploredNote" class="hint aomc-only"></p>
         <details id="advanced">
