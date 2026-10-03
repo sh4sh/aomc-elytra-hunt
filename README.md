@@ -104,7 +104,7 @@ Data files, regenerate when needed:
 
 ```
 npm run precompute # public/cities.json: every End City for the seed, out to 100,000 blocks
-npm run explored   # public/explored.json: areas already on the webmap
+npm run explored   # public/explored.json: areas already on the webmap (also runs hourly on GitHub)
 npm run sky        # public/skycultures/: sky cultures for the constellation easter egg
 npm run looted -- file.csv   # add a player's exported looted cities to public/looted.json
 ```

@@ -2,6 +2,7 @@
 // read from the community webmap's tiles.
 //
 //   npm run explored            only asks what changed since the last update
+//   npm run explored -- --all   also looks for newly mapped regions (done automatically once a day)
 //   npm run explored -- --full  re-reads everything from scratch
 //
 // The webmap is run by a friend of the project, so this is deliberately gentle:
@@ -33,10 +34,17 @@ const PAUSE = 1000;
 const USER_AGENT = 'aomc-elytra-hunt explored-area updater (+https://github.com/sh4sh/aomc-elytra-hunt)';
 
 const full = process.argv.includes('--full');
+/** Hour of the day (UTC) at which a routine run also looks at regions that were empty last time. */
+const WIDE_HOUR = 3;
 const previous = !full && existsSync(FILE) ? JSON.parse(readFileSync(FILE, 'utf8')) : null;
 // Ask only for tiles modified since the last update. A minute of slack covers clock differences.
 const since = previous?.fetchedAt ? new Date(Date.parse(previous.fetchedAt) - 60_000).toUTCString() : null;
 const startedAt = new Date().toISOString();
+// Most of the 64 overview tiles are empty, and asking about those every hour would be most of the
+// traffic for nothing. Routine runs only ask about the tiles that had data last time; a wide run
+// (once a day, or with --all) asks about all of them, so newly mapped regions are still found.
+const known = previous?.overviewTiles ? new Set(previous.overviewTiles) : null;
+const wide = full || !known || process.argv.includes('--all') || new Date().getUTCHours() === WIDE_HOUR;
 
 const tileBlocks = (lod) => TILE_PX * 2 ** lod;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -80,12 +88,16 @@ if (previous) {
 
 // Pass 1: which fine tiles sit under a coarse tile that changed.
 const fineTiles = new Set();
+/** Overview tiles that have any data, remembered for the next routine run. */
+const overviewTiles = [];
 const fineSize = tileBlocks(FINE);
 for (let tz = -COARSE_REACH; tz < COARSE_REACH; tz++) {
   for (let tx = -COARSE_REACH; tx < COARSE_REACH; tx++) {
     const ox = tx * tileBlocks(COARSE);
     const oz = tz * tileBlocks(COARSE);
+    if (!wide && !known.has(`${ox},${oz}`)) continue;
     const tile = await fetchTile(COARSE, ox, oz);
+    if (tile) overviewTiles.push(`${ox},${oz}`);
     if (!tile || tile === 'unchanged') continue;
     for (let y = 0; y < TILE_PX; y++) {
       for (let x = 0; x < TILE_PX; x++) {
@@ -98,6 +110,7 @@ for (let tz = -COARSE_REACH; tz < COARSE_REACH; tz++) {
     }
   }
 }
+console.log(wide ? 'Wide run: asking about every overview tile.' : `Routine run: asking about the ${known.size} overview tiles that had data.`);
 console.log(
   fineTiles.size
     ? `${fineTiles.size} areas to check in detail`
@@ -162,12 +175,18 @@ console.log(
   `${counts.requests} requests: ${counts.unchanged} unchanged, ${counts.missing} empty, ` +
     `${counts.downloaded} downloaded (${Math.round(counts.bytes / 1024)} KB).`,
 );
-const before = previous ? JSON.stringify(previous.runs) : null;
-if (before === JSON.stringify(flat)) {
+// A routine run only saw the tiles it already knew about, so the list carries over unchanged.
+const tiles = wide ? overviewTiles.sort() : previous.overviewTiles;
+const sameMap = previous && JSON.stringify(previous.runs) === JSON.stringify(flat);
+const sameTiles = previous && JSON.stringify(previous.overviewTiles) === JSON.stringify(tiles);
+if (sameMap && sameTiles && !counts.downloaded) {
   // Leave the file alone, so an update with nothing new makes no change to commit.
   console.log('The mapped area is the same as before. Nothing written.');
 } else {
-  writeFileSync(FILE, JSON.stringify({ blocksPerPixel: bpp, fetchedAt: startedAt, bounds, runs: flat }) + '\n');
+  // The timestamp moves on whenever tiles were downloaded, even if the mapped area came out the same,
+  // so those tiles are not fetched again next time. If only the tile list is new, it stays put.
+  const fetchedAt = sameMap && !counts.downloaded ? previous.fetchedAt : startedAt;
+  writeFileSync(FILE, JSON.stringify({ blocksPerPixel: bpp, fetchedAt, bounds, overviewTiles: tiles, runs: flat }) + '\n');
   const area = ((mapped * bpp * bpp) / 1e6).toFixed(0);
   console.log(`${replaced} areas re-read. Mapped: about ${area} million square blocks. Wrote ${FILE}`);
 }
