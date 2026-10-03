@@ -1,4 +1,4 @@
-# AOMC End Runs
+# AOMC Elytra Hunt
 
 Find Elytra on the About Oliver Minecraft Server.
 
@@ -6,8 +6,8 @@ Find Elytra on the About Oliver Minecraft Server.
 
 A web app for hunting elytra on a Minecraft Java server. It works out where
 every End City is from the world seed, keeps the ones that have a ship, and
-groups them into batches of 27 (one shulker box of loot per run) that you can
-load into Xaero's Minimap as waypoints.
+groups them into batches that you can load into Xaero's Minimap, JourneyMap,
+or another map mod as waypoints.
 
 ## Using it
 
