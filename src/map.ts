@@ -17,6 +17,8 @@ export interface MapScene {
   selectedBatch: number | null;
   hot: City | null;
   filters: Filters;
+  /** The search to shade on the map: usually what the form currently says, applied or not. */
+  searchArea: Filters;
   explored: Explored | null;
   /** The player's position, if they entered one. */
   you: { x: number; z: number } | null;
@@ -214,12 +216,57 @@ export class EndMap {
     for (const z of zs) if (this.sy(z) < h - 22 && this.sy(z) > 60) ctx.fillText(`z ${z.toLocaleString()}`, 6, this.sy(z) - 4);
   }
 
+  /** Shade where the search looks: the band between the two distances, narrowed by angle and quadrant. */
+  private drawSearchArea(f: Filters): void {
+    const { ctx } = this;
+    const ox = this.sx(0);
+    const oy = this.sy(0);
+    const outer = f.maxDist * this.scale;
+    const inner = f.minDist * this.scale;
+    if (!(outer > inner) || !f.quadrants.length) return;
+
+    ctx.save();
+    // The band between the two squares.
+    ctx.beginPath();
+    ctx.rect(ox - outer, oy - outer, 2 * outer, 2 * outer);
+    ctx.rect(ox - inner, oy - inner, 2 * inner, 2 * inner);
+    ctx.clip('evenodd');
+    // The chosen quadrants. North is up, so north is the top half.
+    ctx.beginPath();
+    for (const q of f.quadrants) ctx.rect(q[1] === 'E' ? ox : ox - outer, q[0] === 'S' ? oy : oy - outer, outer, outer);
+    ctx.clip();
+
+    ctx.beginPath();
+    if (f.diagonalDeg >= 45) {
+      ctx.rect(ox - outer, oy - outer, 2 * outer, 2 * outer);
+    } else {
+      // A wedge either side of each diagonal or axis, drawn well past the outer square.
+      const reach = 3 * outer;
+      const spread = (f.diagonalDeg * Math.PI) / 180;
+      for (let k = 0; k < 4; k++) {
+        const mid = (k * Math.PI) / 2 + (f.angleFrom === 'axis' ? 0 : Math.PI / 4);
+        ctx.moveTo(ox, oy);
+        ctx.lineTo(ox + reach * Math.cos(mid - spread), oy + reach * Math.sin(mid - spread));
+        ctx.lineTo(ox + reach * Math.cos(mid + spread), oy + reach * Math.sin(mid + spread));
+        ctx.closePath();
+      }
+    }
+    ctx.fillStyle = 'rgba(197, 139, 255, 0.09)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(197, 139, 255, 0.45)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
+  }
+
   private draw(): void {
     const { ctx, w, h } = this;
     ctx.fillStyle = '#0f0c17';
     ctx.fillRect(0, 0, w, h);
     if (!this.scene) return;
-    const { cities, selectedBatch, hot, filters, explored, you } = this.scene;
+    const { cities, selectedBatch, hot, explored, you, searchArea } = this.scene;
+    // Distances and angle are drawn for the search being set up, so they follow the controls live.
+    const filters = searchArea;
     const ox = this.sx(0);
     const oy = this.sy(0);
 
@@ -227,6 +274,7 @@ export class EndMap {
     if (explored) explored.draw(ctx, this.sx, this.sy, w, h);
 
     this.drawGrid();
+    this.drawSearchArea(searchArea);
 
     // Axes and diagonals.
     const reach = filters.maxDist * this.scale;

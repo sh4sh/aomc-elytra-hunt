@@ -226,6 +226,7 @@ body:not(.other-seed) .other-only { display: none; }
 #mapbar .cross { font-style: normal; font-weight: 700; font-size: 14px; line-height: 1; color: #8a8299; }
 #mapbar .dot.diamond { background: none; border: 1px solid var(--muted); border-radius: 0; transform: rotate(45deg) scale(0.8); }
 #mapbar .dot.square { border-radius: 2px; }
+#mapbar .dot.area { background: rgba(197, 139, 255, 0.2); border: 1px solid rgba(197, 139, 255, 0.6); }
 #mapbar .dot.green { background: rgba(110, 190, 150, 0.7); }
 #cursor { margin-left: auto; color: var(--text); font-variant-numeric: tabular-nums; white-space: pre; min-width: 15ch; text-align: right; }
 

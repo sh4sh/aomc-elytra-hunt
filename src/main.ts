@@ -208,6 +208,16 @@ const fmt = (n: number) => n.toLocaleString();
 
 // ---------- rendering ----------
 
+/**
+ * What to shade as the search area: the form's settings, so the shape follows the controls while
+ * they are being changed, or the applied search if the form holds something unusable.
+ */
+function previewFilters(): Filters {
+  const f = formFilters();
+  const usable = Number.isFinite(f.minDist) && Number.isFinite(f.maxDist) && f.minDist >= 0 && f.maxDist > f.minDist;
+  return usable ? f : state.filters;
+}
+
 function renderMap(): void {
   const cities: MapCity[] = [];
   batches.forEach((batch, b) =>
@@ -221,6 +231,7 @@ function renderMap(): void {
     selectedBatch: selected,
     hot,
     filters: state.filters,
+    searchArea: previewFilters(),
     explored: state.seed === DEFAULT_SEED ? explored : null,
     you,
   });
@@ -486,6 +497,17 @@ function fillForm(): void {
   showDiag();
 }
 
+/** The search as currently set in the form, applied or not. */
+function formFilters(): Filters {
+  return {
+    minDist: Number(minInput.value),
+    maxDist: Number(maxInput.value),
+    diagonalDeg: Number(diagInput.value),
+    angleFrom: angleFromSelect.value as Filters['angleFrom'],
+    quadrants: quadBoxes.filter((b) => b.checked).map((b) => b.value as Quadrant),
+  };
+}
+
 function showDiag(): void {
   const v = Number(diagInput.value);
   // At 45° every direction is within range of both, so the choice of lines no longer matters.
@@ -546,13 +568,7 @@ form.addEventListener('submit', (e) => {
   }
   // Changing a control re-runs an instant search with no submitter; only fold for a deliberate press.
   foldWhenDone = e.submitter !== null;
-  const filters: Filters = {
-    minDist: Number(minInput.value),
-    maxDist: Number(maxInput.value),
-    diagonalDeg: Number(diagInput.value),
-    angleFrom: angleFromSelect.value as Filters['angleFrom'],
-    quadrants: quadBoxes.filter((b) => b.checked).map((b) => b.value as Quadrant),
-  };
+  const filters = formFilters();
   if (filters.maxDist <= filters.minDist) {
     maxInput.setCustomValidity('Must be larger than the starting distance.');
     maxInput.reportValidity();
@@ -601,6 +617,9 @@ form.addEventListener('submit', (e) => {
   worker.postMessage({ seed, filters } satisfies FindRequest);
 });
 for (const el of [seedInput, maxInput, ...quadBoxes]) el.addEventListener('input', () => el.setCustomValidity(''));
+
+// Redraw the shaded search area while a control is being moved, before anything is applied.
+for (const el of [minInput, maxInput, diagInput, angleFromSelect, ...quadBoxes]) el.addEventListener('input', renderMap);
 
 // Instant searches are applied as the controls change; slow ones wait for the button.
 function formCovered(): boolean {
