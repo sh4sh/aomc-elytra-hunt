@@ -1050,6 +1050,43 @@ skipBox.addEventListener('change', () => {
   render();
 });
 
+// Put every search setting back to how a first-time visitor finds it, and search again.
+$('searchReset').addEventListener('click', () => {
+  if (worker) return;
+  if (
+    !confirm(
+      'Reset all search settings to their defaults? Your looted marks are kept. Custom batches are kept too, unless the world seed had been changed.',
+    )
+  ) {
+    return;
+  }
+  state.batchSize = BATCH_SIZE;
+  state.batchShape = 'cluster';
+  state.maxHop = DEFAULT_MAX_HOP;
+  state.lineDeviation = DEFAULT_LINE_DEVIATION;
+  state.skipMapped = true;
+  sizeInput.value = String(state.batchSize);
+  shapeSelect.value = state.batchShape;
+  hopInput.value = String(state.maxHop);
+  deviationInput.value = String(state.lineDeviation);
+  skipBox.checked = true;
+  showDeviation();
+  // Fill the form from the defaults without touching the applied search, so the search below sees a change.
+  const applied = { seed: state.seed, filters: state.filters };
+  state.seed = DEFAULT_SEED;
+  state.filters = { ...DEFAULT_FILTERS, quadrants: [...DEFAULT_FILTERS.quadrants] };
+  fillForm();
+  state.seed = applied.seed;
+  state.filters = applied.filters;
+  $('searchWarning').hidden = true;
+  save();
+  form.requestSubmit();
+  // If the search itself was already the default one, nothing re-ran, so regroup with the reset batch settings.
+  selected = null;
+  rebuild();
+  render();
+});
+
 function showExploredNote(): void {
   const note = $('exploredNote');
   if (!explored) {
