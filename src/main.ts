@@ -1,0 +1,852 @@
+import { lookalike, type Constellation } from './constellations';
+import { Explored } from './explored';
+import { BATCH_SIZE, DEFAULT_MAX_HOP, makeBatches, route, type BatchShape } from './filters';
+import type { FindRequest, FindResponse, FoundCity } from './generation/worker';
+import { chunkbaseUrl, parseCoordinates } from './import';
+import { EndMap, type MapCity } from './map';
+import { Precomputed } from './precomputed';
+import { loadSkyFigures } from './sky-cultures';
+import { Tracker } from './tracker';
+import { cityId, type City, type Filters, type Quadrant } from './types';
+import { OUTSIDE_COLOR, XAERO_COLORS, batchColor, waypointFile, waypointLines, waypointName } from './xaero';
+
+const DEFAULT_SEED = '856461443495910397';
+const DEFAULT_FILTERS: Filters = { minDist: 10000, maxDist: 20000, diagonalDeg: 25, quadrants: ['NE', 'NW', 'SE', 'SW'] };
+const STORE = 'end-cities:state';
+
+interface Saved {
+  seed: string;
+  filters: Filters;
+  /** Result of the last search. */
+  found: FoundCity[];
+  imported: [number, number][];
+  /** Leave out cities that already show up on the community webmap. */
+  skipMapped: boolean;
+  /** Leave out cities that generate without a ship, since only ships hold elytra. */
+  shipsOnly: boolean;
+  /** Cities per batch. A full shulker box is 27. */
+  batchSize: number;
+  batchShape: BatchShape;
+  /** Longest allowed flight between consecutive cities in a batch, in blocks. 0 means no limit. */
+  maxHop: number;
+  /** Looted cities (by id) taken out of the batches the last time they were regrouped. */
+  excluded: string[];
+  /** Cities moved by hand: city id -> id of a city in the batch it was added to. */
+  moved: Record<string, string>;
+}
+
+const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+
+function load(): Saved {
+  try {
+    const s = JSON.parse(localStorage.getItem(STORE) ?? 'null');
+    if (s?.seed && s.filters) {
+      const saved: Saved = { found: [], imported: [], skipMapped: true, shipsOnly: true, batchSize: BATCH_SIZE, batchShape: 'cluster', maxHop: DEFAULT_MAX_HOP, excluded: [], moved: {}, ...s };
+      // Results saved before ships were tracked have no ship flag: search again.
+      if (saved.found.some((c) => c.length < 3)) saved.found = [];
+      return saved;
+    }
+  } catch {
+    // Fall through to defaults.
+  }
+  return { seed: DEFAULT_SEED, filters: DEFAULT_FILTERS, found: [], imported: [], skipMapped: true, shipsOnly: true, batchSize: BATCH_SIZE, batchShape: 'cluster', maxHop: DEFAULT_MAX_HOP, excluded: [], moved: {} };
+}
+
+const state = load();
+let tracker = new Tracker(state.seed);
+let batches: City[][] = [];
+let selected: number | null = null;
+let hot: City | null = null;
+let worker: Worker | null = null;
+let explored: Explored | null = null;
+let precomputed: Precomputed | null = null;
+let you: { x: number; z: number } | null = null;
+let showStars = false;
+/** Figures from the world's sky cultures, fetched the first time the sketch is opened. */
+let skyFigures: Constellation[] | null = null;
+let starCache: { key: string; match: ReturnType<typeof lookalike> } | null = null;
+/** Batches shown per page of the list. */
+const PAGE_SIZE = 10;
+let page = 0;
+/** The selection the list last jumped to, so paging by hand isn't undone on the next redraw. */
+let pageFollowed: number | null = null;
+/** Cities left out because they are already on the webmap. */
+let skipped = 0;
+/** Cities left out because they have no ship. */
+let shipless = 0;
+/** Cities that could not be fitted into a full batch within the longest-flight limit. */
+let unbatched = 0;
+/** Cities kept out of the batches but still drawn on the map, with the reason. */
+let outside: { city: City; note: string }[] = [];
+
+const save = () => {
+  try {
+    localStorage.setItem(STORE, JSON.stringify(state));
+  } catch {
+    // Not fatal: the search can be rerun.
+  }
+};
+
+const map = new EndMap($<HTMLCanvasElement>('map'));
+const tooltip = $('tooltip');
+
+// ---------- derived data ----------
+
+function rebuild(): void {
+  // The webmap only describes the default server's world.
+  const mapped = state.skipMapped && explored && state.seed === DEFAULT_SEED ? explored : null;
+  const withShip = state.shipsOnly ? state.found.filter((c) => c[2]) : state.found;
+  shipless = state.found.length - withShip.length;
+  skipped = 0;
+
+  // Every city worth showing, with the reason it is kept out of the batches, if any.
+  const pool = new Map<string, { city: City; note?: string }>();
+  const seen = new Set<string>();
+  const excluded = new Set(state.excluded);
+  const add = (x: number, z: number, source: City['source'], ship: boolean) => {
+    // One city per chunk, whichever source it came from.
+    const key = `${x >> 4},${z >> 4}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    const city: City = { x, z, source };
+    let note: string | undefined;
+    // Only while still looted: unticking a city puts it back.
+    if (excluded.has(cityId(city)) && tracker.has(city)) note = 'looted, removed from batches';
+    else if (source === 'seed' && mapped?.isMapped(x, z)) {
+      skipped++;
+      // Ships near mapped terrain may still be unlooted, so keep them visible.
+      if (!ship) return;
+      note = 'has a ship, but already on the webmap';
+    }
+    pool.set(cityId(city), { city, note });
+  };
+  for (const [x, z, ship] of withShip) add(x, z, 'seed', !!ship);
+  for (const [x, z] of state.imported) add(x, z, 'import', true);
+
+  outside = [];
+  const cities: City[] = [];
+  for (const entry of pool.values()) {
+    if (entry.note) outside.push({ city: entry.city, note: entry.note });
+    else cities.push(entry.city);
+  }
+  batches = makeBatches(cities, state.batchSize, state.batchShape, state.maxHop);
+
+  // Hand-made moves are applied after batching, so adding a city to a batch never reshuffles the others.
+  // A move holds while both cities still exist and its target is in a batch of its own accord.
+  const batchOf = new Map<string, number>();
+  batches.forEach((batch, b) => batch.forEach((c) => batchOf.set(cityId(c), b)));
+  const moved = new Set<string>();
+  const touched = new Set<number>();
+  for (const [id, anchor] of Object.entries(state.moved)) {
+    const to = batchOf.get(anchor);
+    if (!pool.has(id) || to === undefined || anchor in state.moved) continue;
+    const from = batchOf.get(id);
+    if (from === to) continue;
+    if (from !== undefined) batches[from] = batches[from].filter((c) => cityId(c) !== id);
+    batches[to].push(pool.get(id)!.city);
+    moved.add(id);
+    touched.add(to);
+  }
+  for (const b of touched) batches[b] = route(batches[b]);
+  batches = batches.filter((b) => b.length);
+
+  const inBatch = new Set(batches.flat().map(cityId));
+  outside = outside.filter((o) => !moved.has(cityId(o.city)));
+  unbatched = 0;
+  for (const c of cities) {
+    if (inBatch.has(cityId(c))) continue;
+    unbatched++;
+    outside.push({ city: c, note: `no route to it with flights under ${fmt(state.maxHop)} blocks` });
+  }
+  if (selected !== null && selected >= batches.length) selected = null;
+}
+
+const looted = (batch: City[]) => batch.filter((c) => tracker.has(c)).length;
+const color = (i: number) => XAERO_COLORS[batchColor(i)];
+const fmt = (n: number) => n.toLocaleString();
+
+// ---------- rendering ----------
+
+function renderMap(): void {
+  const cities: MapCity[] = [];
+  batches.forEach((batch, b) =>
+    batch.forEach((city, order) => cities.push({ city, batch: b, order, color: color(b), visited: tracker.has(city) })),
+  );
+  for (const o of outside) {
+    cities.push({ city: o.city, batch: -1, order: 0, color: OUTSIDE_COLOR, visited: tracker.has(o.city), note: o.note });
+  }
+  map.setScene({
+    cities,
+    selectedBatch: selected,
+    hot,
+    filters: state.filters,
+    explored: state.seed === DEFAULT_SEED ? explored : null,
+    you,
+  });
+}
+
+function renderBatches(): void {
+  const total = batches.reduce((n, b) => n + b.length, 0);
+  const done = batches.reduce((n, b) => n + looted(b), 0);
+  $('stats').textContent = total
+    ? `${fmt(total)} cities · ${fmt(batches.length)} batches · ${fmt(done)} looted` +
+      (shipless ? ` · ${fmt(shipless)} without a ship left out` : '') +
+      (skipped ? ` · ${fmt(skipped)} left out as already mapped` : '') +
+      (unbatched ? ` · ${fmt(unbatched)} unbatched` : '') +
+      (state.excluded.length ? ` · ${fmt(state.excluded.length)} looted removed from batches` : '')
+    : unbatched
+      ? `No full batches: ${fmt(unbatched)} cities, none reachable in a full batch. Raise the longest flight or lower the batch size.`
+      : 'No cities yet. Set a range and press Find cities.';
+
+  $<HTMLButtonElement>('regroup').disabled = done === 0;
+  $<HTMLButtonElement>('regroupUndo').hidden = state.excluded.length === 0;
+
+  const pages = Math.max(1, Math.ceil(batches.length / PAGE_SIZE));
+  // Jump to the selected batch's page when the selection changes, e.g. after clicking a city on the map.
+  if (selected !== pageFollowed) {
+    pageFollowed = selected;
+    if (selected !== null) page = Math.floor(selected / PAGE_SIZE);
+  }
+  page = Math.min(page, pages - 1);
+  const first = page * PAGE_SIZE;
+  $('pager').hidden = pages === 1;
+  $('pageText').textContent = `Batches ${first + 1}–${Math.min(first + PAGE_SIZE, batches.length)} of ${batches.length}`;
+  $<HTMLButtonElement>('pagePrev').disabled = page === 0;
+  $<HTMLButtonElement>('pageNext').disabled = page === pages - 1;
+
+  const list = $('batches');
+  list.replaceChildren(
+    ...batches.slice(first, first + PAGE_SIZE).map((batch, k) => {
+      const i = first + k;
+      const li = document.createElement('li');
+      const n = looted(batch);
+      li.classList.toggle('done', n === batch.length);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.setAttribute('aria-current', String(i === selected));
+      const sw = document.createElement('span');
+      sw.className = 'swatch';
+      sw.style.background = color(i);
+      const name = document.createElement('span');
+      name.textContent = `Batch ${i + 1}`;
+      const count = document.createElement('span');
+      count.className = 'count';
+      count.textContent = `${n}/${batch.length}`;
+      btn.append(sw, name, count);
+      btn.addEventListener('click', () => select(i, true));
+      li.append(btn);
+      return li;
+    }),
+  );
+}
+
+function renderDetail(): void {
+  const has = selected !== null;
+  $('detailEmpty').hidden = has;
+  $('detailBody').hidden = !has;
+  if (selected === null) return;
+  const batch = batches[selected];
+  const i = selected;
+
+  let length = 0;
+  batch.forEach((c, k) => {
+    if (k) length += Math.hypot(c.x - batch[k - 1].x, c.z - batch[k - 1].z);
+  });
+  $('detailTitle').textContent = `Batch ${i + 1}`;
+  renderStars(batch, color(i));
+  let longest = 0;
+  batch.forEach((c, k) => {
+    if (k) longest = Math.max(longest, Math.hypot(c.x - batch[k - 1].x, c.z - batch[k - 1].z));
+  });
+  $('detailMeta').textContent =
+    `${batch.length} cities · ${looted(batch)} looted · about ${fmt(Math.round(length / 100) * 100)} blocks of flying` +
+    ` · longest flight ${fmt(Math.round(longest))}` +
+    (batch.length < state.batchSize ? ' · short batch' : '');
+
+  $('cities').replaceChildren(
+    ...batch.map((c, k) => {
+      const li = document.createElement('li');
+      li.classList.toggle('looted', tracker.has(c));
+      li.classList.toggle('hot', c === hot);
+      const label = document.createElement('label');
+      label.title = waypointName(i, k) + (c.source === 'import' ? ' (added by hand)' : '');
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.checked = tracker.has(c);
+      box.addEventListener('change', () => {
+        tracker.set(c, box.checked);
+        render();
+      });
+      const n = document.createElement('span');
+      n.className = 'n';
+      n.textContent = String(k + 1);
+      const xz = document.createElement('span');
+      xz.className = 'xz';
+      xz.textContent = `${c.x}, ${c.z}`;
+      const hop = document.createElement('span');
+      hop.className = 'hop';
+      hop.textContent = k ? `+${fmt(Math.round(Math.hypot(c.x - batch[k - 1].x, c.z - batch[k - 1].z)))}` : '';
+      label.append(box, n, xz, hop);
+      label.addEventListener('mouseenter', () => setHot(c));
+      label.addEventListener('mouseleave', () => setHot(null));
+      li.append(label);
+      return li;
+    }),
+  );
+}
+
+/** Easter egg: sketch the constellation this batch most resembles over its cities. */
+function renderStars(batch: City[], batchColor: string): void {
+  // Lines are all the same sliver shape, so the comparison is only offered for clusters.
+  const clusters = state.batchShape === 'cluster';
+  $('starBtn').hidden = !clusters;
+  // Matching against a few hundred figures takes a moment, so reuse the answer while the batch is unchanged.
+  const key = batch.map(cityId).join(';');
+  if (showStars && clusters && starCache?.key !== key) starCache = { key, match: lookalike(batch, skyFigures ?? []) };
+  const match = showStars && clusters ? starCache!.match : null;
+  $('stars').hidden = !match;
+  if (!match) return;
+  const source = document.createElement('a');
+  source.href = match.source;
+  source.target = '_blank';
+  source.rel = 'noopener';
+  source.textContent = 'source';
+  $('starText').replaceChildren(`If you squint, this batch looks like ${match.name} (${match.from}). `, source);
+  // Some cultures add a permission that applies to Stellarium's own apps only; it says nothing about this one.
+  const licence = match.license
+    ?.split(' · ')
+    .filter((part) => !/special permission/i.test(part))
+    .join(' · ');
+  $('starCredit').textContent = licence
+    ? `Figure from the Stellarium sky cultures collection (licence: ${licence}). Star positions from the HYG database (CC BY-SA 4.0).`
+    : 'Figure sketched by hand; not real star positions.';
+  const canvas = $<HTMLCanvasElement>('starCanvas');
+  const ctx = canvas.getContext('2d')!;
+  const { width: w, height: h } = canvas;
+  ctx.clearRect(0, 0, w, h);
+  const all = [...match.points, ...match.stars];
+  const reach = Math.max(...all.map(([x, y]) => Math.max(Math.abs(x), Math.abs(y)))) || 1;
+  const k = (Math.min(w, h) / 2 - 10) / reach;
+  const at = ([x, y]: [number, number]): [number, number] => [w / 2 + x * k, h / 2 + y * k];
+  ctx.fillStyle = batchColor;
+  ctx.globalAlpha = 0.7;
+  for (const p of match.points) {
+    ctx.beginPath();
+    ctx.arc(...at(p), 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = '#ece7f5';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (const [a, b] of match.lines) {
+    ctx.moveTo(...at(match.stars[a]));
+    ctx.lineTo(...at(match.stars[b]));
+  }
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  for (const s of match.stars) {
+    ctx.beginPath();
+    ctx.arc(...at(s), 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function render(): void {
+  renderBatches();
+  renderDetail();
+  renderMap();
+}
+
+function setHot(c: City | null): void {
+  if (hot === c) return;
+  hot = c;
+  renderMap();
+}
+
+function select(i: number | null, zoom = false): void {
+  selected = i;
+  render();
+  if (zoom && i !== null) map.fit(batches[i], state.filters.maxDist);
+}
+
+// ---------- search ----------
+
+const form = $<HTMLFormElement>('search');
+const seedInput = $<HTMLInputElement>('seed');
+const minInput = $<HTMLInputElement>('minDist');
+const maxInput = $<HTMLInputElement>('maxDist');
+const diagInput = $<HTMLInputElement>('diag');
+const quadBoxes = [...document.querySelectorAll<HTMLInputElement>('#quadrants input')];
+const findBtn = $<HTMLButtonElement>('find');
+const progress = $<HTMLProgressElement>('progress');
+
+function fillForm(): void {
+  seedInput.value = state.seed;
+  minInput.value = String(state.filters.minDist);
+  maxInput.value = String(state.filters.maxDist);
+  diagInput.value = String(state.filters.diagonalDeg);
+  for (const b of quadBoxes) b.checked = state.filters.quadrants.includes(b.value as Quadrant);
+  showDiag();
+  $<HTMLAnchorElement>('chunkbase').href = chunkbaseUrl(state.seed);
+}
+
+function showDiag(): void {
+  const v = Number(diagInput.value);
+  $('diagOut').textContent = v >= 45 ? 'any angle' : `${v}°`;
+}
+diagInput.addEventListener('input', showDiag);
+
+/** Take a finished search as the new state. Nothing changes until this runs, so a cancelled search leaves no trace. */
+function applyResult(seed: string, filters: Filters, cities: FoundCity[]): void {
+  const refit = seed !== state.seed || filters.maxDist !== state.filters.maxDist || !state.found.length;
+  if (seed !== state.seed) {
+    // Hand-added positions belong to the old world.
+    state.imported = [];
+    state.excluded = [];
+    state.moved = {};
+    tracker = new Tracker(seed);
+  }
+  state.seed = seed;
+  state.filters = filters;
+  state.found = cities;
+  save();
+  selected = null;
+  rebuild();
+  fillForm();
+  showExploredNote();
+  render();
+  if (refit) map.fit([], filters.maxDist);
+}
+
+function endSearch(): void {
+  worker?.terminate();
+  worker = null;
+  findBtn.textContent = 'Find cities';
+  progress.hidden = true;
+}
+
+form.addEventListener('submit', (e) => {
+  e.preventDefault();
+  // While a search is running the button cancels it; the previous results stay as they were.
+  if (worker) {
+    if (confirm('Cancel the search? The cities already shown will stay as they are.')) endSearch();
+    return;
+  }
+  const filters: Filters = {
+    minDist: Number(minInput.value),
+    maxDist: Number(maxInput.value),
+    diagonalDeg: Number(diagInput.value),
+    quadrants: quadBoxes.filter((b) => b.checked).map((b) => b.value as Quadrant),
+  };
+  if (filters.maxDist <= filters.minDist) {
+    maxInput.setCustomValidity('Must be larger than the starting distance.');
+    maxInput.reportValidity();
+    return;
+  }
+  if (!filters.quadrants.length) {
+    quadBoxes[0].setCustomValidity('Pick at least one quadrant.');
+    quadBoxes[0].reportValidity();
+    return;
+  }
+  const seed = seedInput.value.trim();
+
+  // Within the pre-generated range a search is just a filter.
+  if (precomputed?.covers(seed, filters)) {
+    applyResult(seed, filters, precomputed.search(filters));
+    return;
+  }
+
+  worker = new Worker(new URL('./generation/worker.ts', import.meta.url), { type: 'module' });
+  findBtn.textContent = 'Cancel search';
+  progress.hidden = false;
+  progress.value = 0;
+  const finish = endSearch;
+  worker.addEventListener('message', (ev: MessageEvent<FindResponse>) => {
+    if (ev.data.type === 'progress') {
+      progress.value = ev.data.fraction;
+      return;
+    }
+    finish();
+    applyResult(seed, filters, ev.data.cities);
+  });
+  worker.addEventListener('error', (ev) => {
+    finish();
+    $('stats').textContent = `Search failed: ${ev.message}`;
+  });
+  worker.postMessage({ seed, filters } satisfies FindRequest);
+});
+for (const el of [maxInput, ...quadBoxes]) el.addEventListener('input', () => el.setCustomValidity(''));
+
+// Instant searches are applied as the controls change; slow ones wait for the button.
+function formCovered(): boolean {
+  const maxDist = Number(maxInput.value);
+  return !!precomputed && !worker && precomputed.covers(seedInput.value.trim(), { ...state.filters, maxDist });
+}
+for (const el of [minInput, maxInput, diagInput, ...quadBoxes]) {
+  el.addEventListener('change', () => {
+    if (formCovered() && form.checkValidity()) form.requestSubmit();
+  });
+}
+
+$('pagePrev').addEventListener('click', () => {
+  page--;
+  renderBatches();
+});
+$('pageNext').addEventListener('click', () => {
+  page++;
+  renderBatches();
+});
+
+$('starBtn').addEventListener('click', async () => {
+  showStars = !showStars;
+  if (showStars && !skyFigures) {
+    skyFigures = await loadSkyFigures();
+    starCache = null;
+  }
+  renderDetail();
+});
+
+// ---------- regroup ----------
+
+$('regroup').addEventListener('click', () => {
+  const ids = new Set(state.excluded);
+  for (const c of batches.flat()) if (tracker.has(c)) ids.add(cityId(c));
+  state.excluded = [...ids];
+  save();
+  selected = null;
+  rebuild();
+  render();
+});
+
+$('regroupUndo').addEventListener('click', () => {
+  state.excluded = [];
+  save();
+  selected = null;
+  rebuild();
+  render();
+});
+
+// ---------- locate ----------
+
+const locateForm = $<HTMLFormElement>('locate');
+const locateInput = $<HTMLInputElement>('locateInput');
+const locateNote = $('locateNote');
+
+locateForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const pos = parseCoordinates(locateInput.value)[0];
+  if (!pos) {
+    locateNote.textContent = 'Enter your position as x, z (or x y z).';
+    return;
+  }
+  you = { x: pos.x, z: pos.z };
+  // Nearest city still worth visiting; fall back to any city if everything is looted.
+  let best: { batch: number; order: number; d: number } | null = null;
+  for (const onlyFresh of [true, false]) {
+    batches.forEach((batch, b) =>
+      batch.forEach((c, k) => {
+        if (onlyFresh && tracker.has(c)) return;
+        const d = Math.hypot(c.x - pos.x, c.z - pos.z);
+        if (!best || d < best.d) best = { batch: b, order: k, d };
+      }),
+    );
+    if (best) break;
+  }
+  const hit = best as { batch: number; order: number; d: number } | null;
+  if (!hit) {
+    locateNote.textContent = 'No cities to go to yet.';
+    renderMap();
+    return;
+  }
+  locateNote.textContent = `Nearest: ${waypointName(hit.batch, hit.order)}, ${fmt(Math.round(hit.d))} blocks away.`;
+  select(hit.batch);
+  map.fit([...batches[hit.batch], you], state.filters.maxDist);
+});
+
+$('locateClear').addEventListener('click', () => {
+  you = null;
+  locateInput.value = '';
+  locateNote.textContent = '';
+  renderMap();
+});
+
+// ---------- webmap ----------
+
+const sizeInput = $<HTMLInputElement>('batchSize');
+sizeInput.max = String(BATCH_SIZE);
+sizeInput.value = String(state.batchSize);
+sizeInput.addEventListener('change', () => {
+  const n = Math.round(Number(sizeInput.value));
+  state.batchSize = Math.min(BATCH_SIZE, Math.max(1, Number.isFinite(n) ? n : BATCH_SIZE));
+  sizeInput.value = String(state.batchSize);
+  save();
+  selected = null;
+  rebuild();
+  render();
+});
+
+const hopInput = $<HTMLInputElement>('maxHop');
+hopInput.value = String(state.maxHop);
+hopInput.addEventListener('change', () => {
+  const n = Math.round(Number(hopInput.value));
+  state.maxHop = Number.isFinite(n) && n > 0 ? n : 0;
+  hopInput.value = String(state.maxHop);
+  save();
+  selected = null;
+  rebuild();
+  render();
+});
+
+const shapeSelect = $<HTMLSelectElement>('batchShape');
+shapeSelect.value = state.batchShape;
+shapeSelect.addEventListener('change', () => {
+  state.batchShape = shapeSelect.value as BatchShape;
+  save();
+  selected = null;
+  rebuild();
+  render();
+});
+
+const shipBox = $<HTMLInputElement>('shipsOnly');
+shipBox.checked = state.shipsOnly;
+shipBox.addEventListener('change', () => {
+  state.shipsOnly = shipBox.checked;
+  save();
+  selected = null;
+  rebuild();
+  render();
+});
+
+const skipBox = $<HTMLInputElement>('skipMapped');
+skipBox.checked = state.skipMapped;
+skipBox.addEventListener('change', () => {
+  state.skipMapped = skipBox.checked;
+  save();
+  selected = null;
+  rebuild();
+  render();
+});
+
+function showExploredNote(): void {
+  const note = $('exploredNote');
+  if (!explored) {
+    note.textContent = 'No webmap data loaded. Run "npm run explored" to fetch it.';
+    skipBox.disabled = true;
+    return;
+  }
+  note.textContent = `Webmap data from ${new Date(explored.fetchedAt).toLocaleDateString()}.`;
+}
+
+// ---------- export ----------
+
+function download(name: string, text: string): void {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+const selectedLines = (): string[] =>
+  selected === null ? [] : waypointLines(batches[selected], selected, (c) => tracker.has(c));
+
+$('download').addEventListener('click', () => {
+  if (selected !== null) download(`end-cities-batch-${selected + 1}.txt`, waypointFile(selectedLines()));
+});
+
+$('copy').addEventListener('click', async () => {
+  const btn = $('copy');
+  try {
+    await navigator.clipboard.writeText(selectedLines().join('\n') + '\n');
+    btn.textContent = 'Copied';
+  } catch {
+    btn.textContent = 'Copy failed';
+  }
+  setTimeout(() => (btn.textContent = 'Copy lines'), 1500);
+});
+
+function markAll(v: boolean): void {
+  if (selected === null) return;
+  for (const c of batches[selected]) tracker.set(c, v);
+  render();
+}
+$('markAll').addEventListener('click', () => markAll(true));
+$('markNone').addEventListener('click', () => markAll(false));
+
+$('citiesExport').addEventListener('click', () => {
+  const rows = batches.flatMap((batch, b) =>
+    batch.map((c, k) => `${c.x},${c.z},${b + 1},${k + 1},${tracker.has(c) ? 'yes' : 'no'}`),
+  );
+  download('end-cities.csv', ['x,z,batch,stop,looted', ...rows].join('\n') + '\n');
+});
+
+$('visitedReset').addEventListener('click', () => {
+  if (!tracker.count || !confirm(`Mark all ${tracker.count} looted cities as not looted?`)) return;
+  tracker.clear();
+  state.excluded = [];
+  save();
+  selected = null;
+  rebuild();
+  render();
+});
+
+$('visitedExport').addEventListener('click', () => download('end-cities-looted.csv', tracker.toCsv()));
+
+const visitedFile = $<HTMLInputElement>('visitedFile');
+$('visitedImport').addEventListener('click', () => visitedFile.click());
+visitedFile.addEventListener('change', async () => {
+  const file = visitedFile.files?.[0];
+  if (!file) return;
+  tracker.mergeCsv(await file.text());
+  visitedFile.value = '';
+  render();
+});
+
+// ---------- manual coordinates ----------
+
+$('importAdd').addEventListener('click', () => {
+  const box = $<HTMLTextAreaElement>('importText');
+  const parsed = parseCoordinates(box.value);
+  if (!parsed.length) return;
+  const known = new Set(state.imported.map(([x, z]) => cityId({ x, z })));
+  for (const c of parsed) if (!known.has(cityId(c))) state.imported.push([c.x, c.z]);
+  box.value = '';
+  save();
+  selected = null;
+  rebuild();
+  render();
+});
+
+$('importClear').addEventListener('click', () => {
+  state.imported = [];
+  save();
+  selected = null;
+  rebuild();
+  render();
+});
+
+// ---------- map interaction ----------
+
+map.onHover = (c, px, py) => {
+  setHot(c?.city ?? null);
+  if (selected !== null) {
+    document.querySelectorAll('#cities li').forEach((li, k) => {
+      li.classList.toggle('hot', c?.batch === selected && c?.order === k);
+    });
+  }
+  tooltip.hidden = !c;
+  if (!c) return;
+  tooltip.textContent =
+    c.batch < 0
+      ? `${c.city.x}, ${c.city.z} · not in a batch: ${c.note}`
+      : `${waypointName(c.batch, c.order)} · ${c.city.x}, ${c.city.z}${c.visited ? ' · looted' : ''}`;
+  tooltip.style.left = `${px + 14}px`;
+  tooltip.style.top = `${py + 14}px`;
+};
+map.onPick = (c) => {
+  if (c.batch >= 0) select(c.batch);
+};
+
+// ---------- right-click menu ----------
+
+const menu = $('menu');
+const closeMenu = () => (menu.hidden = true);
+document.addEventListener('pointerdown', (e) => {
+  if (!menu.contains(e.target as Node)) closeMenu();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeMenu();
+});
+$('map').addEventListener('wheel', closeMenu);
+
+/** Rebuild after a change, keeping the batch that holds this city selected. */
+function rebuildKeeping(id: string | null): void {
+  rebuild();
+  selected = id === null ? null : batches.findIndex((b) => b.some((c) => cityId(c) === id));
+  if (selected !== null && selected < 0) selected = null;
+  render();
+}
+
+map.onMenu = (c, px, py) => {
+  const id = cityId(c.city);
+  const items: [string, () => void][] = [];
+  const keep = selected !== null ? cityId(batches[selected][0]) : null;
+
+  if (c.visited) {
+    items.push(['Mark as not looted', () => {
+      if (!confirm(`Mark the city at ${c.city.x}, ${c.city.z} as not looted?`)) return;
+      tracker.set(c.city, false);
+      state.excluded = state.excluded.filter((x) => x !== id);
+      save();
+      rebuildKeeping(keep);
+    }]);
+  } else {
+    items.push(['Mark as looted', () => {
+      tracker.set(c.city, true);
+      render();
+    }]);
+  }
+
+  // A looted city has nothing left to collect, so it is never offered for a batch.
+  if (selected !== null && c.batch !== selected && !c.visited) {
+    const target = selected;
+    // Anchor the move to a city that belongs to the batch of its own accord, so it survives regrouping.
+    const anchor = batches[target].find((x) => !(cityId(x) in state.moved));
+    if (anchor) {
+      items.push([`Add to batch ${target + 1}`, () => {
+        state.moved[id] = cityId(anchor);
+        save();
+        rebuildKeeping(cityId(anchor));
+      }]);
+    }
+  }
+  if (id in state.moved) {
+    items.push(['Return to its own batch', () => {
+      delete state.moved[id];
+      save();
+      rebuildKeeping(keep === id ? null : keep);
+    }]);
+  }
+
+  const title = document.createElement('div');
+  title.className = 'menu-title';
+  title.textContent = `${c.batch >= 0 ? waypointName(c.batch, c.order) + ' · ' : ''}${c.city.x}, ${c.city.z}`;
+  menu.replaceChildren(
+    title,
+    ...items.map(([label, run]) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = label;
+      btn.addEventListener('click', () => {
+        closeMenu();
+        run();
+      });
+      return btn;
+    }),
+  );
+  menu.hidden = false;
+  tooltip.hidden = true;
+  menu.style.left = `${px + 4}px`;
+  menu.style.top = `${py + 4}px`;
+};
+
+const cursor = $('cursor');
+map.onCursor = (pos) => {
+  cursor.textContent = pos ? `x ${fmt(pos.x)}  z ${fmt(pos.z)}` : '';
+};
+
+// ---------- start ----------
+
+fillForm();
+rebuild();
+render();
+map.fit([], state.filters.maxDist);
+Promise.all([Explored.load(), Precomputed.load()]).then(([e, p]) => {
+  explored = e;
+  precomputed = p;
+  showExploredNote();
+  rebuild();
+  render();
+  if (!state.found.length) form.requestSubmit();
+});

@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>End City Runs</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <aside id="sidebar">
+      <header>
+        <h1>End City Runs</h1>
+        <p>Find untouched End Cities, one shulker box at a time.</p>
+      </header>
+
+      <form id="search">
+        <label>World seed <input id="seed" inputmode="numeric" autocomplete="off" required pattern="-?\d+" /></label>
+        <div class="row">
+          <label>From <input id="minDist" type="number" min="0" step="500" required /></label>
+          <label>To <input id="maxDist" type="number" min="1000" step="500" required /></label>
+        </div>
+        <p class="hint">Blocks from 0,0 along the longer axis.</p>
+        <label>
+          Stay within <output id="diagOut"></output> of a diagonal
+          <input id="diag" type="range" min="5" max="45" step="5" />
+        </label>
+        <fieldset id="quadrants">
+          <legend>Quadrants</legend>
+          <label><input type="checkbox" value="NW" /> NW <small>−x −z</small></label>
+          <label><input type="checkbox" value="NE" /> NE <small>+x −z</small></label>
+          <label><input type="checkbox" value="SW" /> SW <small>−x +z</small></label>
+          <label><input type="checkbox" value="SE" /> SE <small>+x +z</small></label>
+        </fieldset>
+        <div class="row">
+          <label>Cities per batch <input id="batchSize" type="number" min="1" step="1" /></label>
+          <label>
+            Batch shape
+            <select id="batchShape">
+              <option value="cluster">Clusters</option>
+              <option value="line">Lines outward</option>
+            </select>
+          </label>
+        </div>
+        <p class="hint">27 fills one shulker box. Clusters are easier to track; lines head away from 0,0 like a long exploration flight.</p>
+        <label>Longest flight between cities <input id="maxHop" type="number" min="0" step="250" /></label>
+        <p class="hint">In blocks. Cities that can't be reached in a full batch within this are left unbatched (small faint diamonds on the map); right-click one to add it to a batch. 0 means no limit.</p>
+        <label class="check"><input id="shipsOnly" type="checkbox" /> Only cities with a ship (elytra)</label>
+        <label class="check"><input id="skipMapped" type="checkbox" /> Leave out cities already on the webmap</label>
+        <p id="exploredNote" class="hint"></p>
+        <button id="find" type="submit" class="primary">Find cities</button>
+        <progress id="progress" max="1" value="0" hidden></progress>
+      </form>
+
+      <p id="stats" class="stats"></p>
+      <div class="row">
+        <button id="regroup" type="button" title="Rebuild the batches from cities that are not looted yet">Re-batch without looted</button>
+        <button id="regroupUndo" type="button" hidden>Put looted back</button>
+      </div>
+      <ol id="batches"></ol>
+      <div id="pager" class="row" hidden>
+        <button id="pagePrev" type="button" aria-label="Previous page">‹</button>
+        <span id="pageText" class="count"></span>
+        <button id="pageNext" type="button" aria-label="Next page">›</button>
+      </div>
+
+      <details>
+        <summary>Add coordinates by hand</summary>
+        <p class="hint">
+          One position per line (<code>x, z</code> or <code>x y z</code>), for example copied from
+          <a id="chunkbase" target="_blank" rel="noopener">Chunkbase</a>. They are batched with the rest.
+        </p>
+        <textarea id="importText" rows="4" placeholder="12040, -11832"></textarea>
+        <div class="row">
+          <button id="importAdd" type="button">Add</button>
+          <button id="importClear" type="button">Remove added</button>
+        </div>
+      </details>
+
+      <details>
+        <summary>Share progress</summary>
+        <p class="hint">Looted cities are saved in this browser. Export them to share with others or move devices; importing merges.</p>
+        <div class="row">
+          <button id="visitedExport" type="button">Export looted</button>
+          <button id="visitedImport" type="button">Import looted</button>
+          <button id="citiesExport" type="button">All cities CSV</button>
+          <button id="visitedReset" type="button">Reset all looted</button>
+        </div>
+        <input id="visitedFile" type="file" accept=".csv,text/csv,text/plain" hidden />
+      </details>
+    </aside>
+
+    <main>
+      <canvas id="map"></canvas>
+      <form id="locate">
+        <input id="locateInput" placeholder="Your position: x, z" autocomplete="off" aria-label="Your position" />
+        <button type="submit">Nearest batch</button>
+        <button id="locateClear" type="button" aria-label="Clear position">×</button>
+        <span id="locateNote"></span>
+      </form>
+      <div id="tooltip" hidden></div>
+      <div id="menu" hidden></div>
+      <footer id="mapbar">
+        <span class="key"><i class="dot"></i> in a batch</span>
+        <span class="key"><i class="cross">×</i> looted</span>
+        <span class="key"><i class="dot diamond"></i> not in a batch</span>
+        <span class="key"><i class="dot square green"></i> already on the webmap</span>
+        <span class="controls">Drag to pan · scroll to zoom · click a city to open its batch · right-click for options</span>
+        <span id="cursor"></span>
+      </footer>
+    </main>
+
+    <section id="detail">
+      <div id="detailEmpty" class="empty">Pick a batch to see its route and export it to Xaero's Minimap.</div>
+      <div id="detailBody" hidden>
+        <h2><span id="detailTitle"></span> <button id="starBtn" type="button" title="Which constellation does this batch look like?">seen in the stars?</button></h2>
+        <div id="stars" hidden>
+          <canvas id="starCanvas" width="288" height="150"></canvas>
+          <p id="starText" class="hint"></p>
+          <p id="starCredit" class="hint credit"></p>
+        </div>
+        <p id="detailMeta" class="hint"></p>
+        <div class="row">
+          <button id="download" type="button" class="primary">Download waypoints</button>
+          <button id="copy" type="button">Copy lines</button>
+        </div>
+        <p class="hint">
+          Looted cities are left out. Close Minecraft, then paste the lines at the end of the waypoint file in
+          <code>.minecraft/xaero/minimap/&lt;your server&gt;/dim%1/</code> (keep the downloaded file as-is if that
+          folder is empty).
+        </p>
+        <div class="row">
+          <button id="markAll" type="button">Mark all looted</button>
+          <button id="markNone" type="button">Clear</button>
+        </div>
+        <ol id="cities"></ol>
+      </div>
+    </section>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
