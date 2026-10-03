@@ -846,6 +846,30 @@ for (const r of modeRadios) {
     if (formCovered() && form.checkValidity() && (!aroundMode() || formFilters().around)) form.requestSubmit();
   });
 }
+// Somewhere to explore, picked at random from anywhere within a million blocks of 0,0, at least
+// 10,000 out. Spots already on the webmap are passed over, and so are the rings of empty void that
+// the End has far out, where there is nothing to find.
+const RANDOM_REACH = 1_000_000;
+/** Whether the game leaves this spot as void: beyond about 370,000 blocks, land and void alternate in rings. */
+const inVoidRing = (x: number, z: number) => {
+  const [cx, cz] = [Math.floor(x / 8), Math.floor(z / 8)];
+  return ((cx * cx + cz * cz) | 0) < 0;
+};
+$('aroundRandom').addEventListener('click', () => {
+  const roll = () => Math.round(((Math.random() * 2 - 1) * RANDOM_REACH) / 100) * 100;
+  let pos = { x: roll(), z: roll() };
+  for (let tries = 0; tries < 200; tries++) {
+    const farEnough = Math.max(Math.abs(pos.x), Math.abs(pos.z)) >= 10000;
+    const fresh = !(explored && state.seed === DEFAULT_SEED && explored.isMapped(pos.x, pos.z));
+    if (farEnough && fresh && !inVoidRing(pos.x, pos.z)) break;
+    pos = { x: roll(), z: roll() };
+  }
+  setAroundPosition(pos);
+  if (!(Number(aroundRadius.value) > 0)) aroundRadius.value = '10000';
+  renderMap();
+  form.requestSubmit();
+});
+
 $('aroundUseMap').addEventListener('click', () => {
   const pos = you ?? parseCoordinates(locateInput.value)[0];
   if (!pos) {
