@@ -11,7 +11,7 @@ import { cityId, type City, type Filters, type Quadrant } from './types';
 import { OUTSIDE_COLOR, XAERO_COLORS, batchColor, waypointFile, waypointLines, waypointName } from './xaero';
 
 const DEFAULT_SEED = '856461443495910397';
-const DEFAULT_FILTERS: Filters = { minDist: 10000, maxDist: 20000, diagonalDeg: 25, quadrants: ['NE', 'NW', 'SE', 'SW'] };
+const DEFAULT_FILTERS: Filters = { minDist: 10000, maxDist: 50000, diagonalDeg: 45, quadrants: ['NE', 'NW', 'SE', 'SW'] };
 const STORE = 'end-cities:state';
 
 interface Saved {
