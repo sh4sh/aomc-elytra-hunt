@@ -1,6 +1,6 @@
 import { lookalike, type Constellation } from './constellations';
 import { Explored } from './explored';
-import { BATCH_SIZE, DEFAULT_MAX_HOP, makeBatches, route, type BatchShape } from './filters';
+import { BATCH_SIZE, DEFAULT_MAX_HOP, makeBatches, passes, route, type BatchShape } from './filters';
 import type { FindRequest, FindResponse, FoundCity } from './generation/worker';
 import { parseCoordinates } from './import';
 import { chatLine, chatLines, cleanUsername } from './journeymap';
@@ -8,7 +8,7 @@ import { EndMap, type MapCity } from './map';
 import { Precomputed } from './precomputed';
 import { loadSkyFigures } from './sky-cultures';
 import { Tracker } from './tracker';
-import { cityId, type City, type Filters, type Quadrant } from './types';
+import { cityId, searchBounds, type City, type Filters, type Quadrant } from './types';
 import { OUTSIDE_COLOR, XAERO_COLORS, batchColor, setBatchTags, waypointFile, waypointLines, waypointName } from './xaero';
 
 const DEFAULT_SEED = '856461443495910397';
@@ -20,6 +20,13 @@ const ISSUES_URL = 'https://github.com/sh4sh/aomc-elytra-hunt/issues';
 const SUBMIT_URL = 'https://aomc-looted-relay.sh4sh.workers.dev';
 /** How far a line batch may stray to either side of straight, in blocks, unless the player changes it. */
 const DEFAULT_LINE_DEVIATION = 1000;
+/**
+ * Most ship cities one search may bring in. Batching and drawing slow down with every city, and beyond
+ * this the page would hang for many seconds, so a wider search is refused with advice to narrow it.
+ */
+const MAX_SEARCH_CITIES = 25000;
+/** Ship cities per square block, measured over the first 100,000 blocks of the default world. */
+const SHIP_DENSITY = 4.6e-7;
 const DEFAULT_FILTERS: Filters = { minDist: 10000, maxDist: 50000, diagonalDeg: 45, quadrants: ['NE', 'NW', 'SE', 'SW'] };
 const STORE = 'end-cities:state';
 
@@ -157,6 +164,16 @@ function rebuild(): void {
     else cities.push(entry.city);
   }
   batches = makeBatches(cities, state.batchSize, state.batchShape, state.maxHop, state.lineDeviation);
+  const centre = state.filters.around;
+  if (centre) {
+    // Searching around a position: number the batches outward from there rather than from 0,0.
+    const far = (b: City[]) =>
+      Math.hypot(b.reduce((t, c) => t + c.x, 0) / b.length - centre.x, b.reduce((t, c) => t + c.z, 0) / b.length - centre.z);
+    batches = batches
+      .map((b) => ({ b, d: far(b) }))
+      .sort((p, q) => p.d - q.d)
+      .map((e) => e.b);
+  }
 
   // Hand-made moves are applied after batching, so adding a city to a batch never reshuffles the others.
   // A move holds while both cities still exist and its target is in a batch of its own accord.
@@ -205,6 +222,8 @@ function rebuild(): void {
 const looted = (batch: City[]) => batch.filter((c) => tracker.has(c)).length;
 const color = (i: number) => XAERO_COLORS[batchColor(i)];
 const fmt = (n: number) => n.toLocaleString();
+/** Coordinates the way Minecraft writes them. No thousands separators, so they can be typed straight in. */
+const xzText = (c: { x: number; z: number }) => `x: ${c.x}, z: ${c.z}`;
 
 // ---------- rendering ----------
 
@@ -214,6 +233,7 @@ const fmt = (n: number) => n.toLocaleString();
  */
 function previewFilters(): Filters {
   const f = formFilters();
+  if (aroundMode()) return f.around ? f : state.filters;
   const usable = Number.isFinite(f.minDist) && Number.isFinite(f.maxDist) && f.minDist >= 0 && f.maxDist > f.minDist;
   return usable ? f : state.filters;
 }
@@ -240,10 +260,15 @@ function renderMap(): void {
 /** One-line description of the current search, shown while the settings are folded away. */
 function renderSettingsSummary(): void {
   const f = state.filters;
+  const where = f.around
+    ? [`within ${fmt(f.around.radius)} blocks of ${xzText(f.around)}`]
+    : [
+        `${fmt(f.minDist)}–${fmt(f.maxDist)} blocks out`,
+        f.diagonalDeg >= 45 ? 'any angle' : `within ${f.diagonalDeg}° of ${f.angleFrom === 'axis' ? 'an axis' : 'a diagonal'}`,
+        f.quadrants.length === 4 ? 'all quadrants' : f.quadrants.join(' '),
+      ];
   $('settingsSummary').textContent = [
-    `${fmt(f.minDist)}–${fmt(f.maxDist)} blocks out`,
-    f.diagonalDeg >= 45 ? 'any angle' : `within ${f.diagonalDeg}° of ${f.angleFrom === 'axis' ? 'an axis' : 'a diagonal'}`,
-    f.quadrants.length === 4 ? 'all quadrants' : f.quadrants.join(' '),
+    ...where,
     `${state.batchSize} per batch`,
     state.batchShape !== 'line'
       ? 'clusters'
@@ -383,7 +408,7 @@ function renderDetail(): void {
       n.textContent = String(k + 1);
       const xz = document.createElement('span');
       xz.className = 'xz';
-      xz.textContent = `${c.x}, ${c.z}`;
+      xz.textContent = xzText(c);
       const hop = document.createElement('span');
       hop.className = 'hop';
       hop.textContent = k ? `+${fmt(Math.round(Math.hypot(c.x - batch[k - 1].x, c.z - batch[k - 1].z)))}` : '';
@@ -490,6 +515,15 @@ function select(i: number | null, zoom = false): void {
 
 const form = $<HTMLFormElement>('search');
 const seedInput = $<HTMLInputElement>('seed');
+const modeRadios = [...document.querySelectorAll<HTMLInputElement>('input[name="searchMode"]')];
+const aroundPos = $<HTMLInputElement>('aroundPos');
+const aroundRadius = $<HTMLInputElement>('aroundRadius');
+/** Whether the form is set to search around a position rather than outward from 0,0. */
+const aroundMode = () => modeRadios.some((r) => r.checked && r.value === 'around');
+function showSearchMode(): void {
+  for (const r of modeRadios) r.parentElement!.classList.toggle('on', r.checked);
+  document.body.classList.toggle('around-mode', aroundMode());
+}
 const minInput = $<HTMLInputElement>('minDist');
 const maxInput = $<HTMLInputElement>('maxDist');
 const diagInput = $<HTMLInputElement>('diag');
@@ -501,6 +535,12 @@ const progress = $<HTMLProgressElement>('progress');
 function fillForm(): void {
   seedInput.value = state.seed;
   showSeedReset();
+  for (const r of modeRadios) r.checked = (r.value === 'around') === !!state.filters.around;
+  if (state.filters.around) {
+    aroundPos.value = xzText(state.filters.around);
+    aroundRadius.value = String(state.filters.around.radius);
+  }
+  showSearchMode();
   minInput.value = String(state.filters.minDist);
   maxInput.value = String(state.filters.maxDist);
   diagInput.value = String(state.filters.diagonalDeg);
@@ -511,7 +551,10 @@ function fillForm(): void {
 
 /** The search as currently set in the form, applied or not. */
 function formFilters(): Filters {
+  const pos = parseCoordinates(aroundPos.value)[0];
+  const radius = Number(aroundRadius.value);
   return {
+    around: aroundMode() && pos && radius > 0 ? { x: pos.x, z: pos.z, radius } : undefined,
     minDist: Number(minInput.value),
     maxDist: Number(maxInput.value),
     diagonalDeg: Number(diagInput.value),
@@ -533,9 +576,19 @@ function showSeedMode(): void {
 }
 showSeedMode();
 
+/** Zoom the map to the whole area a search covers. */
+function fitSearch(f: Filters): void {
+  const b = searchBounds(f);
+  map.fit([{ x: b.x0, z: b.z0 }, { x: b.x1, z: b.z1 }], f.maxDist);
+}
+
 /** Take a finished search as the new state. Nothing changes until this runs, so a cancelled search leaves no trace. */
 function applyResult(seed: string, filters: Filters, cities: FoundCity[]): void {
-  const refit = seed !== state.seed || filters.maxDist !== state.filters.maxDist || !state.found.length;
+  const refit =
+    seed !== state.seed ||
+    filters.maxDist !== state.filters.maxDist ||
+    JSON.stringify(filters.around) !== JSON.stringify(state.filters.around) ||
+    !state.found.length;
   if (seed !== state.seed) {
     // Hand-added positions belong to the old world.
     state.imported = [];
@@ -555,9 +608,47 @@ function applyResult(seed: string, filters: Filters, cities: FoundCity[]): void 
   fillForm();
   showExploredNote();
   render();
-  if (refit) map.fit([], filters.maxDist);
+  if (refit) fitSearch(filters);
   if (foldWhenDone && cities.length) settings.open = false;
   foldWhenDone = false;
+  if (locateAfterSearch) {
+    const pos = locateAfterSearch;
+    locateAfterSearch = null;
+    if (!openNearest(pos, 'Searched around your position. ')) {
+      locateNote.textContent = 'No full batch near your position. Try a larger radius, or add the diamonds to a custom batch.';
+      renderMap();
+    }
+  }
+}
+
+/** Roughly how many ship cities a search covers, from its area alone. */
+function estimateShips(f: Filters): number {
+  if (f.around) return Math.round(Math.PI * f.around.radius ** 2 * SHIP_DENSITY);
+  const band = 4 * (f.maxDist ** 2 - f.minDist ** 2);
+  const angle = f.diagonalDeg >= 45 ? 1 : f.diagonalDeg / 45;
+  return Math.round(band * (f.quadrants.length / 4) * angle * SHIP_DENSITY);
+}
+
+/**
+ * Refuse a search that covers too many cities, explaining how to narrow it. The previous
+ * result stays in place. Returns whether the search was refused.
+ */
+function tooBig(ships: number): boolean {
+  const warning = $('searchWarning');
+  if (ships <= MAX_SEARCH_CITIES) {
+    warning.hidden = true;
+    return false;
+  }
+  // The advice names the controls of whichever kind of search is in use.
+  $('narrowBand').hidden = aroundMode();
+  $('narrowAround').hidden = !aroundMode();
+  $('searchWarningText').textContent =
+    `That search covers about ${fmt(Math.round(ships / 1000) * 1000)} cities, more than the ` +
+    `${fmt(MAX_SEARCH_CITIES)} that can be batched at once.`;
+  warning.hidden = false;
+  foldWhenDone = false;
+  settings.open = true;
+  return true;
 }
 
 function endSearch(): void {
@@ -575,18 +666,27 @@ form.addEventListener('submit', (e) => {
   e.preventDefault();
   // While a search is running the button cancels it; the previous results stay as they were.
   if (worker) {
-    if (confirm('Cancel the search? The cities already shown will stay as they are.')) endSearch();
+    if (confirm('Cancel the search? The cities already shown will stay as they are.')) {
+      endSearch();
+      locateAfterSearch = null;
+    }
     return;
   }
   // Changing a control re-runs an instant search with no submitter; only fold for a deliberate press.
   foldWhenDone = e.submitter !== null;
   const filters = formFilters();
-  if (filters.maxDist <= filters.minDist) {
+  if (aroundMode() && !filters.around) {
+    const field = parseCoordinates(aroundPos.value)[0] ? aroundRadius : aroundPos;
+    field.setCustomValidity(field === aroundPos ? 'Enter a position, like x: 100000, z: 200000.' : 'Enter a radius in blocks.');
+    field.reportValidity();
+    return;
+  }
+  if (!filters.around && filters.maxDist <= filters.minDist) {
     maxInput.setCustomValidity('Must be larger than the starting distance.');
     maxInput.reportValidity();
     return;
   }
-  if (!filters.quadrants.length) {
+  if (!filters.around && !filters.quadrants.length) {
     quadBoxes[0].setCustomValidity('Pick at least one quadrant.');
     quadBoxes[0].reportValidity();
     return;
@@ -602,9 +702,12 @@ form.addEventListener('submit', (e) => {
 
   // Within the pre-generated range a search is just a filter.
   if (precomputed?.covers(seed, filters)) {
-    applyResult(seed, filters, precomputed.search(filters));
+    const found = precomputed.search(filters);
+    if (!tooBig(found.filter((c) => c[2]).length)) applyResult(seed, filters, found);
     return;
   }
+  // A live search can take a long time, so judge its size from the area before starting it.
+  if (tooBig(estimateShips(filters))) return;
 
   // The built worker is a plain script, which every browser can start. Only the dev server serves it as a module.
   worker = import.meta.env.DEV
@@ -620,7 +723,7 @@ form.addEventListener('submit', (e) => {
       return;
     }
     finish();
-    applyResult(seed, filters, ev.data.cities);
+    if (!tooBig(ev.data.cities.filter((c) => c[2]).length)) applyResult(seed, filters, ev.data.cities);
   });
   worker.addEventListener('error', (ev) => {
     finish();
@@ -642,15 +745,39 @@ seedReset.addEventListener('click', () => {
 });
 
 // Redraw the shaded search area while a control is being moved, before anything is applied.
-for (const el of [minInput, maxInput, diagInput, angleFromSelect, ...quadBoxes]) el.addEventListener('input', renderMap);
+for (const el of [minInput, maxInput, diagInput, angleFromSelect, aroundPos, aroundRadius, ...quadBoxes]) {
+  el.addEventListener('input', renderMap);
+}
+for (const el of [aroundPos, aroundRadius]) el.addEventListener('input', () => el.setCustomValidity(''));
+for (const r of modeRadios) {
+  r.addEventListener('change', () => {
+    showSearchMode();
+    // Starting an around-search with the position already given on the map saves typing it twice.
+    if (aroundMode() && !aroundPos.value && you) aroundPos.value = xzText(you);
+    renderMap();
+    if (formCovered() && form.checkValidity() && (!aroundMode() || formFilters().around)) form.requestSubmit();
+  });
+}
+$('aroundUseMap').addEventListener('click', () => {
+  const pos = you ?? parseCoordinates(locateInput.value)[0];
+  if (!pos) {
+    aroundPos.setCustomValidity('Type your position into the box on the map first, or enter it here.');
+    aroundPos.reportValidity();
+    return;
+  }
+  aroundPos.value = xzText(pos);
+  aroundPos.setCustomValidity('');
+  renderMap();
+  if (formCovered() && formFilters().around) form.requestSubmit();
+});
 
 // Instant searches are applied as the controls change; slow ones wait for the button.
 function formCovered(): boolean {
-  const maxDist = Number(maxInput.value);
-  return !!precomputed && !worker && precomputed.covers(seedInput.value.trim(), { ...state.filters, maxDist });
+  return !!precomputed && !worker && precomputed.covers(seedInput.value.trim(), previewFilters());
 }
-for (const el of [minInput, maxInput, diagInput, angleFromSelect, ...quadBoxes]) {
+for (const el of [minInput, maxInput, diagInput, angleFromSelect, aroundPos, aroundRadius, ...quadBoxes]) {
   el.addEventListener('change', () => {
+    if (aroundMode() && !formFilters().around) return;
     if (formCovered() && form.checkValidity()) form.requestSubmit();
   });
 }
@@ -712,15 +839,9 @@ const locateForm = $<HTMLFormElement>('locate');
 const locateInput = $<HTMLInputElement>('locateInput');
 const locateNote = $('locateNote');
 
-locateForm.addEventListener('submit', (e) => {
-  e.preventDefault();
-  const pos = parseCoordinates(locateInput.value)[0];
-  if (!pos) {
-    locateNote.textContent = 'Enter your position as x, z (or x y z).';
-    return;
-  }
-  you = { x: pos.x, z: pos.z };
-  // Nearest city still worth visiting; fall back to any city if everything is looted.
+/** Open the batch holding the nearest city worth visiting. Returns false when there is none. */
+function openNearest(pos: { x: number; z: number }, prefix = ''): boolean {
+  // Prefer a city that is not looted; fall back to any city if everything is.
   let best: { batch: number; order: number; d: number } | null = null;
   for (const onlyFresh of [true, false]) {
     batches.forEach((batch, b) =>
@@ -733,14 +854,41 @@ locateForm.addEventListener('submit', (e) => {
     if (best) break;
   }
   const hit = best as { batch: number; order: number; d: number } | null;
-  if (!hit) {
-    locateNote.textContent = 'No cities to go to yet.';
-    renderMap();
+  if (!hit) return false;
+  locateNote.textContent = `${prefix}Nearest: ${waypointName(hit.batch, hit.order)}, ${fmt(Math.round(hit.d))} blocks away.`;
+  select(hit.batch);
+  map.fit([...batches[hit.batch], pos], state.filters.maxDist);
+  return true;
+}
+
+/** Set while a search around the player's position is running, so the nearest batch is opened once it lands. */
+let locateAfterSearch: { x: number; z: number } | null = null;
+
+locateForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const pos = parseCoordinates(locateInput.value)[0];
+  if (!pos) {
+    locateNote.textContent = 'Enter your position, like x: 100000, z: 200000.';
     return;
   }
-  locateNote.textContent = `Nearest: ${waypointName(hit.batch, hit.order)}, ${fmt(Math.round(hit.d))} blocks away.`;
-  select(hit.batch);
-  map.fit([...batches[hit.batch], you], state.filters.maxDist);
+  you = { x: pos.x, z: pos.z };
+  // Inside the area already searched, the nearest batch is among the ones on screen.
+  if (passes(pos.x, pos.z, state.filters) && openNearest(you)) return;
+
+  // Otherwise the current search does not cover where the player is: search around them instead.
+  for (const r of modeRadios) r.checked = r.value === 'around';
+  showSearchMode();
+  aroundPos.value = xzText(you);
+  if (!(Number(aroundRadius.value) > 0)) aroundRadius.value = '10000';
+  locateNote.textContent = 'Searching around your position…';
+  locateAfterSearch = you;
+  form.requestSubmit();
+  // A refused or invalid search never reports back, so don't leave the request hanging.
+  if (!worker && locateAfterSearch) {
+    locateAfterSearch = null;
+    locateNote.textContent = 'Could not search around that position. Check the search settings.';
+    renderMap();
+  }
 });
 
 $('locateClear').addEventListener('click', () => {
@@ -994,11 +1142,13 @@ submitBtn.addEventListener('click', async () => {
 for (const link of document.querySelectorAll<HTMLElement>('.jump')) {
   link.addEventListener('click', () => {
     const section = $(link.dataset.target!);
-    if (section instanceof HTMLDetailsElement) {
-      section.open = true;
-      section.querySelector('summary')?.focus({ preventScroll: true });
+    // Unfold whatever the target is tucked inside, and the target itself if it folds.
+    for (let el: HTMLElement | null = section; el; el = el.parentElement) {
+      if (el instanceof HTMLDetailsElement) el.open = true;
     }
-    section.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    if (section instanceof HTMLDetailsElement) section.querySelector('summary')?.focus({ preventScroll: true });
+    else section.querySelector<HTMLElement>('input, select')?.focus({ preventScroll: true });
+    section.scrollIntoView({ block: 'center', behavior: 'smooth' });
     section.classList.add('flash');
     setTimeout(() => section.classList.remove('flash'), 1200);
   });
@@ -1039,8 +1189,8 @@ map.onHover = (c, px, py) => {
   if (!c) return;
   tooltip.textContent =
     c.batch < 0
-      ? `${c.city.x}, ${c.city.z} · not in a batch: ${c.note}`
-      : `${waypointName(c.batch, c.order)} · ${c.city.x}, ${c.city.z}${c.visited ? ' · looted' : ''}`;
+      ? `${xzText(c.city)} · not in a batch: ${c.note}`
+      : `${waypointName(c.batch, c.order)} · ${xzText(c.city)}${c.visited ? ' · looted' : ''}`;
   tooltip.style.left = `${px + 14}px`;
   tooltip.style.top = `${py + 14}px`;
 };
@@ -1087,7 +1237,7 @@ map.onMenu = (c, px, py) => {
     }]);
   } else if (c.visited) {
     items.push(['Mark as not looted', () => {
-      if (!confirm(`Mark the city at ${c.city.x}, ${c.city.z} as not looted?`)) return;
+      if (!confirm(`Mark the city at ${xzText(c.city)} as not looted?`)) return;
       tracker.set(c.city, false);
       state.excluded = state.excluded.filter((x) => x !== id);
       save();
@@ -1146,7 +1296,7 @@ map.onMenu = (c, px, py) => {
 
   const title = document.createElement('div');
   title.className = 'menu-title';
-  title.textContent = `${c.batch >= 0 ? waypointName(c.batch, c.order) + ' · ' : ''}${c.city.x}, ${c.city.z}`;
+  title.textContent = `${c.batch >= 0 ? waypointName(c.batch, c.order) + ' · ' : ''}${xzText(c.city)}`;
   menu.replaceChildren(
     title,
     ...items.map(([label, run]) => {
@@ -1176,7 +1326,7 @@ $('zoomIn').addEventListener('click', () => map.setZoom(map.zoom + 0.05));
 
 const cursor = $('cursor');
 map.onCursor = (pos) => {
-  cursor.textContent = pos ? `x ${fmt(pos.x)}  z ${fmt(pos.z)}` : '';
+  cursor.textContent = pos ? xzText(pos) : '';
 };
 
 // ---------- resizable panels ----------
@@ -1271,7 +1421,7 @@ if (!drawsEmoji('🪿')) {
 fillForm();
 rebuild();
 render();
-map.fit([], state.filters.maxDist);
+fitSearch(state.filters);
 // With results from last time, start with the settings folded so the batches are in view.
 settings.open = state.found.length === 0;
 

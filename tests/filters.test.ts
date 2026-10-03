@@ -27,6 +27,14 @@ describe('filters', () => {
     expect(passes(12000, 12000, { ...nearAxis, diagonalDeg: 45 })).toBe(true);
   });
 
+  it('can search a circle around a position, ignoring the band settings', () => {
+    const around = { ...all, quadrants: [], around: { x: 100000, z: 200000, radius: 5000 } };
+    expect(passes(100000, 200000, around)).toBe(true);
+    expect(passes(103000, 204000, around)).toBe(true);
+    expect(passes(104000, 204000, around)).toBe(false);
+    expect(passes(12000, 12000, around)).toBe(false);
+  });
+
   it('treats -z as north', () => {
     expect(quadrantOf(5, -5)).toBe('NE');
     expect(quadrantOf(-5, 5)).toBe('SW');

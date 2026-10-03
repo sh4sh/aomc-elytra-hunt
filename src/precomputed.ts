@@ -4,7 +4,7 @@
 import { passes } from './filters';
 import { chunkToBlock } from './generation/end-cities';
 import type { FoundCity } from './generation/worker';
-import type { Filters } from './types';
+import { searchBounds, type Filters } from './types';
 
 export class Precomputed {
   private constructor(
@@ -27,7 +27,8 @@ export class Precomputed {
   }
 
   covers(seed: string, filters: Filters): boolean {
-    return seed === this.seed && filters.maxDist <= this.maxBlocks;
+    const b = searchBounds(filters);
+    return seed === this.seed && Math.max(-b.x0, b.x1, -b.z0, b.z1) <= this.maxBlocks;
   }
 
   search(filters: Filters): FoundCity[] {

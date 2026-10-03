@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { END_CITY, candidateChunk } from '../src/generation/end-cities';
+import { END_CITY, candidateChunk, chunkToBlock, findEndCities } from '../src/generation/end-cities';
 import { endCityHasShip } from '../src/generation/end-city-pieces';
 import { EndTerrain } from '../src/generation/end-terrain';
 import cases from './fixtures/cubiomes-end-cities.json';
@@ -23,6 +23,19 @@ describe('End City positions and ships match cubiomes', () => {
       expect(found).toEqual(c.cities.map(([x, z, ship]) => `${x} ${z} ${ship}`));
     }, 120_000);
   }
+
+  it('finds the same cities when asked for just one square of the map', () => {
+    const c = cases[0];
+    const bounds = { x0: 4000, x1: 9000, z0: -12000, z1: -6000 };
+    const inside = ([cx, cz]: number[]) => {
+      const [x, z] = [chunkToBlock(cx), chunkToBlock(cz)];
+      return x >= bounds.x0 && x <= bounds.x1 && z >= bounds.z0 && z <= bounds.z1;
+    };
+    const expected = c.cities.filter(inside).map(([x, z]) => `${x} ${z}`).sort();
+    const found = findEndCities(BigInt(c.seed), { maxBlocks: 0, bounds }).map(([x, z]) => `${x} ${z}`).sort();
+    expect(expected.length).toBeGreaterThan(20);
+    expect(found).toEqual(expected);
+  });
 
   // Checked in game: there is a city at -1208, 10312 on this seed, and it has no ship.
   it('reports no ship for a city seen without one', () => {

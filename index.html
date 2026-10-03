@@ -19,7 +19,20 @@
       <details id="settings" open>
         <summary><span class="settings-title">Search settings</span> <span id="settingsSummary"></span></summary>
       <form id="search">
-        <div class="row">
+        <div class="segmented" role="radiogroup" aria-label="Where to search">
+          <label><input type="radio" name="searchMode" value="band" /> Out from 0,0</label>
+          <label><input type="radio" name="searchMode" value="around" /> Around a position</label>
+        </div>
+        <div id="aroundBox" class="panel around-only">
+          <label>Position <input id="aroundPos" autocomplete="off" spellcheck="false" placeholder="x: 100000, z: 200000" /></label>
+          <label>Radius, in blocks <input id="aroundRadius" type="number" min="100" step="500" value="10000" /></label>
+          <div class="row">
+            <button id="aroundUseMap" type="button">Use my position from the map</button>
+          </div>
+          <p class="hint">Finds cities within that distance of the position, in any direction. A small radius may hold too few cities for a full batch; they then show as unbatched diamonds.</p>
+        </div>
+        <div id="bandBox" class="panel band-only">
+        <div class="row" id="distanceBox">
           <label>From <input id="minDist" type="number" min="0" step="500" required /></label>
           <label>To <input id="maxDist" type="number" min="1000" step="500" required /></label>
         </div>
@@ -31,6 +44,7 @@
           <label><input type="checkbox" value="SW" /> SW <small>−x +z</small></label>
           <label><input type="checkbox" value="SE" /> SE <small>+x +z</small></label>
         </fieldset>
+        </div>
         <div class="row">
           <label>Cities per batch <input id="batchSize" type="number" min="1" step="1" /></label>
           <label>
@@ -56,7 +70,7 @@
         <p id="exploredNote" class="hint aomc-only"></p>
         <details id="advanced">
           <summary>Advanced</summary>
-          <label>
+          <label id="angleBox" class="band-only">
             <span>Stay within <output id="diagOut"></output> of
               <select id="angleFrom" aria-label="Measure the angle from">
                 <option value="diagonal">a diagonal</option>
@@ -65,7 +79,7 @@
             </span>
             <input id="diag" type="range" min="5" max="45" step="5" />
           </label>
-          <p class="hint">Narrows the search to directions near the diagonals or near the axes. 45° searches every direction.</p>
+          <p class="hint band-only">Narrows the search to directions near the diagonals or near the axes. 45° searches every direction.</p>
           <label>World seed <input id="seed" inputmode="numeric" autocomplete="off" spellcheck="false" /></label>
           <div class="row">
             <button id="seedReset" type="button">About Oliver Minecraft Seed</button>
@@ -81,6 +95,18 @@
       </form>
       </details>
 
+      <p id="searchWarning" class="warning" role="alert" hidden>
+        <span id="searchWarningText"></span>
+        <span id="narrowBand">
+          Narrow the <button type="button" class="jump" data-target="distanceBox">distance</button>,
+          untick some <button type="button" class="jump" data-target="quadrants">quadrants</button>, or tighten the
+          <button type="button" class="jump" data-target="angleBox">angle</button>.
+        </span>
+        <span id="narrowAround" hidden>
+          Use a smaller <button type="button" class="jump" data-target="aroundBox">radius</button>.
+        </span>
+        The map shows the last search that worked.
+      </p>
       <p id="stats" class="stats"></p>
       <div class="row">
         <button id="regroup" type="button" title="Rebuild the batches from cities that are not looted yet">Re-batch without looted</button>
@@ -140,7 +166,7 @@
     <main>
       <canvas id="map"></canvas>
       <form id="locate">
-        <input id="locateInput" placeholder="Your position: x, z" autocomplete="off" aria-label="Your position" />
+        <input id="locateInput" placeholder="Your position, e.g. x: 100, z: -200" autocomplete="off" aria-label="Your position" />
         <button type="submit">Nearest batch</button>
         <button id="locateClear" type="button" aria-label="Clear position">×</button>
         <span id="locateNote"></span>
@@ -194,6 +220,7 @@
         <h3>Good to know</h3>
         <ul>
           <li>Small faint diamonds are cities with a ship that didn't fit a batch. Right-click one to add it to the batch you have open.</li>
+          <li>Far from 0,0? In <button type="button" class="jump" data-target="settings">Search settings</button>, choose <em>Around a position</em> to search a circle around your coordinates.</li>
           <li>Want your own route? Right-click any city and choose <em>Start a custom batch with this city</em>, then right-click others to add them. Custom batches sit at the top of the batch list.</li>
           <li class="aomc-only">Green shading is terrain already on the community webmap; cities there are left out of batches.</li>
           <li><button type="button" class="jump" data-target="settings">Search settings</button> changes the distance, angle, batch size and longest flight.</li>

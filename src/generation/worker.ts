@@ -2,7 +2,7 @@
 import { endCityHasShip } from './end-city-pieces';
 import { chunkToBlock, findEndCities } from './end-cities';
 import { passes } from '../filters';
-import type { Filters } from '../types';
+import { searchBounds, type Filters } from '../types';
 
 export interface FindRequest {
   seed: string;
@@ -19,6 +19,7 @@ addEventListener('message', (e: MessageEvent<FindRequest>) => {
   const worldSeed = BigInt(seed);
   const chunks = findEndCities(worldSeed, {
     maxBlocks: filters.maxDist,
+    bounds: searchBounds(filters),
     accept: (x, z) => passes(x, z, filters),
     onProgress: (fraction) => postMessage({ type: 'progress', fraction } satisfies FindResponse),
   });

@@ -40,7 +40,10 @@ The same steps are in the app under **How to use**.
 **Search settings** (fold it open) controls which cities are
 considered and how they are grouped:
 
-- **From / To:** how far from 0,0 to look, measured along the longer axis.
+- **Out from 0,0 / Around a position:** search a band around the centre of the
+  End, or a circle of a chosen radius around coordinates you enter.
+- **From / To:** how far from 0,0 to look, measured along the longer axis. A search
+  covering more than 25,000 cities is refused with a prompt to narrow it.
 - **Quadrants:** which quarters of the map to search.
 - **Cities per batch:** 27 fills one shulker box.
 - **Batch shape:** compact clusters, or lines heading outward. For lines you can also set

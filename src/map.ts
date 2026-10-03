@@ -279,13 +279,24 @@ export class EndMap {
     }
     ctx.stroke();
     // Labels along the bottom (x) and left (z) edges.
-    for (const x of xs) ctx.fillText(`x ${x.toLocaleString()}`, this.sx(x) + 4, h - 6);
-    for (const z of zs) if (this.sy(z) < h - 22 && this.sy(z) > 60) ctx.fillText(`z ${z.toLocaleString()}`, 6, this.sy(z) - 4);
+    for (const x of xs) ctx.fillText(`x: ${x}`, this.sx(x) + 4, h - 6);
+    for (const z of zs) if (this.sy(z) < h - 22 && this.sy(z) > 60) ctx.fillText(`z: ${z}`, 6, this.sy(z) - 4);
   }
 
   /** Shade where the search looks: the band between the two distances, narrowed by angle and quadrant. */
   private drawSearchArea(f: Filters): void {
     const { ctx } = this;
+    if (f.around) {
+      // A circle around the chosen position.
+      ctx.beginPath();
+      ctx.arc(this.sx(f.around.x), this.sy(f.around.z), f.around.radius * this.scale, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(197, 139, 255, 0.09)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(197, 139, 255, 0.45)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      return;
+    }
     const ox = this.sx(0);
     const oy = this.sy(0);
     const outer = f.maxDist * this.scale;
@@ -344,7 +355,11 @@ export class EndMap {
     this.drawSearchArea(searchArea);
 
     // Axes and diagonals.
-    const reach = filters.maxDist * this.scale;
+    // The axes reach as far as the search does, wherever it is centred.
+    const reach =
+      (filters.around
+        ? Math.max(Math.abs(filters.around.x), Math.abs(filters.around.z)) + filters.around.radius
+        : filters.maxDist) * this.scale;
     ctx.lineWidth = 1;
     ctx.strokeStyle = '#2a2340';
     ctx.beginPath();
@@ -361,11 +376,16 @@ export class EndMap {
     // Search band: the squares at the minimum and maximum distance.
     ctx.fillStyle = '#7d7494';
     ctx.font = '11px system-ui, sans-serif';
-    for (const d of [filters.minDist, filters.maxDist]) {
-      const r = d * this.scale;
-      ctx.strokeStyle = '#3d3360';
-      ctx.strokeRect(ox - r, oy - r, 2 * r, 2 * r);
-      ctx.fillText(`${d.toLocaleString()} out`, ox + 4, oy - r - 4);
+    if (filters.around) {
+      const { x, z, radius } = filters.around;
+      ctx.fillText(`${radius.toLocaleString()} around x: ${x}, z: ${z}`, this.sx(x) + 4, this.sy(z) - radius * this.scale - 4);
+    } else {
+      for (const d of [filters.minDist, filters.maxDist]) {
+        const r = d * this.scale;
+        ctx.strokeStyle = '#3d3360';
+        ctx.strokeRect(ox - r, oy - r, 2 * r, 2 * r);
+        ctx.fillText(`${d.toLocaleString()} out`, ox + 4, oy - r - 4);
+      }
     }
     ctx.fillText('N (−z)', ox + 4, oy - reach - 18);
 

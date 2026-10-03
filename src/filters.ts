@@ -14,6 +14,7 @@ export function diagonalOffset(x: number, z: number): number {
 }
 
 export function passes(x: number, z: number, f: Filters): boolean {
+  if (f.around) return Math.hypot(x - f.around.x, z - f.around.z) <= f.around.radius;
   const d = Math.max(Math.abs(x), Math.abs(z));
   if (d < f.minDist || d > f.maxDist) return false;
   if (f.diagonalDeg < 45) {

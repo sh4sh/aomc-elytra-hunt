@@ -49,6 +49,8 @@ code { font-size: 12px; background: var(--panel-2); padding: 1px 4px; border-rad
 .empty em { font-style: normal; color: var(--text); }
 .empty ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
 #helpBack { align-self: flex-start; }
+.warning { border: 1px solid #e0a84a; border-radius: 6px; padding: 8px 10px; font-size: 13px; background: rgba(224, 168, 74, 0.08); }
+.warning[hidden] { display: none; }
 .jump { border: 0; background: none; padding: 0; font: inherit; color: var(--accent); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .jump:hover { color: var(--text); }
 .flash { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
@@ -182,7 +184,7 @@ main { position: relative; min-width: 0; min-height: 0; display: flex; flex-dire
 #zoom { position: absolute; top: 10px; right: 10px; display: flex; align-items: center; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 2px 4px; }
 #zoom button { border: 0; background: none; padding: 0 6px; font-size: 16px; line-height: 1.2; }
 #zoom input { width: 110px; }
-#locate input { width: 150px; padding: 3px 6px; font-size: 12px; background: var(--panel); }
+#locate input { width: 210px; padding: 3px 6px; font-size: 12px; background: var(--panel); }
 #locate button { padding: 3px 8px; font-size: 12px; white-space: nowrap; background: var(--panel); }
 #locateNote { white-space: nowrap; background: var(--panel); border-radius: 6px; padding: 3px 8px; }
 #locateNote:empty { display: none; }
@@ -203,6 +205,10 @@ main { position: relative; min-width: 0; min-height: 0; display: flex; flex-dire
 #menu button { border: 0; background: none; text-align: left; padding: 6px 8px; }
 #menu button:hover { background: var(--panel-2); }
 .goose { display: block; margin-top: 4px; }
+/* Controls for one kind of search are hidden while the other is chosen. */
+body.around-mode .band-only { display: none; }
+body:not(.around-mode) .around-only { display: none; }
+#narrowAround[hidden], #narrowBand[hidden] { display: none; }
 /* Parts that only make sense for the About Oliver server's world. */
 .other-seed .aomc-only { display: none !important; }
 body:not(.other-seed) .other-only { display: none; }
