@@ -155,7 +155,8 @@ label.field input { border-color: var(--accent); }
 #cities .chat:hover { color: var(--text); }
 
 main { position: relative; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
-#map { width: 100%; flex: 1; min-height: 0; display: block; cursor: grab; touch-action: none; }
+/* One finger scrolls the page as usual; the browser's own pinch and double-tap zoom stay off the map. */
+#map { width: 100%; flex: 1; min-height: 0; display: block; cursor: grab; touch-action: pan-x pan-y; }
 #map.dragging { cursor: grabbing; }
 #tooltip {
   position: absolute;
@@ -248,7 +249,11 @@ body:not(.other-seed) .other-only { display: none; }
 
 /* Touch screens: iPhones zoom the whole page in when a field with text smaller than 16px is focused,
    so fields get 16px there, and tap targets get a little more room. */
+/* Wording that differs between mouse and touch. */
+.touch-only { display: none; }
 @media (pointer: coarse) {
+  .touch-only { display: inline; }
+  .mouse-only { display: none; }
   input:not([type]), input[type='number'], textarea, select,
   #pager input, #pager select, #locate input, #angleFrom { font-size: 16px; }
   #pager button, #zoom button { padding: 6px 12px; }

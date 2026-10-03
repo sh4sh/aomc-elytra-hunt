@@ -125,36 +125,55 @@ export class EndMap {
     let hold: ReturnType<typeof setTimeout> | undefined;
     const cancelHold = () => clearTimeout(hold);
 
-    // Two fingers on the map pinch to zoom. Positions of the fingers currently down:
-    const fingers = new Map<number, { x: number; y: number }>();
-    /** Distance between the two fingers and the point midway between them. */
-    const pinchState = () => {
-      const [a, b] = [...fingers.values()];
+    // On a touch screen, one finger is left to the browser so the page can still be scrolled past the
+    // map; two fingers move and zoom the map. That gesture is read from touch events, because they can
+    // be claimed or left alone per gesture, which pointer events cannot.
+    const twoFingers = (e: TouchEvent) => {
+      const box = el.getBoundingClientRect();
+      const [a, b] = [e.touches[0], e.touches[1]].map((t) => ({ x: t.clientX - box.left, y: t.clientY - box.top }));
       return { dist: Math.hypot(a.x - b.x, a.y - b.y) || 1, x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
     };
-    let pinch: ReturnType<typeof pinchState> | null = null;
-    const liftFinger = (e: PointerEvent) => {
-      fingers.delete(e.pointerId);
-      if (pinch && fingers.size < 2) {
-        pinch = null;
-        // The finger still down must not carry on as a drag or count as a tap.
+    let pinch: ReturnType<typeof twoFingers> | null = null;
+    el.addEventListener(
+      'touchstart',
+      (e) => {
+        if (e.touches.length !== 2) return;
+        e.preventDefault();
+        cancelHold();
+        // Neither finger should go on to count as a tap on a city.
         drag = null;
-      }
+        pinch = twoFingers(e);
+      },
+      { passive: false },
+    );
+    el.addEventListener(
+      'touchmove',
+      (e) => {
+        if (!pinch || e.touches.length !== 2) return;
+        if (e.cancelable) e.preventDefault();
+        const now = twoFingers(e);
+        // The block that was between the fingers stays between them as they move, spread or close.
+        const wx = (pinch.x - this.w / 2) / this.scale + this.cx;
+        const wz = (pinch.y - this.h / 2) / this.scale + this.cz;
+        this.scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, this.scale * (now.dist / pinch.dist)));
+        this.cx = wx - (now.x - this.w / 2) / this.scale;
+        this.cz = wz - (now.y - this.h / 2) / this.scale;
+        pinch = now;
+        this.draw();
+        this.onZoom(this.zoom);
+        this.onHover(null, 0, 0);
+      },
+      { passive: false },
+    );
+    const endPinch = (e: TouchEvent) => {
+      if (e.touches.length < 2) pinch = null;
     };
+    el.addEventListener('touchend', endPinch);
+    el.addEventListener('touchcancel', endPinch);
 
     el.addEventListener('pointerdown', (e) => {
       if (e.button !== 0) return;
-      if (e.pointerType === 'touch') {
-        fingers.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
-        if (fingers.size === 2) {
-          cancelHold();
-          drag = null;
-          el.classList.remove('dragging');
-          pinch = pinchState();
-          el.setPointerCapture(e.pointerId);
-          return;
-        }
-      }
+      const touch = e.pointerType === 'touch';
       if (e.pointerType !== 'mouse') {
         const { offsetX, offsetY } = e;
         hold = setTimeout(() => {
@@ -166,29 +185,17 @@ export class EndMap {
         }, 550);
       }
       drag = { x: e.offsetX, y: e.offsetY, moved: false };
-      el.setPointerCapture(e.pointerId);
+      // A finger is not captured: if it turns into a page scroll, the browser takes it over.
+      if (!touch) el.setPointerCapture(e.pointerId);
     });
     el.addEventListener('pointermove', (e) => {
-      if (fingers.has(e.pointerId)) fingers.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
-      if (pinch && fingers.size === 2) {
-        const now = pinchState();
-        // The block that was between the fingers stays between them as they spread, close or move.
-        const wx = (pinch.x - this.w / 2) / this.scale + this.cx;
-        const wz = (pinch.y - this.h / 2) / this.scale + this.cz;
-        this.scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, this.scale * (now.dist / pinch.dist)));
-        this.cx = wx - (now.x - this.w / 2) / this.scale;
-        this.cz = wz - (now.y - this.h / 2) / this.scale;
-        pinch = now;
-        this.draw();
-        this.onZoom(this.zoom);
-        this.onHover(null, 0, 0);
-        return;
-      }
       if (drag) {
         const dx = e.offsetX - drag.x;
         const dy = e.offsetY - drag.y;
         if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
         if (drag.moved) cancelHold();
+        // One finger never moves the map; it only stops being a tap once it has moved.
+        if (e.pointerType === 'touch') return;
         if (drag.moved) {
           el.classList.add('dragging');
           this.cx -= dx / this.scale;
@@ -200,22 +207,19 @@ export class EndMap {
           return;
         }
       }
+      if (e.pointerType === 'touch') return;
       this.onHover(this.cityAt(e.offsetX, e.offsetY), e.offsetX, e.offsetY);
       this.onCursor({
         x: Math.round((e.offsetX - this.w / 2) / this.scale + this.cx),
         z: Math.round((e.offsetY - this.h / 2) / this.scale + this.cz),
       });
     });
-    el.addEventListener('pointercancel', (e) => {
+    el.addEventListener('pointercancel', () => {
       cancelHold();
-      liftFinger(e);
       drag = null;
     });
     el.addEventListener('pointerup', (e) => {
       cancelHold();
-      const wasPinching = pinch !== null;
-      liftFinger(e);
-      if (wasPinching) return;
       el.classList.remove('dragging');
       if (drag && !drag.moved) {
         const hit = this.cityAt(e.offsetX, e.offsetY);

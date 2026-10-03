@@ -527,7 +527,19 @@ function select(i: number | null, zoom = false): void {
 const form = $<HTMLFormElement>('search');
 const seedInput = $<HTMLInputElement>('seed');
 const modeRadios = [...document.querySelectorAll<HTMLInputElement>('input[name="searchMode"]')];
-const aroundPos = $<HTMLInputElement>('aroundPos');
+const aroundX = $<HTMLInputElement>('aroundX');
+const aroundZ = $<HTMLInputElement>('aroundZ');
+/** The position typed into the two coordinate fields, or null while either is empty. */
+function aroundPosition(): { x: number; z: number } | null {
+  if (aroundX.value.trim() === '' || aroundZ.value.trim() === '') return null;
+  const [x, z] = [Number(aroundX.value), Number(aroundZ.value)];
+  return Number.isFinite(x) && Number.isFinite(z) ? { x: Math.round(x), z: Math.round(z) } : null;
+}
+function setAroundPosition(pos: { x: number; z: number }): void {
+  aroundX.value = String(pos.x);
+  aroundZ.value = String(pos.z);
+  aroundX.setCustomValidity('');
+}
 const aroundRadius = $<HTMLInputElement>('aroundRadius');
 /** Whether the form is set to search around a position rather than outward from 0,0. */
 const aroundMode = () => modeRadios.some((r) => r.checked && r.value === 'around');
@@ -548,7 +560,7 @@ function fillForm(): void {
   showSeedReset();
   for (const r of modeRadios) r.checked = (r.value === 'around') === !!state.filters.around;
   if (state.filters.around) {
-    aroundPos.value = xzText(state.filters.around);
+    setAroundPosition(state.filters.around);
     aroundRadius.value = String(state.filters.around.radius);
   }
   showSearchMode();
@@ -562,7 +574,7 @@ function fillForm(): void {
 
 /** The search as currently set in the form, applied or not. */
 function formFilters(): Filters {
-  const pos = parseCoordinates(aroundPos.value)[0];
+  const pos = aroundPosition();
   const radius = Number(aroundRadius.value);
   return {
     around: aroundMode() && pos && radius > 0 ? { x: pos.x, z: pos.z, radius } : undefined,
@@ -687,8 +699,8 @@ form.addEventListener('submit', (e) => {
   foldWhenDone = e.submitter !== null;
   const filters = formFilters();
   if (aroundMode() && !filters.around) {
-    const field = parseCoordinates(aroundPos.value)[0] ? aroundRadius : aroundPos;
-    field.setCustomValidity(field === aroundPos ? 'Enter a position, like x: 100000, z: 200000.' : 'Enter a radius in blocks.');
+    const field = aroundPosition() ? aroundRadius : aroundX.value.trim() === '' ? aroundX : aroundZ;
+    field.setCustomValidity(field === aroundRadius ? 'Enter a radius in blocks.' : 'Enter both x and z.');
     field.reportValidity();
     return;
   }
@@ -756,7 +768,7 @@ seedReset.addEventListener('click', () => {
 });
 
 // Redraw the shaded search area while a control is being moved, before anything is applied.
-for (const el of [minInput, maxInput, diagInput, angleFromSelect, aroundPos, aroundRadius, ...quadBoxes]) {
+for (const el of [minInput, maxInput, diagInput, angleFromSelect, aroundX, aroundZ, aroundRadius, ...quadBoxes]) {
   el.addEventListener('input', renderMap);
 }
 // A typed number snaps to the nearest step its field accepts (500 blocks for distances and the radius,
@@ -776,12 +788,12 @@ form.addEventListener(
   },
   true,
 );
-for (const el of [aroundPos, aroundRadius]) el.addEventListener('input', () => el.setCustomValidity(''));
+for (const el of [aroundX, aroundZ, aroundRadius]) el.addEventListener('input', () => el.setCustomValidity(''));
 for (const r of modeRadios) {
   r.addEventListener('change', () => {
     showSearchMode();
     // Starting an around-search with the position already given on the map saves typing it twice.
-    if (aroundMode() && !aroundPos.value && you) aroundPos.value = xzText(you);
+    if (aroundMode() && !aroundPosition() && you) setAroundPosition(you);
     renderMap();
     if (formCovered() && form.checkValidity() && (!aroundMode() || formFilters().around)) form.requestSubmit();
   });
@@ -789,12 +801,11 @@ for (const r of modeRadios) {
 $('aroundUseMap').addEventListener('click', () => {
   const pos = you ?? parseCoordinates(locateInput.value)[0];
   if (!pos) {
-    aroundPos.setCustomValidity('Type your position into the box on the map first, or enter it here.');
-    aroundPos.reportValidity();
+    aroundX.setCustomValidity('Type your position into the box on the map first, or enter it here.');
+    aroundX.reportValidity();
     return;
   }
-  aroundPos.value = xzText(pos);
-  aroundPos.setCustomValidity('');
+  setAroundPosition(pos);
   renderMap();
   if (formCovered() && formFilters().around) form.requestSubmit();
 });
@@ -803,7 +814,7 @@ $('aroundUseMap').addEventListener('click', () => {
 function formCovered(): boolean {
   return !!precomputed && !worker && precomputed.covers(seedInput.value.trim(), previewFilters());
 }
-for (const el of [minInput, maxInput, diagInput, angleFromSelect, aroundPos, aroundRadius, ...quadBoxes]) {
+for (const el of [minInput, maxInput, diagInput, angleFromSelect, aroundX, aroundZ, aroundRadius, ...quadBoxes]) {
   el.addEventListener('change', () => {
     if (aroundMode() && !formFilters().around) return;
     if (formCovered() && form.checkValidity()) form.requestSubmit();
@@ -906,7 +917,7 @@ locateForm.addEventListener('submit', (e) => {
   // Otherwise the current search does not cover where the player is: search around them instead.
   for (const r of modeRadios) r.checked = r.value === 'around';
   showSearchMode();
-  aroundPos.value = xzText(you);
+  setAroundPosition(you);
   if (!(Number(aroundRadius.value) > 0)) aroundRadius.value = '10000';
   locateNote.textContent = 'Searching around your position…';
   locateAfterSearch = you;

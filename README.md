@@ -67,7 +67,8 @@ Only cities with a ship are ever shown, since only ships hold elytra.
 - A small faint diamond is a city with a ship that is not in any batch.
   Right-click it to add it to the batch you have open.
 - Green shading is terrain already on the community webmap.
-- Drag to pan; scroll, pinch or use the slider to zoom. On a wide screen, drag the
+- Drag to pan; scroll or use the slider to zoom. On a touch screen, use two
+  fingers to move the map and pinch to zoom; one finger scrolls the page. On a wide screen, drag the
   dividers either side of the map to resize the panels.
 - Right-click a city for options; on a touch screen, press and hold.
 

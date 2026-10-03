@@ -24,7 +24,10 @@
           <label><input type="radio" name="searchMode" value="around" /> Around a position</label>
         </div>
         <div id="aroundBox" class="panel around-only">
-          <label>Position <input id="aroundPos" autocomplete="off" spellcheck="false" placeholder="x: 100000, z: 200000" /></label>
+          <div class="row" id="aroundPosBox">
+            <label>x <input id="aroundX" type="number" step="1" placeholder="100000" aria-label="Position x" /></label>
+            <label>z <input id="aroundZ" type="number" step="1" placeholder="200000" aria-label="Position z" /></label>
+          </div>
           <label>Radius, in blocks <input id="aroundRadius" type="number" min="500" step="500" value="10000" /></label>
           <div class="row">
             <button id="aroundUseMap" type="button">Use my position from the map</button>
@@ -184,7 +187,8 @@
         <span class="key"><i class="dot diamond"></i> not in a batch</span>
         <span class="key"><i class="dot square area"></i> search area</span>
         <span class="key aomc-only"><i class="dot square green"></i> already on the webmap</span>
-        <span class="controls">Drag to pan · scroll, pinch or use the slider to zoom · click a city to open its batch · right-click or press and hold for options</span>
+        <span class="controls mouse-only">Drag to pan · scroll or use the slider to zoom · click a city to open its batch · right-click for options</span>
+        <span class="controls touch-only">Two fingers to move the map · pinch or use the slider to zoom · tap a city to open its batch · press and hold for options</span>
         <span id="cursor"></span>
       </footer>
     </main>
