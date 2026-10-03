@@ -106,6 +106,8 @@ ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: col
 #pager { align-items: center; justify-content: space-between; flex-wrap: nowrap; }
 #pager button { padding: 2px 10px; }
 #pager input { width: 104px; padding: 2px 6px; font-size: 12px; }
+#pager select { width: auto; min-width: 0; flex: 1; padding: 2px 4px; font-size: 12px; }
+#pager { flex-wrap: wrap; gap: 6px; }
 #pager[hidden] { display: none; }
 #batches li button {
   width: 100%;
@@ -236,4 +238,14 @@ body:not(.other-seed) .other-only { display: none; }
   .resizer { display: none; }
   .wide-only { display: none; }
   #sidebar, #detail { border: 0; }
+}
+
+/* Touch screens: iPhones zoom the whole page in when a field with text smaller than 16px is focused,
+   so fields get 16px there, and tap targets get a little more room. */
+@media (pointer: coarse) {
+  input:not([type]), input[type='number'], textarea, select,
+  #pager input, #pager select, #locate input, #angleFrom { font-size: 16px; }
+  #pager button, #zoom button { padding: 6px 12px; }
+  #pager select { flex-basis: 100%; order: -1; }
+  #pager input { flex: 1; width: auto; }
 }

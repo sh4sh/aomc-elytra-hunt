@@ -281,7 +281,18 @@ function renderBatches(): void {
   const first = page * PAGE_SIZE;
   const last = Math.min(first + PAGE_SIZE, generatedCount);
   $('pager').hidden = pages === 1;
-  $('pageText').textContent = `Batches ${first + 1}–${last} of ${generatedCount}`;
+  // One entry per page, named by the batches on it, so any page is one pick away.
+  const pageSelect = $<HTMLSelectElement>('pageSelect');
+  if (pageSelect.options.length !== pages || pageSelect.dataset.total !== String(generatedCount)) {
+    pageSelect.dataset.total = String(generatedCount);
+    pageSelect.replaceChildren(
+      ...Array.from({ length: pages }, (_, p) => {
+        const from = p * PAGE_SIZE + 1;
+        return new Option(`Batches ${from}–${Math.min(from + PAGE_SIZE - 1, generatedCount)} of ${generatedCount}`, String(p));
+      }),
+    );
+  }
+  pageSelect.value = String(page);
   $<HTMLButtonElement>('pagePrev').disabled = page === 0;
   $<HTMLButtonElement>('pageNext').disabled = page === pages - 1;
   $<HTMLInputElement>('gotoBatch').max = String(generatedCount);
@@ -650,6 +661,11 @@ gotoBatch.addEventListener('change', () => {
   gotoBatch.value = '';
   // Out-of-range numbers go to the nearest end of the list.
   if (Number.isFinite(n) && generatedCount) select(Math.min(generatedCount, Math.max(1, n)) - 1, true);
+});
+
+$<HTMLSelectElement>('pageSelect').addEventListener('change', (e) => {
+  page = Number((e.target as HTMLSelectElement).value);
+  renderBatches();
 });
 
 $('pagePrev').addEventListener('click', () => {
