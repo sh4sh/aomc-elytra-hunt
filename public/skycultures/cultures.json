@@ -1,0 +1,134 @@
+[
+ {
+  "id": "anutan",
+  "from": "Anuta, a Polynesian island in the Solomon Islands",
+  "license": "CC BY-SA",
+  "source": "https://github.com/Stellarium/stellarium-skycultures/blob/014fbb5e59233d133c22f9811af96b67d05a95c9/anutan/description.md"
+ },
+ {
+  "id": "aztec",
+  "from": "Aztec tradition",
+  "license": "GNU GPL v2.0",
+  "source": "https://github.com/Stellarium/stellarium-skycultures/blob/014fbb5e59233d133c22f9811af96b67d05a95c9/aztec/description.md"
+ },
+ {
+  "id": "blackfoot",
+  "from": "Blackfoot tradition, North American Great Plains",
+  "license": "CC BY-SA",
+  "source": "https://github.com/Stellarium/stellarium-skycultures/blob/014fbb5e59233d133c22f9811af96b67d05a95c9/blackfoot/description.md"
+ },
+ {
+  "id": "boorong",
+  "from": "Boorong people, Aboriginal Australia",
+  "license": "Data and illustrations: CC-BY SA",
+  "source": "https://github.com/Stellarium/stellarium-skycultures/blob/014fbb5e59233d133c22f9811af96b67d05a95c9/boorong/description.md"
+ },
+ {
+  "id": "bugis",
+  "from": "Bugis sailors of Sulawesi, Indonesia",
+  "license": "CC BY-SA",
+  "source": "https://github.com/Stellarium/stellarium-skycultures/blob/014fbb5e59233d133c22f9811af96b67d05a95c9/bugis/description.md"
+ },
+ {
+  "id": "chinese",
+  "from": "traditional Chinese astronomy",
+  "license": "Su Song and Suzhou maps images: Public Domain · Text and line: CC BY-SA",
+  "source": "https://github.com/Stellarium/stellarium-skycultures/blob/014fbb5e59233d133c22f9811af96b67d05a95c9/chinese/description.md"
+ },
+ {
+  "id": "egyptian",
+  "from": "late ancient Egyptian astronomy",
+  "license": "GNU GPL v2.0",
+  "source": "https://github.com/Stellarium/stellarium-skycultures/blob/014fbb5e59233d133c22f9811af96b67d05a95c9/egyptian/description.md"
+ },
+ {
+  "id": "hawaiian_starlines",
+  "from": "Hawaiian star lines, used by the Polynesian Voyaging Society",
+  "license": "CC BY-SA",
+  "source": "https://github.com/Stellarium/stellarium-skycultures/blob/014fbb5e59233d133c22f9811af96b67d05a95c9/hawaiian_starlines/description.md"
+ },
+ {
+  "id": "indian",
+  "from": "Indian astronomy",
+  "license": "CC BY-SA",
+  "source": "https://github.com/Stellarium/stellarium-skycultures/blob/014fbb5e59233d133c22f9811af96b67d05a95c9/indian/description.md"
+ },
+ {
+  "id": "inuit",
+  "from": "Inuit astronomy",
+  "license": "Text and data: GNU GPL v2.0 · Illustrations: Free Art License",
+  "source": "https://github.com/Stellarium/stellarium-skycultures/blob/014fbb5e59233d133c22f9811af96b67d05a95c9/inuit/description.md"
+ },
+ {
+  "id": "japanese_moon_stations",
+  "from": "the Japanese moon stations",
+  "license": "Text and data: CC BY-SA · Yasui's Map detail[4] used with authorisation from Steven Renshaw",
+  "source": "https://github.com/Stellarium/stellarium-skycultures/blob/014fbb5e59233d133c22f9811af96b67d05a95c9/japanese_moon_stations/description.md"
+ },
+ {
+  "id": "korean",
+  "from": "traditional Korean astronomy",
+  "license": "GNU GPL v2.0",
+  "source": "https://github.com/Stellarium/stellarium-skycultures/blob/014fbb5e59233d133c22f9811af96b67d05a95c9/korean/description.md"
+ },
+ {
+  "id": "lokono",
+  "from": "Lokono (Arawak) people of the Guianas",
+  "license": "CC-BY NC · Special permission is also granted to Stellarium Labs to include the licensed material in the mobile application Stellarium.",
+  "source": "https://github.com/Stellarium/stellarium-skycultures/blob/014fbb5e59233d133c22f9811af96b67d05a95c9/lokono/description.md"
+ },
+ {
+  "id": "mandar",
+  "from": "Mandar sailors of Sulawesi, Indonesia",
+  "license": "CC BY-SA",
+  "source": "https://github.com/Stellarium/stellarium-skycultures/blob/014fbb5e59233d133c22f9811af96b67d05a95c9/mandar/description.md"
+ },
+ {
+  "id": "maori",
+  "from": "Māori tradition",
+  "license": "Text and lines: CC BY-SA",
+  "source": "https://github.com/Stellarium/stellarium-skycultures/blob/014fbb5e59233d133c22f9811af96b67d05a95c9/maori/description.md"
+ },
+ {
+  "id": "mongolian",
+  "from": "Mongolian tradition",
+  "license": "CC BY-SA",
+  "source": "https://github.com/Stellarium/stellarium-skycultures/blob/014fbb5e59233d133c22f9811af96b67d05a95c9/mongolian/description.md"
+ },
+ {
+  "id": "navajo",
+  "from": "Navajo (Diné) astronomy",
+  "license": "GNU GPL v2.0",
+  "source": "https://github.com/Stellarium/stellarium-skycultures/blob/014fbb5e59233d133c22f9811af96b67d05a95c9/navajo/description.md"
+ },
+ {
+  "id": "northern_andes",
+  "from": "peoples of the northern Andes",
+  "license": "GNU GPL v2.0",
+  "source": "https://github.com/Stellarium/stellarium-skycultures/blob/014fbb5e59233d133c22f9811af96b67d05a95c9/northern_andes/description.md"
+ },
+ {
+  "id": "sami",
+  "from": "Sámi tradition",
+  "license": "CC BY-SA",
+  "source": "https://github.com/Stellarium/stellarium-skycultures/blob/014fbb5e59233d133c22f9811af96b67d05a95c9/sami/description.md"
+ },
+ {
+  "id": "tongan",
+  "from": "Tonga",
+  "license": "CC BY-SA",
+  "source": "https://github.com/Stellarium/stellarium-skycultures/blob/014fbb5e59233d133c22f9811af96b67d05a95c9/tongan/description.md"
+ },
+ {
+  "id": "tukano",
+  "from": "Tukano people of the north-west Amazon",
+  "license": "Text, lines and illustrations: CC BY-SA",
+  "source": "https://github.com/Stellarium/stellarium-skycultures/blob/014fbb5e59233d133c22f9811af96b67d05a95c9/tukano/description.md"
+ },
+ {
+  "id": "tupi",
+  "from": "Tupi-Guarani peoples of South America",
+  "license": "GNU GPL v2.0",
+  "source": "https://github.com/Stellarium/stellarium-skycultures/blob/014fbb5e59233d133c22f9811af96b67d05a95c9/tupi/description.md"
+ }
+]
