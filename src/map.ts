@@ -10,6 +10,8 @@ export interface MapCity {
   visited: boolean;
   /** Set for cities shown outside the batches (batch is -1): why they were left out. */
   note?: string;
+  /** Drawn as a bright cross in the "everything explored so far" view: gold for looted, green for on the webmap. */
+  trophy?: 'looted' | 'mapped';
 }
 
 export interface MapScene {
@@ -444,6 +446,11 @@ export class EndMap {
         if (outside) ctx.globalAlpha = 0.6;
         ctx.strokeStyle = '#8a8299';
         ctx.lineWidth = 1.5;
+        if (c.trophy) {
+          ctx.globalAlpha = 1;
+          ctx.strokeStyle = c.trophy === 'looted' ? '#ffd24a' : '#7fe0b0';
+          ctx.lineWidth = 2;
+        }
         ctx.stroke();
       } else if (outside) {
         ctx.globalAlpha = 0.75;

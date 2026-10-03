@@ -51,6 +51,34 @@ export class Explored {
     return false;
   }
 
+  /**
+   * Every square region of the given size (in blocks) that has mapped terrain in it or within
+   * reach of it, as [regionX, regionZ]. Lets a caller look only where something could be mapped.
+   */
+  regions(regionBlocks: number): [number, number][] {
+    const bpp = this.blocksPerPixel;
+    const margin = NEAR_PX * bpp;
+    const seen = new Set<string>();
+    const out: [number, number][] = [];
+    for (const [row, runs] of this.rows) {
+      const rz0 = Math.floor((row * bpp - margin) / regionBlocks);
+      const rz1 = Math.floor(((row + 1) * bpp + margin) / regionBlocks);
+      for (let k = 0; k < runs.length; k += 2) {
+        const rx0 = Math.floor((runs[k] * bpp - margin) / regionBlocks);
+        const rx1 = Math.floor(((runs[k] + runs[k + 1]) * bpp + margin) / regionBlocks);
+        for (let rz = rz0; rz <= rz1; rz++) {
+          for (let rx = rx0; rx <= rx1; rx++) {
+            const key = `${rx},${rz}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            out.push([rx, rz]);
+          }
+        }
+      }
+    }
+    return out;
+  }
+
   /** Paint the mapped areas. sx/sy convert block coordinates to canvas pixels. */
   draw(ctx: CanvasRenderingContext2D, sx: (x: number) => number, sy: (z: number) => number, w: number, h: number): void {
     const bpp = this.blocksPerPixel;

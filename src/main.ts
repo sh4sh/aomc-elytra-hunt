@@ -1,5 +1,8 @@
 import { lookalike, type Constellation } from './constellations';
 import { Explored } from './explored';
+import { endCityHasShip } from './generation/end-city-pieces';
+import { END_CITY, candidateChunk, chunkToBlock } from './generation/end-cities';
+import { EndTerrain } from './generation/end-terrain';
 import { BATCH_SIZE, DEFAULT_MAX_HOP, makeBatches, passes, route, type BatchShape } from './filters';
 import type { FindRequest, FindResponse, FoundCity } from './generation/worker';
 import { parseCoordinates } from './import';
@@ -88,6 +91,36 @@ let explored: Explored | null = null;
 let precomputed: Precomputed | null = null;
 let you: { x: number; z: number } | null = null;
 let showStars = false;
+/** Hidden extra, toggled by the goose: show every looted city on the map. */
+let showTrophies = false;
+const lootedCities = (): City[] =>
+  tracker.all().map((id) => {
+    const [x, z] = id.split(',').map(Number);
+    return { x, z, source: 'seed' as const };
+  });
+/** Ship cities in areas on the webmap, worked out the first time the hidden view is opened. */
+let webmapCities: City[] | null = null;
+
+/**
+ * Find every ship city in terrain the webmap shows, however far out. Only the regions that contain
+ * mapped terrain are examined, in small slices so the page stays responsive.
+ */
+async function findWebmapCities(mask: Explored): Promise<City[]> {
+  const seed = BigInt(DEFAULT_SEED);
+  const terrain = new EndTerrain(seed);
+  const out: City[] = [];
+  const regions = mask.regions(END_CITY.spacing * 16);
+  for (let i = 0; i < regions.length; i++) {
+    if (i % 250 === 249) await new Promise((r) => setTimeout(r));
+    const [cx, cz] = candidateChunk(seed, regions[i][0], regions[i][1], END_CITY);
+    const [x, z] = [chunkToBlock(cx), chunkToBlock(cz)];
+    if (!mask.isMapped(x, z)) continue;
+    // Nothing generates on the central island.
+    if ((cx * 16) ** 2 + (cz * 16) ** 2 < 1008 ** 2) continue;
+    if (terrain.canGenerateEndCity(cx, cz) && endCityHasShip(seed, cx, cz)) out.push({ x, z, source: 'seed' });
+  }
+  return out;
+}
 /** Whether the instructions are showing in place of the open batch. */
 let helpOpen = false;
 /** Figures from the world's sky cultures, fetched the first time the sketch is opened. */
@@ -253,6 +286,24 @@ function renderMap(): void {
   );
   for (const o of outside) {
     cities.push({ city: o.city, batch: -1, order: 0, color: OUTSIDE_COLOR, visited: tracker.has(o.city), note: o.note });
+  }
+  if (showTrophies) {
+    // Hidden extra: every looted city there is, wherever the current search happens to be looking.
+    const drawn = new Map(cities.map((c) => [cityId(c.city), c]));
+    const mark = (city: City, trophy: 'looted' | 'mapped', note: string) => {
+      const there = drawn.get(cityId(city));
+      // Looted outranks mapped, and is added second so it wins.
+      if (there) {
+        there.trophy = trophy;
+        there.visited = true;
+      } else {
+        const entry: MapCity = { city, batch: -1, order: 0, color: OUTSIDE_COLOR, visited: true, note, trophy };
+        cities.push(entry);
+        drawn.set(cityId(city), entry);
+      }
+    };
+    if (state.seed === DEFAULT_SEED) for (const city of webmapCities ?? []) mark(city, 'mapped', 'in an area on the webmap');
+    for (const city of lootedCities()) mark(city, 'looted', 'looted');
   }
   map.setScene({
     cities,
@@ -1429,6 +1480,38 @@ for (const handle of document.querySelectorAll<HTMLElement>('.resizer')) {
 }
 
 // ---------- goose ----------
+
+// The goose keeps count: click it to see every looted city at once, click again to put them away.
+const gooseCredit = $('gooseCredit');
+const gooseTally = $('gooseTally');
+const showTally = () => {
+  if (!showTrophies) return (gooseTally.textContent = '');
+  const looted = lootedCities().length;
+  const parts = [looted ? `${fmt(looted)} ${looted === 1 ? 'city' : 'cities'} looted so far (gold)` : 'nothing looted yet'];
+  if (state.seed === DEFAULT_SEED && explored) {
+    parts.push(webmapCities ? `${fmt(webmapCities.length)} more in areas on the webmap (green)` : 'counting the ones on the webmap…');
+  }
+  gooseTally.textContent = `Honk! ${parts.join(', ')}.`;
+};
+gooseCredit.addEventListener('click', async () => {
+  showTrophies = !showTrophies;
+  showTally();
+  renderMap();
+  if (!showTrophies) return;
+  const fitAll = () => {
+    const all = [...lootedCities(), ...(webmapCities ?? [])];
+    if (all.length) map.fit(all, state.filters.maxDist);
+  };
+  fitAll();
+  // The webmap's cities take a moment to work out the first time; they join the view when ready.
+  if (!webmapCities && explored && state.seed === DEFAULT_SEED) {
+    webmapCities = await findWebmapCities(explored);
+    showTally();
+    renderMap();
+    if (showTrophies) fitAll();
+  }
+});
+
 
 // The goose emoji only exists on systems from 2022 onwards; elsewhere it shows as an empty box.
 // Those get the nearest bird their system does have: the swan (2018), then the duck (2016).

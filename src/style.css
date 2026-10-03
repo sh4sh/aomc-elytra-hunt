@@ -207,7 +207,9 @@ main { position: relative; min-width: 0; min-height: 0; display: flex; flex-dire
 #menu .menu-title { padding: 4px 8px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 #menu button { border: 0; background: none; text-align: left; padding: 6px 8px; }
 #menu button:hover { background: var(--panel-2); }
-.goose { display: block; margin-top: 4px; }
+.goose { display: block; margin-top: 4px; cursor: pointer; width: fit-content; }
+#gooseTally { display: block; color: var(--text); }
+#gooseTally:empty { display: none; }
 /* Controls for one kind of search are hidden while the other is chosen. */
 body.around-mode .band-only { display: none; }
 body:not(.around-mode) .around-only { display: none; }

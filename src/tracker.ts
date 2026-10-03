@@ -46,6 +46,11 @@ export class Tracker {
     return [...this.visited.keys()].filter((id) => !this.shared.has(id));
   }
 
+  /** Every looted city known here, the visitor's own and the shared list's, as "x,z". */
+  all(): string[] {
+    return [...new Set([...this.visited.keys(), ...this.shared])];
+  }
+
   get sharedCount(): number {
     return this.shared.size;
   }
