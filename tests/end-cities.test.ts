@@ -3,6 +3,7 @@ import { END_CITY, candidateChunk, chunkToBlock, findEndCities } from '../src/ge
 import { endCityHasShip } from '../src/generation/end-city-pieces';
 import { EndTerrain } from '../src/generation/end-terrain';
 import cases from './fixtures/cubiomes-end-cities.json';
+import far from './fixtures/cubiomes-far-strip.json';
 
 // Fixtures were produced by cubiomes (MC 1.21 rules, built with -ffp-contract=off
 // so float maths matches Java) for every region in
@@ -23,6 +24,30 @@ describe('End City positions and ships match cubiomes', () => {
       expect(found).toEqual(c.cities.map(([x, z, ship]) => `${x} ${z} ${ship}`));
     }, 120_000);
   }
+
+  // The far end of the webmap's western corridor, about 600,000 blocks out. Produced by cubiomes
+  // with one change: its piece "depth" tag widened from 8 bits to a full int, as the game has it.
+  // (With the 8-bit tag, cubiomes reports a ship for 4 of 36,398 cities across the webmap's area
+  // where this code and the widened cubiomes agree there is none.)
+  it('matches the reference 600,000 blocks out', () => {
+    const seed = BigInt(far.seed);
+    const terrain = new EndTerrain(seed);
+    const found: string[] = [];
+    for (let rz = far.rz[0]; rz < far.rz[1]; rz++) {
+      for (let rx = far.rx[0]; rx < far.rx[1]; rx++) {
+        const [cx, cz] = candidateChunk(seed, rx, rz, END_CITY);
+        if (terrain.canGenerateEndCity(cx, cz)) found.push(`${cx} ${cz} ${endCityHasShip(seed, cx, cz) ? 1 : 0}`);
+      }
+    }
+    expect(far.cities.length).toBeGreaterThan(40);
+    expect(found).toEqual(far.cities.map(([x, z, ship]) => `${x} ${z} ${ship}`));
+  });
+
+  it('follows the game, not the 8-bit shortcut, where the two differ on a ship', () => {
+    for (const [cx, cz] of [[-15396, -1317], [-32937, 562], [-13233, 1403], [-19116, 1720]]) {
+      expect(endCityHasShip(856461443495910397n, cx, cz)).toBe(false);
+    }
+  });
 
   it('finds the same cities when asked for just one square of the map', () => {
     const c = cases[0];
