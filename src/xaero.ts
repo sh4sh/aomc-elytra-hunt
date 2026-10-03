@@ -21,7 +21,14 @@ export const WAYPOINT_Y = 70;
 
 const pad = (n: number): string => String(n).padStart(2, '0');
 
-export const waypointName = (batchIndex: number, i: number): string => `EC ${batchIndex + 1}-${pad(i + 1)}`;
+/** Short tag per batch used in waypoint names: its number, or "C1", "C2"… for a player's custom batches. */
+let batchTags: string[] = [];
+export function setBatchTags(tags: string[]): void {
+  batchTags = tags;
+}
+
+export const waypointName = (batchIndex: number, i: number): string =>
+  `EC ${batchTags[batchIndex] ?? batchIndex + 1}-${pad(i + 1)}`;
 
 export function waypointLines(batch: City[], batchIndex: number, skip: (c: City) => boolean): string[] {
   const color = batchColor(batchIndex);

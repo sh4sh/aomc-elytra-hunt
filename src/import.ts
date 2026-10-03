@@ -13,7 +13,3 @@ export function parseCoordinates(text: string): City[] {
   }
   return out;
 }
-
-export function chunkbaseUrl(seed: string, x = 0, z = 0): string {
-  return `https://www.chunkbase.com/apps/endcity-finder#seed=${seed}&platform=java&dimension=end&x=${x}&z=${z}&zoom=0.5`;
-}

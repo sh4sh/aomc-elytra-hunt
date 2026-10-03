@@ -1,4 +1,23 @@
-node_modules
-dist
+# Dependencies and build output
+node_modules/
+dist/
+
+# Local tool settings
 .claude/
+.wrangler/
+.dev.vars
+.env
+.env.*
+
+# Editor and OS leftovers
+*~
+*.swp
+*.swo
 .DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Logs
+*.log
+npm-debug.log*

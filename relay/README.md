@@ -46,6 +46,13 @@ git commit -am "Add looted cities from issue 12" && git push
 
 Then close the issue.
 
+## Label
+
+Every submission is filed with the `map-submission` label, which must exist in
+the repository. List them with
+`gh issue list --label map-submission`. After changing the relay's code, run
+`npx wrangler deploy` again from `relay/` for it to take effect.
+
 ## Limits
 
 - Only the app's own site (`ALLOWED_ORIGIN` in `wrangler.toml`) may call it.

@@ -49,6 +49,9 @@ code { font-size: 12px; background: var(--panel-2); padding: 1px 4px; border-rad
 .empty em { font-style: normal; color: var(--text); }
 .empty ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
 #helpBack { align-self: flex-start; }
+.jump { border: 0; background: none; padding: 0; font: inherit; color: var(--accent); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.jump:hover { color: var(--text); }
+details.flash { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
 header button { margin-top: 8px; padding: 3px 10px; font-size: 12px; }
 
 form { display: flex; flex-direction: column; gap: 8px; }
@@ -113,6 +116,7 @@ ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: col
 }
 #batches li button[aria-current='true'] { border-color: var(--accent); background: #2e2545; }
 #batches li.done button { opacity: 0.5; }
+#batches li.custom button { border-style: dashed; }
 .swatch { width: 12px; height: 12px; border-radius: 50%; }
 .count { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 
@@ -196,6 +200,10 @@ main { position: relative; min-width: 0; min-height: 0; display: flex; flex-dire
 #menu button { border: 0; background: none; text-align: left; padding: 6px 8px; }
 #menu button:hover { background: var(--panel-2); }
 .goose { display: block; margin-top: 4px; }
+/* Parts that only make sense for the About Oliver server's world. */
+.other-seed .aomc-only { display: none !important; }
+body:not(.other-seed) .other-only { display: none; }
+.help-step { display: flex; flex-direction: column; gap: 10px; }
 .feedback { margin-top: auto; padding-top: 10px; border-top: 1px solid var(--line); }
 #starBtn { border: 0; background: none; color: var(--accent); padding: 0 4px; font-size: 11px; font-weight: 400; font-style: italic; vertical-align: middle; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 #starBtn:hover { color: var(--text); }

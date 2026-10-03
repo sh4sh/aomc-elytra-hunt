@@ -75,6 +75,27 @@ describe('makeBatches', () => {
     it('does not depend on input order', () => {
       expect(makeBatches([...field].reverse(), BATCH_SIZE, 'cluster', 2000)).toEqual(makeBatches(field, BATCH_SIZE, 'cluster', 2000));
     });
+
+    it('keeps a line within the allowed distance of straight', () => {
+      // A string of cities close to the +x axis, with others well off to one side.
+      const along: City[] = [];
+      for (let i = 0; i < 40; i++) {
+        along.push({ x: 10000 + i * 500, z: ((i * 37) % 3) * 100 - 100, source: 'seed' });
+        if (i % 4 === 0) along.push({ x: 10000 + i * 500, z: 1500, source: 'seed' });
+      }
+      const limit = 600;
+      const batches = makeBatches(along, 9, 'line', 2000, limit);
+      expect(batches.length).toBeGreaterThan(0);
+      for (const b of batches) {
+        // The line runs from 0,0 through the city the batch was grown from, which is one of its members.
+        const fits = b.some((s) => b.every((c) => Math.abs(c.x * s.z - c.z * s.x) / Math.hypot(s.x, s.z) <= limit + 1e-6));
+        expect(fits).toBe(true);
+        // So a batch never mixes the string along the axis with the cities 1,500 blocks off it.
+        expect(new Set(b.map((c) => c.z === 1500)).size).toBe(1);
+      }
+      // Without the limit, at least as many cities are batched.
+      expect(makeBatches(along, 9, 'line', 2000).flat().length).toBeGreaterThanOrEqual(batches.flat().length);
+    });
   });
 
   describe('as lines', () => {
@@ -222,9 +243,23 @@ describe('looted submission relay', async () => {
   });
 
   it('writes an issue the merge script can read back', () => {
-    const { title, body } = issueFor({ name: 'Steve_01', cities: ['10264,3864', '-500,9000'] });
+    const { title, body, labels } = issueFor({ name: 'Steve_01', cities: ['10264,3864', '-500,9000'] });
     expect(title).toBe('Looted cities from Steve_01 (2)');
+    expect(labels).toEqual(['map-submission']);
     const rows = body.split('\n').filter((l) => /^\s*-?\d+\s*,\s*-?\d+/.test(l));
     expect(rows).toEqual(['10264,3864', '-500,9000']);
+  });
+});
+
+describe('waypoint names', async () => {
+  const { setBatchTags, waypointName } = await import('../src/xaero');
+
+  it('numbers generated batches and tags custom ones', () => {
+    setBatchTags([]);
+    expect(waypointName(2, 6)).toBe('EC 3-07');
+    setBatchTags(['1', '2', 'C1']);
+    expect(waypointName(1, 0)).toBe('EC 2-01');
+    expect(waypointName(2, 11)).toBe('EC C1-12');
+    setBatchTags([]);
   });
 });

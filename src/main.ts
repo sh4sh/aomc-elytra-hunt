@@ -2,14 +2,14 @@ import { lookalike, type Constellation } from './constellations';
 import { Explored } from './explored';
 import { BATCH_SIZE, DEFAULT_MAX_HOP, makeBatches, route, type BatchShape } from './filters';
 import type { FindRequest, FindResponse, FoundCity } from './generation/worker';
-import { chunkbaseUrl, parseCoordinates } from './import';
+import { parseCoordinates } from './import';
 import { chatLine, chatLines, cleanUsername } from './journeymap';
 import { EndMap, type MapCity } from './map';
 import { Precomputed } from './precomputed';
 import { loadSkyFigures } from './sky-cultures';
 import { Tracker } from './tracker';
 import { cityId, type City, type Filters, type Quadrant } from './types';
-import { OUTSIDE_COLOR, XAERO_COLORS, batchColor, waypointFile, waypointLines, waypointName } from './xaero';
+import { OUTSIDE_COLOR, XAERO_COLORS, batchColor, setBatchTags, waypointFile, waypointLines, waypointName } from './xaero';
 
 const DEFAULT_SEED = '856461443495910397';
 const ISSUES_URL = 'https://github.com/sh4sh/aomc-elytra-hunt/issues';
@@ -36,11 +36,15 @@ interface Saved {
   batchShape: BatchShape;
   /** Longest allowed flight between consecutive cities in a batch, in blocks. 0 means no limit. */
   maxHop: number;
+  /** For line batches: how many blocks a line may stray to either side of straight. 0 means no limit. */
+  lineDeviation: number;
   /** Looted cities (by id) taken out of the batches the last time they were regrouped. */
   excluded: string[];
   /** Cities moved by hand: city id -> id of a city in the batch it was added to. */
   moved: Record<string, string>;
   /** Minecraft username to whisper JourneyMap chat lines to, or empty to write them for public chat. */
+  /** Batches the player put together by hand, each a list of city ids. */
+  custom: string[][];
   chatName: string;
   /** Which map mod the export controls are shown for. */
   mapMod: 'xaero' | 'journeymap';
@@ -52,7 +56,9 @@ function load(): Saved {
   try {
     const s = JSON.parse(localStorage.getItem(STORE) ?? 'null');
     if (s?.seed && s.filters) {
-      const saved: Saved = { found: [], imported: [], skipMapped: true, shipsOnly: true, batchSize: BATCH_SIZE, batchShape: 'cluster', maxHop: DEFAULT_MAX_HOP, excluded: [], moved: {}, chatName: '', mapMod: 'xaero', ...s };
+      const saved: Saved = { found: [], imported: [], skipMapped: true, shipsOnly: true, batchSize: BATCH_SIZE, batchShape: 'cluster', maxHop: DEFAULT_MAX_HOP, lineDeviation: 0, excluded: [], moved: {}, custom: [], chatName: '', mapMod: 'xaero', ...s };
+      // Fixed since the setting for it was removed.
+      saved.shipsOnly = true;
       // Results saved before ships were tracked have no ship flag: search again.
       if (saved.found.some((c) => c.length < 3)) saved.found = [];
       return saved;
@@ -60,7 +66,7 @@ function load(): Saved {
   } catch {
     // Fall through to defaults.
   }
-  return { seed: DEFAULT_SEED, filters: DEFAULT_FILTERS, found: [], imported: [], skipMapped: true, shipsOnly: true, batchSize: BATCH_SIZE, batchShape: 'cluster', maxHop: DEFAULT_MAX_HOP, excluded: [], moved: {}, chatName: '', mapMod: 'xaero' };
+  return { seed: DEFAULT_SEED, filters: DEFAULT_FILTERS, found: [], imported: [], skipMapped: true, shipsOnly: true, batchSize: BATCH_SIZE, batchShape: 'cluster', maxHop: DEFAULT_MAX_HOP, lineDeviation: 0, excluded: [], moved: {}, custom: [], chatName: '', mapMod: 'xaero' };
 }
 
 const state = load();
@@ -87,6 +93,12 @@ let pageFollowed: number | null = null;
 let skipped = 0;
 /** Cities left out because they have no ship. */
 let shipless = 0;
+/** How many of `batches` were generated; the player's custom batches follow them. */
+let generatedCount = 0;
+
+const isCustom = (i: number) => i >= generatedCount;
+/** Display name of a batch: "Batch 12", or "Custom 1" for one the player made. */
+const batchTitle = (i: number) => (isCustom(i) ? `Custom ${i - generatedCount + 1}` : `Batch ${i + 1}`);
 /** Cities that could not be fitted into a full batch within the longest-flight limit. */
 let unbatched = 0;
 /** Cities kept out of the batches but still drawn on the map, with the reason. */
@@ -108,7 +120,8 @@ const tooltip = $('tooltip');
 function rebuild(): void {
   // The webmap only describes the default server's world.
   const mapped = state.skipMapped && explored && state.seed === DEFAULT_SEED ? explored : null;
-  const withShip = state.shipsOnly ? state.found.filter((c) => c[2]) : state.found;
+  // Only ships hold elytra, so cities without one are never offered.
+  const withShip = state.found.filter((c) => c[2]);
   shipless = state.found.length - withShip.length;
   skipped = 0;
 
@@ -134,7 +147,6 @@ function rebuild(): void {
     pool.set(cityId(city), { city, note });
   };
   for (const [x, z, ship] of withShip) add(x, z, 'seed', !!ship);
-  for (const [x, z] of state.imported) add(x, z, 'import', true);
 
   outside = [];
   const cities: City[] = [];
@@ -142,7 +154,7 @@ function rebuild(): void {
     if (entry.note) outside.push({ city: entry.city, note: entry.note });
     else cities.push(entry.city);
   }
-  batches = makeBatches(cities, state.batchSize, state.batchShape, state.maxHop);
+  batches = makeBatches(cities, state.batchSize, state.batchShape, state.maxHop, state.lineDeviation);
 
   // Hand-made moves are applied after batching, so adding a city to a batch never reshuffles the others.
   // A move holds while both cities still exist and its target is in a batch of its own accord.
@@ -161,10 +173,24 @@ function rebuild(): void {
     touched.add(to);
   }
   for (const b of touched) batches[b] = route(batches[b]);
+
+  // Custom batches take their cities out of wherever they were and are listed after the generated ones.
+  const customs: City[][] = [];
+  const inCustom = new Set<string>();
+  for (const ids of state.custom) {
+    const members = ids.filter((id) => pool.has(id) && !inCustom.has(id));
+    members.forEach((id) => inCustom.add(id));
+    customs.push(members.map((id) => pool.get(id)!.city));
+  }
+  if (inCustom.size) batches = batches.map((b) => b.filter((c) => !inCustom.has(cityId(c))));
   batches = batches.filter((b) => b.length);
+  generatedCount = batches.length;
+  // An emptied custom batch is kept, so its number does not shift while the player is still building it.
+  batches.push(...customs.map((b) => (b.length > 1 ? route(b) : b)));
+  setBatchTags(batches.map((_, i) => (isCustom(i) ? `C${i - generatedCount + 1}` : String(i + 1))));
 
   const inBatch = new Set(batches.flat().map(cityId));
-  outside = outside.filter((o) => !moved.has(cityId(o.city)));
+  outside = outside.filter((o) => !moved.has(cityId(o.city)) && !inCustom.has(cityId(o.city)));
   unbatched = 0;
   for (const c of cities) {
     if (inBatch.has(cityId(c))) continue;
@@ -206,7 +232,11 @@ function renderSettingsSummary(): void {
     f.diagonalDeg >= 45 ? 'any angle' : `within ${f.diagonalDeg}° of ${f.angleFrom === 'axis' ? 'an axis' : 'a diagonal'}`,
     f.quadrants.length === 4 ? 'all quadrants' : f.quadrants.join(' '),
     `${state.batchSize} per batch`,
-    state.batchShape === 'line' ? 'lines outward' : 'clusters',
+    state.batchShape !== 'line'
+      ? 'clusters'
+      : state.lineDeviation && state.maxHop
+        ? `lines outward within ${fmt(state.lineDeviation)} of straight`
+        : 'lines outward',
     state.maxHop ? `flights up to ${fmt(state.maxHop)}` : 'any flight length',
   ].join(' · ');
 }
@@ -228,27 +258,34 @@ function renderBatches(): void {
   $<HTMLButtonElement>('regroup').disabled = done === 0;
   $<HTMLButtonElement>('regroupUndo').hidden = state.excluded.length === 0;
 
-  const pages = Math.max(1, Math.ceil(batches.length / PAGE_SIZE));
+  const pages = Math.max(1, Math.ceil(generatedCount / PAGE_SIZE));
   // Jump to the selected batch's page when the selection changes, e.g. after clicking a city on the map.
   if (selected !== pageFollowed) {
     pageFollowed = selected;
-    if (selected !== null) page = Math.floor(selected / PAGE_SIZE);
+    if (selected !== null && !isCustom(selected)) page = Math.floor(selected / PAGE_SIZE);
   }
   page = Math.min(page, pages - 1);
   const first = page * PAGE_SIZE;
+  const last = Math.min(first + PAGE_SIZE, generatedCount);
   $('pager').hidden = pages === 1;
-  $('pageText').textContent = `Batches ${first + 1}–${Math.min(first + PAGE_SIZE, batches.length)} of ${batches.length}`;
+  $('pageText').textContent = `Batches ${first + 1}–${last} of ${generatedCount}`;
   $<HTMLButtonElement>('pagePrev').disabled = page === 0;
   $<HTMLButtonElement>('pageNext').disabled = page === pages - 1;
-  $<HTMLInputElement>('gotoBatch').max = String(batches.length);
+  $<HTMLInputElement>('gotoBatch').max = String(generatedCount);
+
+  // Custom batches stay pinned above whichever page of generated batches is showing.
+  const shown: number[] = [];
+  for (let i = generatedCount; i < batches.length; i++) shown.push(i);
+  for (let i = first; i < last; i++) shown.push(i);
 
   const list = $('batches');
   list.replaceChildren(
-    ...batches.slice(first, first + PAGE_SIZE).map((batch, k) => {
-      const i = first + k;
+    ...shown.map((i) => {
+      const batch = batches[i];
       const li = document.createElement('li');
+      li.classList.toggle('custom', isCustom(i));
       const n = looted(batch);
-      li.classList.toggle('done', n === batch.length);
+      li.classList.toggle('done', batch.length > 0 && n === batch.length);
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.setAttribute('aria-current', String(i === selected));
@@ -256,7 +293,7 @@ function renderBatches(): void {
       sw.className = 'swatch';
       sw.style.background = color(i);
       const name = document.createElement('span');
-      name.textContent = `Batch ${i + 1}`;
+      name.textContent = batchTitle(i);
       const count = document.createElement('span');
       count.className = 'count';
       count.textContent = `${n}/${batch.length}`;
@@ -275,7 +312,7 @@ function renderDetail(): void {
   $('detailBody').hidden = !showBatch;
   const back = $('helpBack');
   back.hidden = selected === null;
-  if (selected !== null) back.textContent = `← Back to batch ${selected + 1}`;
+  if (selected !== null) back.textContent = `← Back to ${batchTitle(selected).toLowerCase()}`;
   $('help').textContent = selected !== null && helpOpen ? 'Close help' : 'How to use';
   if (selected === null) return;
   const batch = batches[selected];
@@ -285,7 +322,8 @@ function renderDetail(): void {
   batch.forEach((c, k) => {
     if (k) length += Math.hypot(c.x - batch[k - 1].x, c.z - batch[k - 1].z);
   });
-  $('detailTitle').textContent = `Batch ${i + 1}`;
+  $('detailTitle').textContent = batchTitle(i);
+  $('customDelete').hidden = !isCustom(i);
   renderStars(batch, color(i));
   let longest = 0;
   batch.forEach((c, k) => {
@@ -294,7 +332,8 @@ function renderDetail(): void {
   $('detailMeta').textContent =
     `${batch.length} cities · ${looted(batch)} looted · about ${fmt(Math.round(length / 100) * 100)} blocks of flying` +
     ` · longest flight ${fmt(Math.round(longest))}` +
-    (batch.length < state.batchSize ? ' · short batch' : '');
+    (!isCustom(i) && batch.length < state.batchSize ? ' · short batch' : '') +
+    (isCustom(i) && !batch.length ? ' · right-click a city on the map to add it' : '');
 
   $('cities').replaceChildren(
     ...batch.map((c, k) => {
@@ -302,7 +341,7 @@ function renderDetail(): void {
       li.classList.toggle('looted', tracker.has(c));
       li.classList.toggle('hot', c === hot);
       const label = document.createElement('label');
-      label.title = waypointName(i, k) + (c.source === 'import' ? ' (added by hand)' : '');
+      label.title = waypointName(i, k);
       const box = document.createElement('input');
       box.type = 'checkbox';
       box.checked = tracker.has(c);
@@ -443,7 +482,6 @@ function fillForm(): void {
   angleFromSelect.value = state.filters.angleFrom ?? 'diagonal';
   for (const b of quadBoxes) b.checked = state.filters.quadrants.includes(b.value as Quadrant);
   showDiag();
-  $<HTMLAnchorElement>('chunkbase').href = chunkbaseUrl(state.seed);
 }
 
 function showDiag(): void {
@@ -453,6 +491,12 @@ function showDiag(): void {
 }
 diagInput.addEventListener('input', showDiag);
 
+/** Hide or show the parts of the page that only apply to the About Oliver server's world. */
+function showSeedMode(): void {
+  document.body.classList.toggle('other-seed', state.seed !== DEFAULT_SEED);
+}
+showSeedMode();
+
 /** Take a finished search as the new state. Nothing changes until this runs, so a cancelled search leaves no trace. */
 function applyResult(seed: string, filters: Filters, cities: FoundCity[]): void {
   const refit = seed !== state.seed || filters.maxDist !== state.filters.maxDist || !state.found.length;
@@ -461,11 +505,13 @@ function applyResult(seed: string, filters: Filters, cities: FoundCity[]): void 
     state.imported = [];
     state.excluded = [];
     state.moved = {};
+    state.custom = [];
     tracker = new Tracker(seed);
     tracker.setShared(seed === DEFAULT_SEED ? sharedLooted : []);
   }
   state.seed = seed;
   state.filters = filters;
+  showSeedMode();
   state.found = cities;
   save();
   selected = null;
@@ -516,6 +562,13 @@ form.addEventListener('submit', (e) => {
     return;
   }
   const seed = seedInput.value.trim();
+  if (!/^-?\d+$/.test(seed)) {
+    // The field is inside a folded section; open it so the message can be shown.
+    $<HTMLDetailsElement>('advanced').open = true;
+    seedInput.setCustomValidity('A world seed is a whole number.');
+    seedInput.reportValidity();
+    return;
+  }
 
   // Within the pre-generated range a search is just a filter.
   if (precomputed?.covers(seed, filters)) {
@@ -545,7 +598,7 @@ form.addEventListener('submit', (e) => {
   });
   worker.postMessage({ seed, filters } satisfies FindRequest);
 });
-for (const el of [maxInput, ...quadBoxes]) el.addEventListener('input', () => el.setCustomValidity(''));
+for (const el of [seedInput, maxInput, ...quadBoxes]) el.addEventListener('input', () => el.setCustomValidity(''));
 
 // Instant searches are applied as the controls change; slow ones wait for the button.
 function formCovered(): boolean {
@@ -563,7 +616,7 @@ gotoBatch.addEventListener('change', () => {
   const n = Math.round(Number(gotoBatch.value));
   gotoBatch.value = '';
   // Out-of-range numbers go to the nearest end of the list.
-  if (Number.isFinite(n) && batches.length) select(Math.min(batches.length, Math.max(1, n)) - 1, true);
+  if (Number.isFinite(n) && generatedCount) select(Math.min(generatedCount, Math.max(1, n)) - 1, true);
 });
 
 $('pagePrev').addEventListener('click', () => {
@@ -675,20 +728,28 @@ hopInput.addEventListener('change', () => {
   render();
 });
 
-const shapeSelect = $<HTMLSelectElement>('batchShape');
-shapeSelect.value = state.batchShape;
-shapeSelect.addEventListener('change', () => {
-  state.batchShape = shapeSelect.value as BatchShape;
+const deviationInput = $<HTMLInputElement>('lineDeviation');
+/** The sideways limit only means something for lines. */
+function showDeviation(): void {
+  $('lineDeviationBox').hidden = state.batchShape !== 'line';
+}
+deviationInput.value = String(state.lineDeviation);
+deviationInput.addEventListener('change', () => {
+  const n = Math.round(Number(deviationInput.value));
+  state.lineDeviation = Number.isFinite(n) && n > 0 ? n : 0;
+  deviationInput.value = String(state.lineDeviation);
   save();
   selected = null;
   rebuild();
   render();
 });
+showDeviation();
 
-const shipBox = $<HTMLInputElement>('shipsOnly');
-shipBox.checked = state.shipsOnly;
-shipBox.addEventListener('change', () => {
-  state.shipsOnly = shipBox.checked;
+const shapeSelect = $<HTMLSelectElement>('batchShape');
+shapeSelect.value = state.batchShape;
+shapeSelect.addEventListener('change', () => {
+  state.batchShape = shapeSelect.value as BatchShape;
+  showDeviation();
   save();
   selected = null;
   rebuild();
@@ -800,6 +861,16 @@ function markAll(v: boolean): void {
   for (const c of batches[selected]) tracker.set(c, v);
   render();
 }
+$('customDelete').addEventListener('click', () => {
+  if (selected === null || !isCustom(selected)) return;
+  if (!confirm(`Delete ${batchTitle(selected).toLowerCase()}? Its cities go back to where they were. Looted marks are kept.`)) return;
+  state.custom.splice(selected - generatedCount, 1);
+  save();
+  selected = null;
+  rebuild();
+  render();
+});
+
 $('markAll').addEventListener('click', () => markAll(true));
 $('markNone').addEventListener('click', () => markAll(false));
 
@@ -870,6 +941,18 @@ submitBtn.addEventListener('click', async () => {
   }
 });
 
+// Names of sidebar sections in the help text open that section and bring it into view.
+for (const link of document.querySelectorAll<HTMLElement>('.jump')) {
+  link.addEventListener('click', () => {
+    const section = $<HTMLDetailsElement>(link.dataset.target!);
+    section.open = true;
+    section.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    section.querySelector('summary')?.focus({ preventScroll: true });
+    section.classList.add('flash');
+    setTimeout(() => section.classList.remove('flash'), 1200);
+  });
+}
+
 $('help').addEventListener('click', () => {
   helpOpen = selected !== null && !helpOpen;
   renderDetail();
@@ -889,29 +972,6 @@ visitedFile.addEventListener('change', async () => {
   if (!file) return;
   tracker.mergeCsv(await file.text());
   visitedFile.value = '';
-  render();
-});
-
-// ---------- manual coordinates ----------
-
-$('importAdd').addEventListener('click', () => {
-  const box = $<HTMLTextAreaElement>('importText');
-  const parsed = parseCoordinates(box.value);
-  if (!parsed.length) return;
-  const known = new Set(state.imported.map(([x, z]) => cityId({ x, z })));
-  for (const c of parsed) if (!known.has(cityId(c))) state.imported.push([c.x, c.z]);
-  box.value = '';
-  save();
-  selected = null;
-  rebuild();
-  render();
-});
-
-$('importClear').addEventListener('click', () => {
-  state.imported = [];
-  save();
-  selected = null;
-  rebuild();
   render();
 });
 
@@ -960,7 +1020,15 @@ function rebuildKeeping(id: string | null): void {
 map.onMenu = (c, px, py) => {
   const id = cityId(c.city);
   const items: [string, () => void][] = [];
-  const keep = selected !== null ? cityId(batches[selected][0]) : null;
+  // After a change the batches are rebuilt; keep the same one open afterwards.
+  const openCustom = selected !== null && isCustom(selected) ? selected - generatedCount : -1;
+  const keep = selected !== null && openCustom < 0 && batches[selected].length ? cityId(batches[selected][0]) : null;
+  const reselect = (custom = openCustom) => {
+    if (custom < 0) return rebuildKeeping(keep);
+    rebuild();
+    selected = generatedCount + custom < batches.length ? generatedCount + custom : null;
+    render();
+  };
 
   if (tracker.isShared(c.city)) {
     items.push(['On the shared looted list. Wrong? Report it on GitHub', () => {
@@ -972,7 +1040,7 @@ map.onMenu = (c, px, py) => {
       tracker.set(c.city, false);
       state.excluded = state.excluded.filter((x) => x !== id);
       save();
-      rebuildKeeping(keep);
+      reselect();
     }]);
   } else {
     items.push(['Mark as looted', () => {
@@ -981,20 +1049,43 @@ map.onMenu = (c, px, py) => {
     }]);
   }
 
+  const inCustom = state.custom.findIndex((ids) => ids.includes(id));
+  /** Put the city in custom batch k (a new one when k is past the end), taking it out of any other. */
+  const addToCustom = (k: number) => {
+    state.custom = state.custom.map((ids) => ids.filter((x) => x !== id));
+    if (k >= state.custom.length) state.custom.push([]);
+    state.custom[k].push(id);
+    delete state.moved[id];
+    save();
+    reselect(k);
+  };
+
   // A looted city has nothing left to collect, so it is never offered for a batch.
-  if (selected !== null && c.batch !== selected && !c.visited) {
-    const target = selected;
-    // Anchor the move to a city that belongs to the batch of its own accord, so it survives regrouping.
-    const anchor = batches[target].find((x) => !(cityId(x) in state.moved));
-    if (anchor) {
-      items.push([`Add to batch ${target + 1}`, () => {
-        state.moved[id] = cityId(anchor);
-        save();
-        rebuildKeeping(cityId(anchor));
-      }]);
+  if (!c.visited) {
+    if (openCustom >= 0 && inCustom !== openCustom) {
+      items.push([`Add to custom ${openCustom + 1}`, () => addToCustom(openCustom)]);
+    } else if (selected !== null && openCustom < 0 && c.batch !== selected && inCustom < 0) {
+      const target = selected;
+      // Anchor the move to a city that belongs to the batch of its own accord, so it survives regrouping.
+      const anchor = batches[target].find((x) => !(cityId(x) in state.moved));
+      if (anchor) {
+        items.push([`Add to batch ${target + 1}`, () => {
+          state.moved[id] = cityId(anchor);
+          save();
+          rebuildKeeping(cityId(anchor));
+        }]);
+      }
     }
+    items.push(['Start a custom batch with this city', () => addToCustom(state.custom.length)]);
   }
-  if (id in state.moved) {
+  if (inCustom >= 0) {
+    items.push([`Remove from custom ${inCustom + 1}`, () => {
+      state.custom[inCustom] = state.custom[inCustom].filter((x) => x !== id);
+      save();
+      reselect();
+    }]);
+  }
+  if (id in state.moved && inCustom < 0) {
     items.push(['Return to its own batch', () => {
       delete state.moved[id];
       save();

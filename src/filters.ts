@@ -118,9 +118,10 @@ export const DEFAULT_MAX_HOP = 2000;
  *
  * `shape` steers which reachable city is taken next: for clusters, the one
  * nearest the batch's centre; for lines, the one nearest the ray from 0,0
- * through the batch's first city.
+ * through the batch's first city. With lineDeviation set, a line never takes a
+ * city further than that many blocks to either side of that ray.
  */
-function chains(cities: City[], size: number, maxHop: number, shape: BatchShape): City[][] {
+function chains(cities: City[], size: number, maxHop: number, shape: BatchShape, lineDeviation = 0): City[][] {
   const origin = { x: 0, z: 0 };
   const order = [...cities].sort((a, b) => dist(a, origin) - dist(b, origin) || a.x - b.x || a.z - b.z);
 
@@ -160,11 +161,14 @@ function chains(cities: City[], size: number, maxHop: number, shape: BatchShape)
       let sx = start.x;
       let sz = start.z;
       const ray = Math.hypot(start.x, start.z) || 1;
+      /** How far a city sits to the side of the straight line from 0,0 through this batch's first city. */
+      const offLine = (c: City) => Math.abs(c.x * start.z - c.z * start.x) / ray;
+      const corridor = shape === 'line' && lineDeviation > 0;
       // Lower is better. Mostly "nearest to the end being extended", nudged towards the wanted shape.
       const score = (c: City, end: City) =>
         dist(c, end) +
         (shape === 'line'
-          ? 0.5 * (Math.abs(c.x * start.z - c.z * start.x) / ray)
+          ? 0.5 * offLine(c)
           : 0.5 * dist(c, { x: sx / path.length, z: sz / path.length }));
 
       const extend = (): boolean => {
@@ -173,6 +177,7 @@ function chains(cities: City[], size: number, maxHop: number, shape: BatchShape)
         let atTail = true;
         for (const [end, tail] of [[path[path.length - 1], true], [path[0], false]] as const) {
           for (const c of reachable(end, taken)) {
+            if (corridor && offLine(c) > lineDeviation) continue;
             const v = score(c, end);
             if (v < bestScore || (v === bestScore && best && (c.x - best.x || c.z - best.z) < 0)) {
               best = c;
@@ -197,7 +202,8 @@ function chains(cities: City[], size: number, maxHop: number, shape: BatchShape)
           const p = flip ? [...path].reverse() : path;
           const tail = p[p.length - 1];
           for (let k = p.length - 3; k >= 0; k--) {
-            if (dist(tail, p[k]) > maxHop || !reachable(p[k + 1], taken).length) continue;
+            if (dist(tail, p[k]) > maxHop) continue;
+            if (!reachable(p[k + 1], taken).some((c) => !corridor || offLine(c) <= lineDeviation)) continue;
             path = [...p.slice(0, k + 1), ...p.slice(k + 1).reverse()];
             return true;
           }
@@ -250,12 +256,21 @@ function tidyPath(path: City[], maxHop: number): City[] {
  * full, and cities that cannot be fitted into one are not returned: the caller
  * shows those as unbatched. With maxHop 0 there is no limit, every city is
  * batched, and at most one cluster is short.
+ *
+ * lineDeviation (lines with a maxHop only) keeps each line within that many
+ * blocks either side of straight; 0 means no limit.
  */
-export function makeBatches(cities: City[], size = BATCH_SIZE, shape: BatchShape = 'cluster', maxHop = 0): City[][] {
+export function makeBatches(
+  cities: City[],
+  size = BATCH_SIZE,
+  shape: BatchShape = 'cluster',
+  maxHop = 0,
+  lineDeviation = 0,
+): City[][] {
   if (!cities.length) return [];
   const routed =
     maxHop > 0
-      ? chains(cities, size, maxHop, shape).map((p) => tidyPath(p, maxHop))
+      ? chains(cities, size, maxHop, shape, lineDeviation).map((p) => tidyPath(p, maxHop))
       : (shape === 'line' ? lines(cities, size) : split(cities, size)).map(route);
   // Number batches outward: batch 1 is the one centred closest to 0,0.
   const centre = (b: City[]) => Math.hypot(b.reduce((t, c) => t + c.x, 0) / b.length, b.reduce((t, c) => t + c.z, 0) / b.length);

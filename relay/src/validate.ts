@@ -28,8 +28,12 @@ export function parseSubmission(input: unknown): Parsed {
   return { ok: true, value: { name: who || 'anonymous', cities: [...clean] } };
 }
 
-export function issueFor(s: Submission): { title: string; body: string } {
+/** Label put on every submission, so they are easy to find among other issues. It must exist in the repository. */
+export const LABEL = 'map-submission';
+
+export function issueFor(s: Submission): { title: string; body: string; labels: string[] } {
   return {
+    labels: [LABEL],
     title: `Looted cities from ${s.name} (${s.cities.length})`,
     body: [
       `Submitted through the app by **${s.name}**. Not verified.`,

@@ -19,7 +19,6 @@
       <details id="settings" open>
         <summary><span class="settings-title">Search settings</span> <span id="settingsSummary"></span></summary>
       <form id="search">
-        <label>World seed <input id="seed" inputmode="numeric" autocomplete="off" required pattern="-?\d+" /></label>
         <div class="row">
           <label>From <input id="minDist" type="number" min="0" step="500" required /></label>
           <label>To <input id="maxDist" type="number" min="1000" step="500" required /></label>
@@ -52,11 +51,27 @@
           </label>
         </div>
         <p class="hint">27 fills one shulker box. Clusters are easier to track; lines head away from 0,0 like a long exploration flight.</p>
+        <div id="lineDeviationBox" class="panel" hidden>
+          <label>Stray from a straight line, up to <input id="lineDeviation" type="number" min="0" step="250" /></label>
+          <p class="hint">
+            In blocks, to either side of the line from 0,0 through the batch's first city. The default is 0, which
+            means no limit. Tight values leave most cities unbatched: ships are sparse, so try 2,000 or more, or
+            smaller batches. Needs a longest flight to be set.
+          </p>
+        </div>
         <label>Longest flight between cities <input id="maxHop" type="number" min="0" step="250" /></label>
         <p class="hint">In blocks. Cities that can't be reached in a full batch within this are left unbatched (small faint diamonds on the map); right-click one to add it to a batch. 0 means no limit.</p>
-        <label class="check"><input id="shipsOnly" type="checkbox" /> Only cities with a ship (elytra)</label>
-        <label class="check"><input id="skipMapped" type="checkbox" /> Leave out cities already on the webmap</label>
-        <p id="exploredNote" class="hint"></p>
+        <label class="check aomc-only"><input id="skipMapped" type="checkbox" /> Leave out cities already on the webmap</label>
+        <p id="exploredNote" class="hint aomc-only"></p>
+        <details id="advanced">
+          <summary>Advanced</summary>
+          <label>World seed <input id="seed" inputmode="numeric" autocomplete="off" spellcheck="false" /></label>
+          <p class="hint">
+            Set to the About Oliver server's seed. With any other seed, press <em>Find cities</em> to search; searches
+            are slower, and everything specific to that server (the webmap filter and shading, the shared looted
+            list and submitting to it) is hidden.
+          </p>
+        </details>
         <button id="find" type="submit" class="primary">Find cities</button>
         <progress id="progress" max="1" value="0" hidden></progress>
       </form>
@@ -75,26 +90,17 @@
         <input id="gotoBatch" type="number" min="1" step="1" placeholder="Go to batch #" title="Type a batch number and press Enter" aria-label="Go to batch number" />
       </div>
 
-      <details>
-        <summary>Add coordinates by hand</summary>
-        <p class="hint">
-          One position per line (<code>x, z</code> or <code>x y z</code>), for example copied from
-          <a id="chunkbase" target="_blank" rel="noopener">Chunkbase</a>. They are batched with the rest.
-        </p>
-        <textarea id="importText" rows="4" placeholder="12040, -11832"></textarea>
-        <div class="row">
-          <button id="importAdd" type="button">Add</button>
-          <button id="importClear" type="button">Remove added</button>
-        </div>
-      </details>
-
-      <details>
+      <details id="share">
         <summary>Share progress</summary>
-        <p class="hint">
+        <p class="hint aomc-only">
           The cities you mark as looted are saved in this browser only. Send them in and, once accepted, they show as
           looted for all players.
         </p>
-        <div id="submitBox" class="panel" hidden>
+        <p class="hint other-only">
+          The cities you mark as looted are saved in this browser only. Sending them in for everyone is only available
+          for the About Oliver server's world.
+        </p>
+        <div id="submitBox" class="panel aomc-only" hidden>
           <label class="field">
             <strong>Your Minecraft username</strong>
             <input id="submitName" autocomplete="off" spellcheck="false" maxlength="16" placeholder="Optional" />
@@ -104,11 +110,11 @@
           </div>
           <p id="submitNote" class="hint"></p>
         </div>
-        <p id="submitFallback" class="hint">
+        <p id="submitFallback" class="hint aomc-only">
           To send them in, press <em>Export looted</em> and attach the file to
           <a href="https://github.com/sh4sh/aomc-elytra-hunt/issues/new?title=Looted%20cities&amp;body=Attach%20your%20exported%20end-cities-looted.csv%20file%20here." target="_blank" rel="noopener">a new GitHub issue</a>.
         </p>
-        <p id="sharedNote" class="hint"></p>
+        <p id="sharedNote" class="hint aomc-only"></p>
         <p class="hint">You can also send the file to a friend, or move it to another device: <em>Import looted</em> merges it in.</p>
         <div class="row">
           <button id="visitedExport" type="button">Export looted</button>
@@ -146,7 +152,7 @@
         <span class="key"><i class="dot"></i> in a batch</span>
         <span class="key"><i class="cross">×</i> looted</span>
         <span class="key"><i class="dot diamond"></i> not in a batch</span>
-        <span class="key"><i class="dot square green"></i> already on the webmap</span>
+        <span class="key aomc-only"><i class="dot square green"></i> already on the webmap</span>
         <span class="controls">Drag to pan · scroll or use the slider to zoom · click a city to open its batch · right-click for options</span>
         <span id="cursor"></span>
       </footer>
@@ -160,8 +166,8 @@
         <h3>1. Pick a batch</h3>
         <p>
           Batches are in the list on the left, numbered outward from 0,0. Click one, click any city on the map, or type
-          your position above the map and press <em>Nearest batch</em>. Can't see the list? Fold away the search
-          settings or scroll that panel.
+          your position above the map and press <em>Nearest batch</em>. Can't see the list? Fold away the
+          <button type="button" class="jump" data-target="settings">Search settings</button> or scroll that panel.
         </p>
         <h3>2. Get the waypoints into your map mod</h3>
         <p>
@@ -173,16 +179,19 @@
           Use the checkboxes in the batch, or right-click a city on the map. Looted cities turn into an × and are left
           out of exports.
         </p>
+        <div class="aomc-only help-step">
         <h3>4. Share what you looted</h3>
         <p>
-          Your ticks stay in this browser. To mark them for everyone, open <em>Share progress</em> on the left and
+          Your ticks stay in this browser. To mark them for everyone, open <button type="button" class="jump" data-target="share">Share progress</button> on the left and
           send them in. Once accepted onto the shared list, those cities show as looted for all players.
         </p>
+        </div>
         <h3>Good to know</h3>
         <ul>
           <li>Small faint diamonds are cities with a ship that didn't fit a batch. Right-click one to add it to the batch you have open.</li>
-          <li>Green shading is terrain already on the community webmap; cities there are left out of batches.</li>
-          <li><em>Search settings</em> on the left changes the distance, angle, batch size and longest flight.</li>
+          <li>Want your own route? Right-click any city and choose <em>Start a custom batch with this city</em>, then right-click others to add them. Custom batches sit at the top of the batch list.</li>
+          <li class="aomc-only">Green shading is terrain already on the community webmap; cities there are left out of batches.</li>
+          <li><button type="button" class="jump" data-target="settings">Search settings</button> on the left changes the distance, angle, batch size and longest flight.</li>
           <li>Drag the dividers beside the map to resize the panels.</li>
         </ul>
       </div>
@@ -238,6 +247,7 @@
         <div class="row">
           <button id="markAll" type="button">Mark all looted</button>
           <button id="markNone" type="button">Clear</button>
+          <button id="customDelete" type="button" hidden>Delete this custom batch</button>
         </div>
         <ol id="cities"></ol>
       </div>
