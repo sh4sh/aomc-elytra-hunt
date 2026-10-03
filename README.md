@@ -1,5 +1,7 @@
 # End City Runs
 
+**Use it here: https://sh4sh.github.io/aomc-elytra-hunt/**
+
 A web app for hunting elytra on a Minecraft Java server. It works out where
 every End City is from the world seed, keeps the ones that have a ship, and
 groups them into batches of 27 (one shulker box of loot per run) that you can
