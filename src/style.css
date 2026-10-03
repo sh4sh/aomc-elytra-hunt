@@ -96,6 +96,7 @@ details[open] { display: flex; flex-direction: column; gap: 8px; }
 summary { cursor: pointer; color: var(--muted); }
 #settings { border-top: 0; padding-top: 0; }
 #settings summary { color: var(--text); }
+#share summary { color: var(--text); font-weight: 600; }
 #settings .settings-title { font-weight: 600; }
 #settingsSummary { display: block; margin: 2px 0 0 16px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 #settings[open] #settingsSummary { display: none; }
