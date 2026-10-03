@@ -489,6 +489,7 @@ const progress = $<HTMLProgressElement>('progress');
 
 function fillForm(): void {
   seedInput.value = state.seed;
+  showSeedReset();
   minInput.value = String(state.filters.minDist);
   maxInput.value = String(state.filters.maxDist);
   diagInput.value = String(state.filters.diagonalDeg);
@@ -617,6 +618,17 @@ form.addEventListener('submit', (e) => {
   worker.postMessage({ seed, filters } satisfies FindRequest);
 });
 for (const el of [seedInput, maxInput, ...quadBoxes]) el.addEventListener('input', () => el.setCustomValidity(''));
+
+// Back to the server's own world, searched straight away.
+const seedReset = $<HTMLButtonElement>('seedReset');
+const showSeedReset = () => (seedReset.disabled = seedInput.value.trim() === DEFAULT_SEED);
+seedInput.addEventListener('input', showSeedReset);
+seedReset.addEventListener('click', () => {
+  seedInput.value = DEFAULT_SEED;
+  seedInput.setCustomValidity('');
+  showSeedReset();
+  if (state.seed !== DEFAULT_SEED) form.requestSubmit();
+});
 
 // Redraw the shaded search area while a control is being moved, before anything is applied.
 for (const el of [minInput, maxInput, diagInput, angleFromSelect, ...quadBoxes]) el.addEventListener('input', renderMap);
@@ -962,13 +974,15 @@ submitBtn.addEventListener('click', async () => {
   }
 });
 
-// Names of sidebar sections in the help text open that section and bring it into view.
+// Names of other parts of the page in the help text bring that part into view, wherever the layout has put it.
 for (const link of document.querySelectorAll<HTMLElement>('.jump')) {
   link.addEventListener('click', () => {
-    const section = $<HTMLDetailsElement>(link.dataset.target!);
-    section.open = true;
+    const section = $(link.dataset.target!);
+    if (section instanceof HTMLDetailsElement) {
+      section.open = true;
+      section.querySelector('summary')?.focus({ preventScroll: true });
+    }
     section.scrollIntoView({ block: 'start', behavior: 'smooth' });
-    section.querySelector('summary')?.focus({ preventScroll: true });
     section.classList.add('flash');
     setTimeout(() => section.classList.remove('flash'), 1200);
   });

@@ -67,6 +67,9 @@
           </label>
           <p class="hint">Narrows the search to directions near the diagonals or near the axes. 45° searches every direction.</p>
           <label>World seed <input id="seed" inputmode="numeric" autocomplete="off" spellcheck="false" /></label>
+          <div class="row">
+            <button id="seedReset" type="button">About Oliver Minecraft Seed</button>
+          </div>
           <p class="hint">
             Set to the About Oliver server's seed. With any other seed, press <em>Find cities</em> to search; searches
             are slower, and everything specific to that server (the webmap filter and shading, the shared looted
@@ -155,7 +158,7 @@
         <span class="key"><i class="dot diamond"></i> not in a batch</span>
         <span class="key"><i class="dot square area"></i> search area</span>
         <span class="key aomc-only"><i class="dot square green"></i> already on the webmap</span>
-        <span class="controls">Drag to pan · scroll or use the slider to zoom · click a city to open its batch · right-click for options</span>
+        <span class="controls">Drag to pan · scroll, pinch or use the slider to zoom · click a city to open its batch · right-click or press and hold for options</span>
         <span id="cursor"></span>
       </footer>
     </main>
@@ -167,9 +170,9 @@
         <h2>How to use</h2>
         <h3>1. Pick a batch</h3>
         <p>
-          Batches are in the list on the left, numbered outward from 0,0. Click one, click any city on the map, or type
-          your position above the map and press <em>Nearest batch</em>. Can't see the list? Fold away the
-          <button type="button" class="jump" data-target="settings">Search settings</button> or scroll that panel.
+          Batches are in the <button type="button" class="jump" data-target="batches">batch list</button>, numbered
+          outward from 0,0. Pick one there, select any city on the map, or type your position into the box on the map
+          and press <em>Nearest batch</em>.
         </p>
         <h3>2. Get the waypoints into your map mod</h3>
         <p>
@@ -178,13 +181,13 @@
         </p>
         <h3>3. Tick cities off as you loot them</h3>
         <p>
-          Use the checkboxes in the batch, or right-click a city on the map. Looted cities turn into an × and are left
+          Use the checkboxes in the batch, or right-click a city on the map (press and hold on a touch screen). Looted cities turn into an × and are left
           out of exports.
         </p>
         <div class="aomc-only help-step">
         <h3>4. Share what you looted</h3>
         <p>
-          Your ticks stay in this browser. To mark them for everyone, open <button type="button" class="jump" data-target="share">Share progress</button> on the left and
+          Your ticks stay in this browser. To mark them for everyone, open <button type="button" class="jump" data-target="share">Share progress</button> and
           send them in. Once accepted onto the shared list, those cities show as looted for all players.
         </p>
         </div>
@@ -193,8 +196,8 @@
           <li>Small faint diamonds are cities with a ship that didn't fit a batch. Right-click one to add it to the batch you have open.</li>
           <li>Want your own route? Right-click any city and choose <em>Start a custom batch with this city</em>, then right-click others to add them. Custom batches sit at the top of the batch list.</li>
           <li class="aomc-only">Green shading is terrain already on the community webmap; cities there are left out of batches.</li>
-          <li><button type="button" class="jump" data-target="settings">Search settings</button> on the left changes the distance, angle, batch size and longest flight.</li>
-          <li>Drag the dividers beside the map to resize the panels.</li>
+          <li><button type="button" class="jump" data-target="settings">Search settings</button> changes the distance, angle, batch size and longest flight.</li>
+          <li class="wide-only">Drag the dividers either side of the map to resize the panels.</li>
         </ul>
       </div>
       <div id="detailBody" hidden>

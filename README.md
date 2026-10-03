@@ -13,9 +13,9 @@ or another map mod as waypoints.
 
 The same steps are in the app under **How to use**.
 
-1. **Pick a batch.** Batches are listed on the left, numbered outward from 0,0.
-   Click one, click any city on the map, or type your position above the map
-   and press **Nearest batch**. **Go to batch #** jumps to a batch by number.
+1. **Pick a batch.** Batches are in the batch list, numbered outward from 0,0.
+   Pick one there, select any city on the map, or type your position into the
+   box on the map and press **Nearest batch**. **Go to batch #** jumps to a batch by number.
 2. **Get the waypoints into your map mod.** With a batch open, choose one:
    - **Xaero's Minimap:** press **Download waypoints**, close Minecraft, and
      paste the lines at the end of the waypoint file in
@@ -37,7 +37,7 @@ The same steps are in the app under **How to use**.
 
 ### Changing the search
 
-**Search settings** (fold it open on the left) controls which cities are
+**Search settings** (fold it open) controls which cities are
 considered and how they are grouped:
 
 - **From / To:** how far from 0,0 to look, measured along the longer axis.
@@ -63,8 +63,9 @@ Only cities with a ship are ever shown, since only ships hold elytra.
 - A small faint diamond is a city with a ship that is not in any batch.
   Right-click it to add it to the batch you have open.
 - Green shading is terrain already on the community webmap.
-- Drag to pan; scroll or use the slider to zoom. Drag the dividers beside the
-  map to resize the panels.
+- Drag to pan; scroll, pinch or use the slider to zoom. On a wide screen, drag the
+  dividers either side of the map to resize the panels.
+- Right-click a city for options; on a touch screen, press and hold.
 
 **Re-batch without looted** regroups the remaining cities into fresh batches
 once some have been looted.
