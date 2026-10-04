@@ -135,6 +135,8 @@ let pageFollowed: number | null = null;
 let skipped = 0;
 /** Cities left out because they have no ship. */
 let shipless = 0;
+/** Largest batch a player can ask for. Routes much longer than this get slow to work out. */
+const MAX_BATCH_SIZE = 500;
 /** Cities per batch actually used: the setting, or fewer when no batch that large could be made. */
 let usedBatchSize = BATCH_SIZE;
 /** How many of `batches` were generated; the player's custom batches follow them. */
@@ -201,9 +203,21 @@ function rebuild(): void {
   batches = makeBatches(cities, state.batchSize, state.batchShape, state.maxHop, state.lineDeviation);
   // If not even one batch of the wanted size fits, settle for the largest size that gives one, down to pairs.
   usedBatchSize = state.batchSize;
-  while (!batches.length && cities.length >= 2 && usedBatchSize > 2) {
-    usedBatchSize--;
-    batches = makeBatches(cities, usedBatchSize, state.batchShape, state.maxHop, state.lineDeviation);
+  if (!batches.length && cities.length >= 2 && usedBatchSize > 2) {
+    // Halve the range each time rather than stepping down one by one, which matters for large sizes.
+    const attempt = (size: number) => makeBatches(cities, size, state.batchShape, state.maxHop, state.lineDeviation);
+    let [fits, tooBig] = [1, usedBatchSize];
+    let best: City[][] = [];
+    while (tooBig - fits > 1) {
+      const size = Math.floor((fits + tooBig) / 2);
+      const made = attempt(size);
+      if (made.length) [fits, best] = [size, made];
+      else tooBig = size;
+    }
+    if (fits >= 2) {
+      usedBatchSize = fits;
+      batches = best;
+    }
   }
   const centre = state.filters.around;
   if (centre) {
@@ -1012,11 +1026,11 @@ $('locateClear').addEventListener('click', () => {
 // ---------- webmap ----------
 
 const sizeInput = $<HTMLInputElement>('batchSize');
-sizeInput.max = String(BATCH_SIZE);
+sizeInput.max = String(MAX_BATCH_SIZE);
 sizeInput.value = String(state.batchSize);
 sizeInput.addEventListener('change', () => {
   const n = Math.round(Number(sizeInput.value));
-  state.batchSize = Math.min(BATCH_SIZE, Math.max(1, Number.isFinite(n) ? n : BATCH_SIZE));
+  state.batchSize = Math.min(MAX_BATCH_SIZE, Math.max(1, Number.isFinite(n) ? n : BATCH_SIZE));
   sizeInput.value = String(state.batchSize);
   save();
   selected = null;
@@ -1448,6 +1462,17 @@ map.onMenu = (c, px, py, pos) => {
   if (c) addCityItems(c, items);
   // On a city, "here" is the city itself rather than the exact pixel that was clicked.
   const here = c ? { x: c.city.x, z: c.city.z } : pos;
+  items.push(['Copy coordinates', async () => {
+    const text = xzText(here);
+    const ok = await copyText(text);
+    // The menu has closed by now, so the result is reported beside the position box.
+    locateNote.textContent = ok ? `Copied ${text}` : `Could not copy. The coordinates are ${text}`;
+    if (ok) {
+      setTimeout(() => {
+        if (locateNote.textContent === `Copied ${text}`) locateNote.textContent = '';
+      }, 2500);
+    }
+  }]);
   items.push(['Set my position here', () => {
     you = here;
     locateInput.value = xzText(here);
