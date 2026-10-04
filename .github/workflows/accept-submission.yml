@@ -1,0 +1,62 @@
+name: Accept a looted-city submission
+
+# When the repository owner (or a collaborator) comments "/merge" on a
+# submission issue, add its cities to the shared looted list, publish the site
+# and close the issue. Anyone else's comment, and any other wording, is ignored.
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  issues: write
+  actions: write
+
+concurrency:
+  group: accept-submission
+  cancel-in-progress: false
+
+jobs:
+  accept:
+    if: >-
+      !github.event.issue.pull_request &&
+      contains(github.event.issue.labels.*.name, 'map-submission') &&
+      startsWith(github.event.comment.body, '/merge') &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      NUMBER: ${{ github.event.issue.number }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Reads the issue's text itself and takes only lines that are coordinates.
+      - name: Merge the submission
+        id: merge
+        run: |
+          node scripts/merge-looted.mjs --issue "$NUMBER" | tee merge.log
+          echo "summary=$(tail -n 1 merge.log)" >> "$GITHUB_OUTPUT"
+      - name: Publish
+        env:
+          SUMMARY: ${{ steps.merge.outputs.summary }}
+        run: |
+          if git diff --quiet -- public/looted.json; then
+            gh issue comment "$NUMBER" --body "Nothing to add: every city in this submission is already on the shared list."
+            gh issue close "$NUMBER"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/looted.json
+          git commit -m "add looted from #$NUMBER"
+          git push
+          # A push made by this job does not start other workflows, so the site is rebuilt explicitly.
+          gh workflow run pages.yml --ref main
+          gh issue comment "$NUMBER" --body "Added to the shared list. $SUMMARY The site will update in a minute or two."
+          gh issue close "$NUMBER"

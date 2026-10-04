@@ -24,7 +24,12 @@ for (let i = 0; i < args.length; i++) {
   if (args[i] === '--issue') {
     const number = args[++i];
     const res = await fetch(`https://api.github.com/repos/${REPO}/issues/${number}`, {
-      headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'aomc-merge-looted' },
+      headers: {
+        Accept: 'application/vnd.github+json',
+        'User-Agent': 'aomc-merge-looted',
+        // Signed in when a token is around (as in GitHub Actions), which avoids the anonymous request limit.
+        ...(process.env.GH_TOKEN ? { Authorization: `Bearer ${process.env.GH_TOKEN}` } : {}),
+      },
     });
     if (!res.ok) throw new Error(`Issue ${number}: HTTP ${res.status}`);
     sources.push([`issue ${number}`, (await res.json()).body ?? '']);

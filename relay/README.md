@@ -44,12 +44,21 @@ mentions the repository owner, which does send a notification.
 
 ## Handling a submission
 
+Reply to the issue with a comment that starts with `/merge`. The workflow in
+`.github/workflows/accept-submission.yml` then adds the cities to
+`public/looted.json`, commits it as `add looted from #<number>`, republishes the
+site, and closes the issue with a note of how many cities were new. It only
+acts on comments from the repository owner or a collaborator, and only on
+issues carrying the `map-submission` label.
+
+To reject a submission, just close the issue.
+
+By hand, the same thing is:
+
 ```
 npm run looted -- --issue 12    # merge issue #12 into public/looted.json
-git commit -am "Add looted cities from issue 12" && git push
+git commit -am "add looted from #12" && git push
 ```
-
-Then close the issue.
 
 ## Hourly webmap update
 

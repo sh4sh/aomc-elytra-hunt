@@ -198,8 +198,10 @@ npm run sky        # public/skycultures/: sky cultures for the constellation eas
 npm run looted -- file.csv   # add a player's exported looted cities to public/looted.json
 ```
 
-`public/looted.json` is the shared looted list every visitor gets. When a player
-sends an exported file, run `npm run looted` on it, then commit and push.
+`public/looted.json` is the shared looted list every visitor gets. Submissions
+from the app arrive as GitHub issues; replying `/merge` on one adds it to the
+list and republishes the site. For a file a player sends you directly, run
+`npm run looted` on it, then commit and push.
 
 `relay/` is a small Cloudflare Worker that lets players submit their looted
 cities from the app without a GitHub account; it files each submission as an

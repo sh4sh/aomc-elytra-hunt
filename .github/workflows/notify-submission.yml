@@ -23,4 +23,4 @@ jobs:
           NUMBER: ${{ github.event.issue.number }}
           OWNER: ${{ github.repository_owner }}
         run: |
-          gh issue comment "$NUMBER" --body "@$OWNER a player submitted looted cities. To accept them, run \`npm run looted -- --issue $NUMBER\`, then commit and push, and close this issue."
+          gh issue comment "$NUMBER" --body "@$OWNER a player submitted looted cities. To accept them, reply to this issue with \`/merge\`. That adds them to the shared list, updates the site and closes the issue."
