@@ -339,7 +339,7 @@ body:not(.other-seed) .other-only { display: none; }
 #mapbar .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-sizing: border-box; }
 #mapbar .dot.ring { background: none; border: 2px solid; }
 #mapbar .dash { width: 16px; border-top: 2px dashed #b3876a; }
-#mapbar .dot.hollow { background: radial-gradient(var(--accent) 0 25%, transparent 30%); border: 1.5px solid #b3876a; }
+#mapbar .dot.hollow { background: radial-gradient(var(--accent) 0 25%, transparent 30%); border: 1.5px solid #9d94b3; }
 #mapbar .cross.tan { color: #b3876a; }
 #mapbar .cross.green { color: #6fdc8c; }
 #mapbar .cross { font-style: normal; font-weight: 700; font-size: 14px; line-height: 1; color: #8a8299; }

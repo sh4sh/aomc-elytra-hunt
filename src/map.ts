@@ -44,6 +44,7 @@ const HIT_RADIUS = 9;
  * muted tan: not for the taking, so it recedes like the faint diamonds, in a tone no route is drawn in.
  */
 const ALREADY_COLOR = '#b3876a';
+const POSSIBLE_COLOR = '#9d94b3';
 /** The guesswork about earlier hunters is drawn when no more than this many blocks fit across the map. */
 const PATHS_WITHIN_BLOCKS = 30000;
 /** Cities looted in the ordinary way: done, and plain to see. */
@@ -526,12 +527,10 @@ export class EndMap {
         ctx.lineWidth = 1;
         ctx.stroke();
       } else if (c.possible && this.detailed) {
-        // Possibly looted: a tan ring, the colour of everything to do with earlier hunters, around a
-        // small dot in the route's own colour.
-        ctx.beginPath();
-        ctx.arc(x, y, r + 1.5, 0, Math.PI * 2);
-        ctx.strokeStyle = ALREADY_COLOR;
-        ctx.lineWidth = 1.5;
+        // Possibly looted: a small grey ring, in the same quiet grey as the diamonds of cities without a
+        // route, around a dot in the route's own colour.
+        ctx.strokeStyle = POSSIBLE_COLOR;
+        ctx.lineWidth = 1.2;
         ctx.stroke();
         ctx.beginPath();
         ctx.arc(x, y, 1.5, 0, Math.PI * 2);

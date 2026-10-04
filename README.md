@@ -31,7 +31,7 @@ The same steps are in the app under **How to use**.
 | White circle | The city you are up to in the open route |
 | Green × | Looted |
 | Tan ×, `!` in the list | Looted by someone else before you got there |
-| Tan ring, `?` in the list | Possibly looted: near a city someone else looted, or on a guessed flight path. A guess |
+| Small grey ring, `?` in the list | Possibly looted: near a city someone else looted, or on a guessed flight path. A guess |
 | Dashed tan line | A guess at where an earlier hunter flew |
 | Grey × | Ship or city reported missing |
 | Faint diamond | A city with a ship that is not in any route |

@@ -79,7 +79,7 @@ near them) to the route's first city, plus the route itself.
 Mark a city **looted by someone else** when its elytra was gone before you got
 there. These marks are sent with **Share progress**.
 
-A city is **possibly looted** (a tan ring on the map) when it is within
+A city is **possibly looted** (a small grey ring on the map) when it is within
 2,000 blocks of one of those. The flag is lifted if a city between the two (within 500 blocks of the line
 joining them) was looted the ordinary way: the earlier hunter did not come that
 way.
