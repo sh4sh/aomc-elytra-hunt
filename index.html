@@ -229,6 +229,7 @@
         <span class="key"><i class="cross">×</i> looted, or reported missing</span>
         <span class="key"><i class="cross amber">×</i> found already looted</span>
         <span class="key"><i class="dot hollow"></i> possibly looted</span>
+        <span class="key"><i class="dash"></i> earlier flight path?</span>
         <span class="key"><i class="dot diamond"></i> not in a route</span>
         <span class="key"><i class="dot square area"></i> search area</span>
         <span class="key aomc-only"><i class="dot square green"></i> already on the webmap</span>
@@ -277,6 +278,13 @@
           <em>Mark as found already looted</em>. It turns amber, with a <code>!</code> in the route. Someone hunted there before, so cities within 2,000 blocks of it
           are shown as possibly looted: a hollow dot on the map and a <code>?</code> in the route (hover over it to see why). Send these in too,
           and everyone gets the warning.
+        </p>
+        <p>
+          When three or more cities found already looted line up, the map draws a dashed amber line through them: a
+          guess at where the earlier hunter flew, carried on a little past each end. Cities within 1,000 blocks of it
+          count as possibly looted. It says how sure it is: <em>medium confidence</em> for three or four cities in a
+          line, <em>high</em> for five or more. Two or more cities found with their elytra along the line lower that, or
+          remove the line; a single one is put down to the earlier hunter missing it. It is only ever a guess.
         </p>
         </div>
         <h3>Good to know</h3>

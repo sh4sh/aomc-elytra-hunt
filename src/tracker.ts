@@ -13,6 +13,8 @@ export class Tracker {
   private sharedAlready = new Set<string>();
   /** Every already-looted city as [x, z], worked out when first asked for. */
   private priorPoints: [number, number][] | null = null;
+  /** Goes up whenever a mark changes, so anything worked out from the marks knows to start again. */
+  version = 0;
   private readonly key: string;
   private readonly alreadyKey: string;
 
@@ -31,6 +33,7 @@ export class Tracker {
 
   private save(): void {
     this.priorPoints = null;
+    this.version++;
     try {
       localStorage.setItem(this.key, JSON.stringify(Object.fromEntries(this.visited)));
       localStorage.setItem(this.alreadyKey, JSON.stringify([...this.already]));
@@ -52,6 +55,7 @@ export class Tracker {
     this.shared = new Set(ids);
     this.sharedAlready = new Set(already);
     this.priorPoints = null;
+    this.version++;
   }
 
   /** Found already looted on arrival, by this visitor or according to the shared list. */
@@ -66,6 +70,11 @@ export class Tracker {
       this.already.add(cityId(c));
     } else this.already.delete(cityId(c));
     this.save();
+  }
+
+  /** Every city found already looted, the visitor's own and the shared list's, as "x,z". */
+  alreadyAll(): string[] {
+    return [...new Set([...this.already, ...this.sharedAlready])];
   }
 
   /** This visitor's own "found already looted" marks that are not on the shared list yet, as "x,z". */

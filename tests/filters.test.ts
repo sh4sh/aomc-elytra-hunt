@@ -458,3 +458,39 @@ describe('found already looted', async () => {
     expect(issueFor(parsed.value).body).toContain('1,2\n3,4,already\n');
   });
 });
+
+describe('earlier flight paths', async () => {
+  const { findTrajectories, onTrajectory } = await import('../src/trajectory');
+  const line = [0, 1, 2, 3, 4].map((i) => ({ x: 10000 + i * 2500, z: 5000 + i * 100 }));
+
+  it('needs three cities found already looted in a line', () => {
+    expect(findTrajectories(line.slice(0, 2), [])).toEqual([]);
+    const [t] = findTrajectories([line[2], line[0], line[1]], []);
+    expect(t.confidence).toBe('medium');
+    expect(t.points).toEqual(line.slice(0, 3));
+    expect(findTrajectories(line, [])[0].confidence).toBe('high');
+  });
+
+  it('ignores reports that are far apart or bunched together', () => {
+    expect(findTrajectories([line[0], line[2], line[4]], [])).toEqual([]);
+    const bunch = [{ x: 0, z: 0 }, { x: 2000, z: 0 }, { x: 1000, z: 1800 }];
+    expect(findTrajectories(bunch, [])).toEqual([]);
+  });
+
+  it('thinks less of a path with intact cities along it', () => {
+    const intact = [{ x: 11200, z: 5300 }, { x: 13700, z: 5000 }];
+    // One intact city is taken for a miss by the earlier hunter.
+    expect(findTrajectories(line, intact.slice(0, 1))[0]).toMatchObject({ confidence: 'high', intact: 1 });
+    expect(findTrajectories(line, intact)[0]).toMatchObject({ confidence: 'medium', intact: 2 });
+    expect(findTrajectories(line.slice(0, 3), intact)).toEqual([]);
+    expect(findTrajectories(line, [{ x: 11200, z: 9000 }])[0].confidence).toBe('high');
+  });
+
+  it('covers cities beside the line and a little past its ends', () => {
+    const [t] = findTrajectories(line, []);
+    expect(onTrajectory(t, { x: 13000, z: 5900 })).toBe(true);
+    expect(onTrajectory(t, { x: 21500, z: 5400 })).toBe(true);
+    expect(onTrajectory(t, { x: 13000, z: 7000 })).toBe(false);
+    expect(onTrajectory(t, { x: 24000, z: 5400 })).toBe(false);
+  });
+});

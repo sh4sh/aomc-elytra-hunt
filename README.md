@@ -80,6 +80,16 @@ Only cities with a ship are ever shown, since only ships hold elytra.
   When you arrive to an empty ship, right-click the city and choose **Mark as
   found already looted**; these marks are sent along with **Share progress**.
   **Leave out cities that are possibly looted** keeps them out of the routes.
+- A dashed amber line is a possible earlier flight path: a guess at where a
+  previous hunter flew, drawn when three or more cities found already looted
+  lie in a line (within 4,000 blocks of one another, and not straying from the
+  line by more than a fifth of its length). It is carried on 2,000 blocks past
+  each end, and cities within 1,000 blocks of it count as possibly looted. Its
+  label states the confidence: **medium** for three or four cities, **high**
+  for five or more. One city found intact (looted the ordinary way) within 1,000 blocks
+  of the line is ignored, since any hunter can miss one. Two or more lower the
+  confidence a step, and the line is dropped if that takes it below medium or
+  the intact cities number half the already-looted ones. These levels are rules of thumb, not measured probabilities.
 - A `?` can also mean the city's ship is uncertain (see "How do we know the
   positions are right?" below). Hover over the city to see which it is.
   Right-click a city to report whether its ship was there.

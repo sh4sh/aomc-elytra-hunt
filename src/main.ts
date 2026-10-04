@@ -11,6 +11,7 @@ import { EndMap, type MapCity } from './map';
 import { Precomputed } from './precomputed';
 import { loadSkyFigures } from './sky-cultures';
 import { Tracker } from './tracker';
+import { describeTrajectory, findTrajectories, onTrajectory, type Trajectory } from './trajectory';
 import { cityId, searchBounds, type City, type Filters, type Quadrant } from './types';
 import { OUTSIDE_COLOR, XAERO_COLORS, batchColor, setBatchTags, shareLine, waypointFile, waypointLines, waypointName } from './xaero';
 
@@ -158,8 +159,31 @@ let uncertainShips = new Set<string>();
 /** A city this close (in blocks) to one found already looted counts as possibly looted. */
 const POSSIBLE_RADIUS = 2000;
 const POSSIBLE_NOTE = 'possibly looted: near a city found already looted';
-/** Not looted as far as anyone has said, but near a city someone found already looted. */
-const possible = (c: City): boolean => !tracker.has(c) && tracker.nearAlready(c, POSSIBLE_RADIUS);
+
+/** Guessed flight paths of earlier hunters, worked out again whenever a looted mark changes. */
+let pathsFor: { tracker: Tracker; version: number; paths: Trajectory[] } | null = null;
+function earlierPaths(): Trajectory[] {
+  if (pathsFor?.tracker !== tracker || pathsFor.version !== tracker.version) {
+    const point = (id: string) => {
+      const [x, z] = id.split(',').map(Number);
+      return { x, z };
+    };
+    const already = tracker.alreadyAll().map(point);
+    // Cities looted the ordinary way had their elytra, so no earlier hunter took it.
+    const intact = tracker.all().map(point).filter((p) => !tracker.isAlready(p));
+    pathsFor = { tracker, version: tracker.version, paths: findTrajectories(already, intact) };
+  }
+  return pathsFor.paths;
+}
+
+/** Why a city that nobody has marked looted may be looted all the same, or null if there is no sign of it. */
+function possibleNote(c: City): string | null {
+  if (tracker.has(c)) return null;
+  const path = earlierPaths().find((t) => onTrajectory(t, c));
+  if (path) return `possibly looted: on a possible earlier flight path (${describeTrajectory(path)})`;
+  return tracker.nearAlready(c, POSSIBLE_RADIUS) ? POSSIBLE_NOTE : null;
+}
+const possible = (c: City): boolean => possibleNote(c) !== null;
 /** How many of `batches` were generated; the player's custom batches follow them. */
 let generatedCount = 0;
 
@@ -243,7 +267,7 @@ function rebuild(done?: () => void): void {
       // Ships near mapped terrain may still be unlooted, so keep them visible.
       if (!ship) return;
       note = 'has a ship, but already on the webmap';
-    } else if (state.skipPossible && possible(city)) note = POSSIBLE_NOTE;
+    } else if (state.skipPossible) note = possibleNote(city) ?? undefined;
     pool.set(cityId(city), { city, note });
   };
   for (const [x, z, ship] of withShip) add(x, z, 'seed', !!ship);
@@ -421,6 +445,7 @@ function renderMap(): void {
     filters: state.filters,
     searchArea: previewFilters(),
     explored: state.seed === DEFAULT_SEED ? explored : null,
+    paths: earlierPaths(),
     you,
     pin,
   });
@@ -463,6 +488,9 @@ function renderBatches(): void {
       (unbatched ? ` · ${fmt(unbatched)} without a route` : '') +
       (uncertainShips.size ? ` · ${fmt(uncertainShips.size)} with an uncertain ship (marked ?)` : '') +
       (maybeCount ? ` · ${fmt(maybeCount)} possibly looted (marked ?)` : '') +
+      earlierPaths()
+        .map((t) => ` · possible earlier flight path (${describeTrajectory(t)})`)
+        .join('') +
       (state.excluded.length ? ` · ${fmt(state.excluded.length)} looted removed from routes` : '')
     : unbatched
       ? `No routes: ${fmt(unbatched)} cities, but no two are within the longest flight of each other. Raise the longest flight.`
@@ -572,8 +600,9 @@ function renderDetail(): void {
       const box = document.createElement('input');
       box.type = 'checkbox';
       box.checked = tracker.has(c);
-      const maybe = possible(c);
-      if (maybe) label.title += ` · ${POSSIBLE_NOTE}`;
+      const maybeNote = possibleNote(c);
+      const maybe = maybeNote !== null;
+      if (maybeNote) label.title += ` · ${maybeNote}`;
       const already = tracker.isAlready(c);
       li.classList.toggle('already', already);
       if (already) label.title += ' · found already looted';
@@ -1694,7 +1723,7 @@ map.onHover = (c, px, py) => {
         ? `${xzText(c.city)} · ${c.note}`
         : `${xzText(c.city)} · not in a route: ${c.note}`
       : `${waypointName(c.batch, c.order)} · ${xzText(c.city)}${c.visited ? (tracker.isAlready(c.city) ? ' · found already looted' : ' · looted') : ''}` +
-        (c.possible ? ` · ${POSSIBLE_NOTE}` : '') +
+        (c.possible ? ` · ${possibleNote(c.city) ?? POSSIBLE_NOTE}` : '') +
         (uncertainShips.has(cityId(c.city)) ? ' · ship uncertain' : '');
   tooltip.style.left = `${px + 14}px`;
   tooltip.style.top = `${py + 14}px`;

@@ -1,3 +1,4 @@
+import type { Trajectory } from './trajectory';
 import type { Explored } from './explored';
 import type { City, Filters } from './types';
 
@@ -28,6 +29,8 @@ export interface MapScene {
   /** The search to shade on the map: usually what the form currently says, applied or not. */
   searchArea: Filters;
   explored: Explored | null;
+  /** Guessed flight paths of earlier hunters. */
+  paths: Trajectory[];
   /** The player's position, if they entered one. */
   you: { x: number; z: number } | null;
   /** A spot the player jumped the map to, marked so it can be found again. */
@@ -422,6 +425,30 @@ export class EndMap {
       }
     }
     ctx.fillText('N (−z)', ox + 4, oy - reach - 18);
+
+    // Where an earlier hunter may have flown: dashed, since it is a guess, and fainter past the ends.
+    for (const t of this.scene.paths) {
+      ctx.strokeStyle = ALREADY_COLOR;
+      ctx.lineWidth = t.confidence === 'high' ? 2 : 1.5;
+      ctx.setLineDash(t.confidence === 'high' ? [8, 4] : [3, 5]);
+      ctx.globalAlpha = 0.8;
+      ctx.beginPath();
+      t.points.forEach((p, i) => {
+        if (i) ctx.lineTo(this.sx(p.x), this.sy(p.z)); else ctx.moveTo(this.sx(p.x), this.sy(p.z));
+      });
+      ctx.stroke();
+      ctx.globalAlpha = 0.4;
+      ctx.beginPath();
+      const first = t.points[0], last = t.points[t.points.length - 1];
+      ctx.moveTo(this.sx(t.before.x), this.sy(t.before.z)); ctx.lineTo(this.sx(first.x), this.sy(first.z));
+      ctx.moveTo(this.sx(last.x), this.sy(last.z)); ctx.lineTo(this.sx(t.after.x), this.sy(t.after.z));
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 0.9;
+      ctx.fillStyle = ALREADY_COLOR;
+      ctx.fillText(`earlier flight path? ${t.confidence} confidence`, this.sx(t.after.x) + 6, this.sy(t.after.z) + 4);
+      ctx.globalAlpha = 1;
+    }
 
     // Flight path of the selected batch.
     const route = cities.filter((c) => c.batch === selectedBatch).sort((a, b) => a.order - b.order);

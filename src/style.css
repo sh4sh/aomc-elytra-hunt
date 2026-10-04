@@ -266,6 +266,7 @@ body:not(.other-seed) .other-only { display: none; }
 #mapbar .key { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
 #mapbar .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-sizing: border-box; }
 #mapbar .dot.ring { background: none; border: 2px solid; }
+#mapbar .dash { width: 16px; border-top: 2px dashed #e0954a; }
 #mapbar .dot.hollow { background: none; border: 1.5px solid var(--accent); }
 #mapbar .cross.amber { color: #e0954a; }
 #mapbar .cross { font-style: normal; font-weight: 700; font-size: 14px; line-height: 1; color: #8a8299; }
