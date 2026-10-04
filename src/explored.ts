@@ -8,8 +8,12 @@ interface ExploredFile {
   runs: number[];
 }
 
-/** A city counts as mapped if any mapped pixel lies within this many pixels (about 100 blocks) of it. */
-const NEAR_PX = 3;
+/**
+ * A city counts as mapped only if its own spot and everything within this many pixels of it
+ * (one pixel is 32 blocks) is mapped. Terrain a player merely flew past, with the city just beyond
+ * what their game had loaded, does not count: nobody has been to that city.
+ */
+const SURROUND_PX = 1;
 
 export class Explored {
   /** Mapped pixel runs per row, as [start, length, start, length, ...]. Mapped terrain is sparse: mostly flight trails. */
@@ -41,23 +45,27 @@ export class Explored {
   isMapped(x: number, z: number): boolean {
     const px = Math.floor(x / this.blocksPerPixel);
     const pz = Math.floor(z / this.blocksPerPixel);
-    for (let j = pz - NEAR_PX; j <= pz + NEAR_PX; j++) {
+    for (let j = pz - SURROUND_PX; j <= pz + SURROUND_PX; j++) {
       const runs = this.rows.get(j);
-      if (!runs) continue;
-      for (let k = 0; k < runs.length; k += 2) {
-        if (runs[k] <= px + NEAR_PX && runs[k] + runs[k + 1] > px - NEAR_PX) return true;
+      if (!runs) return false;
+      // The row must have one run covering the whole stretch either side of the city.
+      let covered = false;
+      for (let k = 0; k < runs.length && !covered; k += 2) {
+        covered = runs[k] <= px - SURROUND_PX && runs[k] + runs[k + 1] > px + SURROUND_PX;
       }
+      if (!covered) return false;
     }
-    return false;
+    return true;
   }
 
   /**
-   * Every square region of the given size (in blocks) that has mapped terrain in it or within
-   * reach of it, as [regionX, regionZ]. Lets a caller look only where something could be mapped.
+   * Every square region of the given size (in blocks) that has mapped terrain in it, as
+   * [regionX, regionZ]. Lets a caller look only where something could be mapped.
    */
   regions(regionBlocks: number): [number, number][] {
     const bpp = this.blocksPerPixel;
-    const margin = NEAR_PX * bpp;
+    // A mapped city sits on mapped terrain, so only regions that contain some need looking at.
+    const margin = 0;
     const seen = new Set<string>();
     const out: [number, number][] = [];
     for (const [row, runs] of this.rows) {

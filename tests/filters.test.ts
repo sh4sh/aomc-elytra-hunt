@@ -297,3 +297,45 @@ describe('typed coordinates', async () => {
     expect(at('x: 5')).toBeUndefined();
   });
 });
+
+describe('webmap coverage', async () => {
+  const { existsSync, readFileSync } = await import('node:fs');
+  const { Explored } = await import('../src/explored');
+
+  it.skipIf(!existsSync('public/explored.json'))('only counts a city as mapped when it sits inside mapped terrain', async () => {
+    const file = JSON.parse(readFileSync('public/explored.json', 'utf8'));
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async () => ({ ok: true, json: async () => file })) as unknown as typeof fetch;
+    const mask = (await Explored.load())!;
+    globalThis.fetch = realFetch;
+
+    // Take a mapped run at least 5 pixels long with mapped rows above and below its middle.
+    const bpp = file.blocksPerPixel;
+    const rows = new Map<number, number[]>();
+    for (let i = 0; i < file.runs.length; ) {
+      rows.set(file.runs[i], file.runs.slice(i + 2, i + 2 + file.runs[i + 1] * 2));
+      i += 2 + file.runs[i + 1] * 2;
+    }
+    const on = (px: number, pz: number) => {
+      const r = rows.get(pz) ?? [];
+      for (let k = 0; k < r.length; k += 2) if (r[k] <= px && px < r[k] + r[k + 1]) return true;
+      return false;
+    };
+    let inside: [number, number] | null = null;
+    let edge: [number, number] | null = null;
+    for (const [pz, r] of rows) {
+      for (let k = 0; k < r.length && !(inside && edge); k += 2) {
+        const px = r[k] + Math.floor(r[k + 1] / 2);
+        const surrounded = [-1, 0, 1].every((dz) => [-1, 0, 1].every((dx) => on(px + dx, pz + dz)));
+        if (surrounded && !inside) inside = [px, pz];
+        // Just off the end of a run: next to mapped terrain, but not on it.
+        if (!on(r[k] - 1, pz) && !edge) edge = [r[k] - 1, pz];
+      }
+    }
+    expect(inside && edge).toBeTruthy();
+    expect(mask.isMapped(inside![0] * bpp + 16, inside![1] * bpp + 16)).toBe(true);
+    expect(mask.isMapped(edge![0] * bpp + 16, edge![1] * bpp + 16)).toBe(false);
+    // The city a player reported: about 96 blocks outside the mapped corridor.
+    expect(mask.isMapped(-591320, -2808)).toBe(false);
+  });
+});
