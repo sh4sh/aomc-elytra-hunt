@@ -55,6 +55,8 @@ interface Saved {
   excluded: string[];
   /** Cities moved by hand: city id -> id of a city in the batch it was added to. */
   moved: Record<string, string>;
+  /** Cities added with "+1 city", oldest first: they go at the end of their route, in this order. */
+  appended?: string[];
   /** Keep cities near one found already looted out of the routes. */
   skipPossible?: boolean;
   /** Minecraft username to whisper JourneyMap chat lines to, or empty to write them for public chat. */
@@ -337,17 +339,28 @@ function finishRebuild(
   batches.forEach((batch, b) => batch.forEach((c) => batchOf.set(cityId(c), b)));
   const moved = new Set<string>();
   const touched = new Set<number>();
+  const appended = state.appended ?? [];
+  const tails = new Map<number, string[]>();
   for (const [id, anchor] of Object.entries(state.moved)) {
     const to = batchOf.get(anchor);
     if (!pool.has(id) || to === undefined || anchor in state.moved) continue;
     const from = batchOf.get(id);
     if (from === to) continue;
     if (from !== undefined) batches[from] = batches[from].filter((c) => cityId(c) !== id);
-    batches[to].push(pool.get(id)!.city);
     moved.add(id);
+    // A "+1 city" addition waits, to go on the end once the rest of the route is in order.
+    if (appended.includes(id)) {
+      tails.set(to, [...(tails.get(to) ?? []), id]);
+      continue;
+    }
+    batches[to].push(pool.get(id)!.city);
     touched.add(to);
   }
   for (const b of touched) batches[b] = route(batches[b], startPoint());
+  for (const [b, ids] of tails) {
+    ids.sort((p, q) => appended.indexOf(p) - appended.indexOf(q));
+    batches[b] = [...batches[b], ...ids.map((id) => pool.get(id)!.city)];
+  }
 
   // Custom batches take their cities out of wherever they were and are listed after the generated ones.
   const customs: City[][] = [];
@@ -581,6 +594,7 @@ function renderDetail(): void {
   });
   $('detailTitle').textContent = batchTitle(i);
   $('customDelete').hidden = !isCustom(i);
+  $('addOneUndo').hidden = !batch.some((c) => state.appended?.includes(cityId(c)));
   renderStars(batch, color(i));
   showChatStep();
   let longest = 0;
@@ -827,6 +841,7 @@ function applyResult(seed: string, filters: Filters, cities: FoundCity[]): void 
     state.imported = [];
     state.excluded = [];
     state.moved = {};
+    state.appended = [];
     state.custom = [];
     tracker = new Tracker(seed);
     tracker.setShared(seed === DEFAULT_SEED ? sharedLooted : [], seed === DEFAULT_SEED ? sharedAlready : []);
@@ -1519,7 +1534,7 @@ $('customDelete').addEventListener('click', () => {
 
 $('markAll').addEventListener('click', () => markAll(true));
 
-// Adds the nearest city that has no route to the open one: a quick way to make a route a little longer.
+// Adds the city nearest the route's last stop that has no route, at the end: a quick way to fly a little further.
 const addOneBtn = $('addOne');
 addOneBtn.addEventListener('click', () => {
   if (selected === null) return;
@@ -1528,10 +1543,10 @@ addOneBtn.addEventListener('click', () => {
   let bestDist = Infinity;
   for (const o of outside) {
     if (o.missing || tracker.has(o.city)) continue;
-    for (const c of batch) {
-      const d = Math.hypot(c.x - o.city.x, c.z - o.city.z);
-      if (d < bestDist) [best, bestDist] = [o.city, d];
-    }
+    const last = batch[batch.length - 1];
+    if (!last) break;
+    const d = Math.hypot(last.x - o.city.x, last.z - o.city.z);
+    if (d < bestDist) [best, bestDist] = [o.city, d];
   }
   const say = (text: string) => {
     addOneBtn.textContent = text;
@@ -1539,6 +1554,7 @@ addOneBtn.addEventListener('click', () => {
   };
   if (!best) return say(batch.length ? 'No city without a route' : 'Add a first city from the map');
   const id = cityId(best);
+  state.appended = [...(state.appended ?? []).filter((x) => x !== id), id];
   if (isCustom(selected)) {
     const k = selected - generatedCount;
     state.custom[k].push(id);
@@ -1556,6 +1572,30 @@ addOneBtn.addEventListener('click', () => {
   state.moved[id] = cityId(anchor);
   save();
   rebuildKeeping(cityId(anchor));
+});
+
+// Takes the latest "+1 city" addition back out of the open route.
+$('addOneUndo').addEventListener('click', () => {
+  if (selected === null) return;
+  const batch = batches[selected];
+  const here = new Set(batch.map(cityId));
+  const id = [...(state.appended ?? [])].reverse().find((x) => here.has(x));
+  if (!id) return;
+  state.appended = state.appended!.filter((x) => x !== id);
+  if (isCustom(selected)) {
+    const k = selected - generatedCount;
+    state.custom[k] = state.custom[k].filter((x) => x !== id);
+    save();
+    rebuild(() => {
+      selected = generatedCount + k < batches.length ? generatedCount + k : null;
+    });
+    render();
+    return;
+  }
+  const keep = batch.find((x) => !(cityId(x) in state.moved));
+  delete state.moved[id];
+  save();
+  rebuildKeeping(keep ? cityId(keep) : null);
 });
 $('markNone').addEventListener('click', () => markAll(false));
 

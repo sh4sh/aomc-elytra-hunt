@@ -101,7 +101,8 @@ Only cities with a ship are ever shown, since only ships hold elytra.
   dividers either side of the map to resize the panels.
 - Right-click a city for options; on a touch screen, press and hold.
 
-**+1 city**, in an open route, adds the nearest city that is not in any route.
+**+1 city**, in an open route, adds the city nearest the route's last stop that
+is not in any route, as the new last stop. **Undo +1** takes the latest one out.
 
 **Rebuild routes without looted** regroups the remaining cities into fresh routes
 once some have been looted.
