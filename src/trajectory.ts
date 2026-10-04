@@ -29,7 +29,7 @@ export const EXTEND_BLOCKS = 2000;
 const MIN_POINTS = 3;
 const HIGH_POINTS = 5;
 
-function distanceToSegment(p: Pt, a: Pt, b: Pt): number {
+export function distanceToSegment(p: Pt, a: Pt, b: Pt): number {
   const dx = b.x - a.x;
   const dz = b.z - a.z;
   const len = dx * dx + dz * dz;

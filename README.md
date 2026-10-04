@@ -76,7 +76,10 @@ Only cities with a ship are ever shown, since only ships hold elytra.
   player found already looted by someone else.
 - A hollow dot, and a `?` after a city's coordinates in a route, means the city
   is possibly looted: it is within 2,000 blocks of a city a player found
-  already looted, so an earlier hunt probably passed through. It is a guess.
+  already looted, so an earlier hunt probably passed through. It is a guess. The flag is
+  lifted when a city between the two (within 500 blocks of the straight line
+  joining them) has been looted the ordinary way: the earlier hunter did not
+  come that way.
   When you arrive to an empty ship, right-click the city and choose **Mark as
   found already looted**; these marks are sent along with **Share progress**.
   **Leave out cities that are possibly looted** keeps them out of the routes.

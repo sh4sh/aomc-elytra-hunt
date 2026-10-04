@@ -444,6 +444,12 @@ describe('found already looted', async () => {
     expect(t.has({ x: 1000, z: 1000 })).toBe(true);
     expect(t.nearAlready({ x: 2500, z: 1000 }, 2000)).toBe(true);
     expect(t.nearAlready({ x: 4000, z: 1000 }, 2000)).toBe(false);
+    // An intact city in between clears the one beyond it, but not one off to the side.
+    t.set({ x: 1800, z: 1100 }, true);
+    expect(t.nearAlready({ x: 2500, z: 1000 }, 2000)).toBe(false);
+    expect(t.nearAlready({ x: 1000, z: 2500 }, 2000)).toBe(true);
+    t.set({ x: 1800, z: 1100 }, false);
+    expect(t.nearAlready({ x: 2500, z: 1000 }, 2000)).toBe(true);
     t.set({ x: 1000, z: 1000 }, false);
     expect(t.nearAlready({ x: 2500, z: 1000 }, 2000)).toBe(false);
     t.setShared(['0,0'], ['0,0']);
