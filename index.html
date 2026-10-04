@@ -131,6 +131,9 @@
         <span class="hint">Working out the routes…</span>
       </div>
       <ol id="batches"></ol>
+      <p id="finishedNote" class="hint" hidden>
+        <span id="finishedCount"></span> · <button id="finishedToggle" type="button" class="textlink">show</button>
+      </p>
       <div id="pager" class="row" hidden>
         <button id="pagePrev" type="button" aria-label="Previous page">‹</button>
         <select id="pageSelect" aria-label="Jump to a page of routes"></select>
@@ -230,9 +233,11 @@
         <div id="picked" hidden>
           <span id="pickedText"></span>
           <button id="pickedCopy" type="button" class="textlink">copy coordinates</button>
+          <button id="pickedMore" type="button" class="textlink">options</button>
         </div>
         <span class="key"><i class="dot"></i> in a route</span>
-        <span class="key" data-key="looted"><i class="cross">×</i> looted, or reported missing</span>
+        <span class="key" data-key="looted"><i class="cross green">×</i> looted</span>
+        <span class="key" data-key="missing"><i class="cross">×</i> reported missing</span>
         <span class="key" data-key="already"><i class="cross amber">×</i> looted by someone else</span>
         <span class="key" data-key="possible"><i class="dot hollow"></i> possibly looted</span>
         <span class="key" data-key="path"><i class="dash"></i> earlier flight path?</span>
@@ -240,7 +245,7 @@
         <span class="key"><i class="dot square area"></i> search area</span>
         <span class="key aomc-only"><i class="dot square green"></i> already on the webmap</span>
         <span class="controls mouse-only">Drag to pan · scroll or use the slider to zoom · click a city to open its route and see its details · right-click for options</span>
-        <span class="controls touch-only">Two fingers to move the map · pinch or use the slider to zoom · tap a city to open its route and see its details · press and hold for options</span>
+        <span class="controls touch-only">Two fingers to move the map · pinch or use the slider to zoom · tap a city to open its route and see its details, with its options</span>
         <span id="cursor"></span>
       </footer>
     </main>
@@ -265,7 +270,7 @@
         </p>
         <h3>3. Tick cities off as you loot them</h3>
         <p>
-          If you like, delete each city's waypoint in your map mod as you go, so you can keep track in game of where you still need to go. Use the checkboxes in the route, or right-click a city on the map or in the route's list (on a touch screen, press and hold it on the map). Looted cities turn into an × and are left
+          If you like, delete each city's waypoint in your map mod as you go, so you can keep track in game of where you still need to go. Use the checkboxes in the route, or right-click a city on the map or in the route's list (on a touch screen, tap <em>⋯</em> on its row). Looted cities turn into a green × and are left
           out of exports.
         </p>
         <div class="aomc-only help-step">
@@ -298,13 +303,13 @@
         <h3>Good to know</h3>
         <ul>
           <li class="mouse-only">Moving the map: drag to pan, scroll or use the slider to zoom, click a city to open its route, right-click for options.</li>
-          <li class="touch-only">Moving the map: two fingers to pan, pinch or use the slider to zoom, tap a city to open its route, press and hold for options.</li>
+          <li class="touch-only">Moving the map: two fingers to pan, pinch or use the slider to zoom, tap a city to open its route; its details appear under the map, with an <em>options</em> link for everything a right-click offers.</li>
           <li>For Minecraft Java Edition, not Bedrock. It follows the 1.19–1.21 world generation rules and is in use on a 26.2 server; a future version that changes End generation could put cities elsewhere.</li>
           <li>A <em>?</em> after a city in a route means its ship is uncertain: it is an unusually tight fit in that city, and one ship like that turned out not to exist. Most may be fine. If you visit one, right-click it and report whether the ship was there.</li>
           <li>Found a city with no ship, or no city where the app shows one? Right-click it, choose <em>Report incorrect…</em> and pick which. Once accepted, it shows as a grey × for everyone and is left out of routes; hover over it to see what was reported.</li>
           <li>Small faint diamonds are cities with a ship that didn't fit a route. Right-click one to add it to the route you have open.</li>
           <li>Far from 0,0? In <button type="button" class="jump" data-target="settings">Search settings</button>, choose <em>Near my coordinates</em> to search a circle around your coordinates.</li>
-          <li>To change the order of a route, drag a city up or down its list, or right-click it (press and hold on the map) and choose <em>Move up</em> or <em>Move down</em>. Cities you add to a route go at the end. The undo arrow takes back your last change, and <em>Original order</em> undoes the reordering but keeps the cities you added.</li>
+          <li>To change the order of a route, drag a city up or down its list, or on a touch screen tap <em>⋯</em> on its row and choose <em>Move up</em> or <em>Move down</em>. Cities you add to a route go at the end. The undo arrow takes back your last change, and <em>Original order</em> undoes the reordering but keeps the cities you added.</li>
           <li>Want to plan your own? Right-click any city and choose <em>Start a custom route with this city</em>, then right-click others to add them. Custom routes sit at the top of the route list.</li>
           <li class="aomc-only">Green shading is terrain already on the community webmap; cities there are left out of routes, unless you tick <em>Include cities already on the webmap</em> under Advanced.</li>
           <li><button type="button" class="jump" data-target="settings">Search settings</button> changes the distance, angle, route size and longest flight.</li>

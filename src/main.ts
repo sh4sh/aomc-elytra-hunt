@@ -149,6 +149,8 @@ let starCache: { key: string; match: ReturnType<typeof lookalike> } | null = nul
 /** Batches shown per page of the list. */
 const PAGE_SIZE = 5;
 let page = 0;
+/** Whether routes that are all looted are listed after all. */
+let showFinished = false;
 /** The selection the list last jumped to, so paging by hand isn't undone on the next redraw. */
 let pageFollowed: number | null = null;
 /** Cities left out because they are already on the webmap. */
@@ -588,7 +590,8 @@ function renderMap(): void {
   }
   // The legend only explains marks that are on the map just now.
   const legend = {
-    looted: cities.some((c) => (c.visited && !c.already) || c.missing),
+    looted: cities.some((c) => c.visited && !c.already),
+    missing: cities.some((c) => c.missing && !c.visited),
     already: cities.some((c) => c.already),
     possible: cities.some((c) => c.possible),
     path: earlierPaths().length > 0,
@@ -672,27 +675,39 @@ function renderBatches(): void {
   $<HTMLButtonElement>('regroup').disabled = done === 0;
   $<HTMLButtonElement>('regroupUndo').disabled = state.excluded.length === 0;
 
-  const pages = Math.max(1, Math.ceil(generatedCount / PAGE_SIZE));
+  // Finished routes drop out of the list, so what is left is what there is still to fly. The open
+  // route stays while it is open, finished or not. Route numbers do not change: waypoints already in
+  // the player's map mod keep matching.
+  const finished = (b: City[]) => b.length > 0 && b.every((c) => tracker.has(c));
+  const live: number[] = [];
+  let hiddenCount = 0;
+  for (let i = 0; i < generatedCount; i++) {
+    if (finished(batches[i])) hiddenCount++;
+    if (showFinished || i === selected || !finished(batches[i])) live.push(i);
+  }
+  const finishedNote = $('finishedNote');
+  finishedNote.hidden = hiddenCount === 0;
+  $('finishedCount').textContent = `${fmt(hiddenCount)} finished ${hiddenCount === 1 ? 'route' : 'routes'} ${showFinished ? 'shown' : 'hidden'}`;
+  $('finishedToggle').textContent = showFinished ? 'hide' : 'show';
+
+  const pages = Math.max(1, Math.ceil(live.length / PAGE_SIZE));
   // Jump to the selected batch's page when the selection changes, e.g. after clicking a city on the map.
   if (selected !== pageFollowed) {
     pageFollowed = selected;
-    if (selected !== null && !isCustom(selected)) page = Math.floor(selected / PAGE_SIZE);
+    if (selected !== null && !isCustom(selected)) page = Math.floor(live.indexOf(selected) / PAGE_SIZE);
   }
-  page = Math.min(page, pages - 1);
-  const first = page * PAGE_SIZE;
-  const last = Math.min(first + PAGE_SIZE, generatedCount);
+  page = Math.max(0, Math.min(page, pages - 1));
+  const onPage = live.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   $('pager').hidden = pages === 1;
   // One entry per page, named by the batches on it, so any page is one pick away.
   const pageSelect = $<HTMLSelectElement>('pageSelect');
-  if (pageSelect.options.length !== pages || pageSelect.dataset.total !== String(generatedCount)) {
-    pageSelect.dataset.total = String(generatedCount);
-    pageSelect.replaceChildren(
-      ...Array.from({ length: pages }, (_, p) => {
-        const from = p * PAGE_SIZE + 1;
-        return new Option(`Routes ${from}–${Math.min(from + PAGE_SIZE - 1, generatedCount)} of ${generatedCount}`, String(p));
-      }),
-    );
-  }
+  pageSelect.replaceChildren(
+    ...Array.from({ length: pages }, (_, p) => {
+      const from = live[p * PAGE_SIZE];
+      const to = live[Math.min((p + 1) * PAGE_SIZE, live.length) - 1];
+      return new Option(`Routes ${from + 1}–${to + 1} of ${generatedCount}`, String(p));
+    }),
+  );
   pageSelect.value = String(page);
   $<HTMLButtonElement>('pagePrev').disabled = page === 0;
   $<HTMLButtonElement>('pageNext').disabled = page === pages - 1;
@@ -701,7 +716,7 @@ function renderBatches(): void {
   // Custom batches stay pinned above whichever page of generated batches is showing.
   const shown: number[] = [];
   for (let i = generatedCount; i < batches.length; i++) shown.push(i);
-  for (let i = first; i < last; i++) shown.push(i);
+  shown.push(...onPage);
 
   const list = $('batches');
   list.replaceChildren(
@@ -909,30 +924,20 @@ function renderDetail(): void {
         e.preventDefault();
         menuAt(e.clientX, e.clientY);
       });
-      // Under a finger, pressing and holding opens it, as on the map. Not every phone treats that as a right-click.
-      let hold: ReturnType<typeof setTimeout> | undefined;
-      let held = false;
-      label.addEventListener('pointerdown', (e) => {
-        if (e.pointerType === 'mouse') return;
-        const { clientX, clientY } = e;
-        held = false;
-        hold = setTimeout(() => {
-          held = true;
-          menuAt(clientX, clientY);
-        }, 550);
+      // No right-click under a finger: there, each row carries a small button for the same menu.
+      const more = document.createElement('button');
+      more.type = 'button';
+      more.className = 'chat touch-only';
+      more.textContent = '⋯';
+      more.setAttribute('aria-label', 'Options for this city');
+      more.addEventListener('click', (e) => {
+        // Inside the row's label: don't let the tap tick the looted box.
+        e.preventDefault();
+        e.stopPropagation();
+        const at = more.getBoundingClientRect();
+        menuAt(at.left, at.bottom);
       });
-      // A finger that moves is scrolling the list, not holding.
-      for (const type of ['pointermove', 'pointerup', 'pointercancel', 'pointerleave'] as const) {
-        label.addEventListener(type, (e) => {
-          if (type === 'pointermove' && Math.hypot(e.movementX, e.movementY) < 4) return;
-          clearTimeout(hold);
-        });
-      }
-      label.addEventListener('click', (e) => {
-        // Lifting the finger after a hold must not tick the looted box as well.
-        if (held) e.preventDefault();
-        held = false;
-      });
+      label.append(more);
       label.addEventListener('mouseenter', () => setHot(c));
       label.addEventListener('mouseleave', () => setHot(null));
       li.append(label);
@@ -1356,6 +1361,10 @@ gotoBatch.addEventListener('change', () => {
   if (Number.isFinite(n) && generatedCount) select(Math.min(generatedCount, Math.max(1, n)) - 1, true);
 });
 
+$('finishedToggle').addEventListener('click', () => {
+  showFinished = !showFinished;
+  renderBatches();
+});
 $<HTMLSelectElement>('pageSelect').addEventListener('change', (e) => {
   page = Number((e.target as HTMLSelectElement).value);
   renderBatches();
@@ -2191,8 +2200,10 @@ const cityLine = (c: MapCity): string =>
 
 // The city last clicked stays described under the map, where a hover tip cannot (there is no hover under a finger).
 let picked: City | null = null;
+let pickedOn: MapCity | null = null;
 function showPicked(c: MapCity): void {
   picked = c.city;
+  pickedOn = c;
   const extra: string[] = [];
   if (c.batch >= 0) {
     extra.push(`stop ${c.order + 1} of ${batches[c.batch].length} in ${batchTitle(c.batch)}`);
@@ -2208,6 +2219,24 @@ $('pickedCopy').addEventListener('click', async () => {
   const btn = $('pickedCopy');
   btn.textContent = (await copyText(xzText(picked))) ? 'copied' : 'copy failed';
   setTimeout(() => (btn.textContent = 'copy coordinates'), 1500);
+});
+
+// The same menu as a right-click on the city: the way to it on a touch screen.
+$('pickedMore').addEventListener('click', () => {
+  if (!pickedOn) return;
+  // The city as it stands now: it may have been looted, moved or regrouped since it was tapped.
+  const id = cityId(pickedOn.city);
+  let now: MapCity | null = null;
+  batches.forEach((batch, b) =>
+    batch.forEach((city, order) => {
+      if (cityId(city) === id) now = { city, batch: b, order, color: color(b), visited: tracker.has(city), possible: possible(city) };
+    }),
+  );
+  const out = outside.find((o) => cityId(o.city) === id);
+  if (!now && out) now = { city: out.city, batch: -1, order: 0, color: OUTSIDE_COLOR, visited: tracker.has(out.city), note: out.note, missing: out.missing };
+  if (!now) return;
+  const at = $('pickedMore').getBoundingClientRect();
+  openMenu(now, at.left, at.top, pickedOn.city);
 });
 
 map.onPick = (c) => {

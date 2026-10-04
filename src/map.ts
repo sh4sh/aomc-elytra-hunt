@@ -41,6 +41,8 @@ export interface MapScene {
 const HIT_RADIUS = 9;
 /** Cities found already looted stand out from ordinary looted ones: they are why their neighbours are in doubt. */
 const ALREADY_COLOR = '#e0954a';
+/** Cities looted in the ordinary way: done, and plain to see. */
+const LOOTED_COLOR = '#6fdc8c';
 // Pixels per block at the two ends of the zoom range.
 const MIN_SCALE = 0.0005;
 const MAX_SCALE = 2;
@@ -59,7 +61,7 @@ export class EndMap {
   onPick: (c: MapCity) => void = () => {};
   /** Called with the zoom level, 0 (furthest out) to 1 (closest in), whenever it changes. */
   onZoom: (level: number) => void = () => {};
-  /** Right-click (or press and hold) on the map: the city under the pointer, if any, and the block position. */
+  /** Right-click on the map: the city under the pointer, if any, and the block position. */
   onMenu: (c: MapCity | null, px: number, py: number, pos: { x: number; z: number }) => void = () => {};
   /** Called with the block at the centre of the view whenever the view moves. */
   onView: (centre: { x: number; z: number }) => void = () => {};
@@ -157,7 +159,8 @@ export class EndMap {
     const el = this.canvas;
     let drag: { x: number; y: number; moved: boolean } | null = null;
 
-    // Touch screens have no right-click: pressing and holding on a city opens the same menu.
+    // Pressing and holding used to open the menu on touch screens, but went off by accident too easily;
+    // there the menu is reached from a city's details under the map instead. Nothing sets this now.
     let hold: ReturnType<typeof setTimeout> | undefined;
     const cancelHold = () => clearTimeout(hold);
 
@@ -210,14 +213,6 @@ export class EndMap {
     el.addEventListener('pointerdown', (e) => {
       if (e.button !== 0) return;
       const touch = e.pointerType === 'touch';
-      if (e.pointerType !== 'mouse') {
-        const { offsetX, offsetY } = e;
-        hold = setTimeout(() => {
-          // The finger lifting afterwards must not also count as a tap on a city.
-          drag = null;
-          this.onMenu(this.cityAt(offsetX, offsetY), offsetX, offsetY, this.blockAt(offsetX, offsetY));
-        }, 550);
-      }
       drag = { x: e.offsetX, y: e.offsetY, moved: false };
       // A finger is not captured: if it turns into a page scroll, the browser takes it over.
       if (!touch) el.setPointerCapture(e.pointerId);
@@ -495,9 +490,10 @@ export class EndMap {
         ctx.moveTo(x + d, y - d);
         ctx.lineTo(x - d, y + d);
         if (outside) ctx.globalAlpha = 0.6;
-        ctx.strokeStyle = c.already ? ALREADY_COLOR : '#8a8299';
-        ctx.lineWidth = c.already ? 2 : 1.5;
-        if (c.already) ctx.globalAlpha = dimmed ? 0.5 : 1;
+        // Green for a city the player looted, amber for one someone else got to first, grey for a missing one.
+        ctx.strokeStyle = c.already ? ALREADY_COLOR : c.visited ? LOOTED_COLOR : '#8a8299';
+        ctx.lineWidth = c.visited ? 2 : 1.5;
+        if (c.visited) ctx.globalAlpha = dimmed ? 0.5 : 1;
         if (c.trophy) {
           ctx.globalAlpha = 1;
           ctx.strokeStyle = c.trophy === 'looted' ? '#ffd24a' : '#7fe0b0';

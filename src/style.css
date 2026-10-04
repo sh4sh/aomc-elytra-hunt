@@ -191,10 +191,6 @@ ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: col
   0%, 25% { background: var(--accent); color: #1a1326; border-color: var(--accent); }
   100% { background: transparent; }
 }
-/* Holding a row opens its menu; the phone's own text selection and callout would get in the way. */
-@media (pointer: coarse) {
-  #cities li label { -webkit-touch-callout: none; user-select: none; }
-}
 .path-note span { display: block; }
 /* The route's own buttons: one tidy row that fills the panel's width, a size down from the main buttons. */
 .actions { gap: 6px; }
@@ -343,6 +339,7 @@ body:not(.other-seed) .other-only { display: none; }
 #mapbar .dash { width: 16px; border-top: 2px dashed #e0954a; }
 #mapbar .dot.hollow { background: none; border: 1.5px solid var(--accent); }
 #mapbar .cross.amber { color: #e0954a; }
+#mapbar .cross.green { color: #6fdc8c; }
 #mapbar .cross { font-style: normal; font-weight: 700; font-size: 14px; line-height: 1; color: #8a8299; }
 #mapbar .dot.diamond { background: none; border: 1px solid var(--muted); border-radius: 0; transform: rotate(45deg) scale(0.8); }
 #mapbar .dot.square { border-radius: 2px; }
@@ -380,6 +377,7 @@ body:not(.other-seed) .other-only { display: none; }
 @media (pointer: coarse) {
   .touch-only { display: inline; }
   li.touch-only { display: list-item; }
+  #cities .chat.touch-only { display: inline-block; padding: 4px 10px; font-size: 14px; }
   /* Room for a fingertip. */
   .actions button { padding: 9px 8px; }
   .row.quiet .textlink { padding: 8px 0; font-size: 14px; }

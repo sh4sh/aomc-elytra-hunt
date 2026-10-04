@@ -78,8 +78,13 @@ Only cities with a ship are ever shown, since only ships hold elytra.
 ### On the map
 
 - Filled dots are cities in a route, coloured by route.
-- An × is a looted city, or one where a player reported the ship or the whole
-  city missing; hover over it to see which.
+- A green × is a city you (or the shared list) marked looted. A grey × is one
+  where a player reported the ship or the whole city missing; hover over it to
+  see which.
+- A route whose cities are all looted drops out of the route list once you
+  leave it. **N finished routes hidden · show** under the list brings them
+  back. Route numbers never change because of this, so waypoints already in
+  your map mod keep matching.
 - An amber ×, and a `!` after a city's coordinates in a route, is a city a
   player found already looted by someone else.
 - A hollow dot, and a `?` after a city's coordinates in a route, means the city
@@ -110,7 +115,7 @@ Only cities with a ship are ever shown, since only ships hold elytra.
 - Drag to pan; scroll or use the slider to zoom. On a touch screen, use two
   fingers to move the map and pinch to zoom; one finger scrolls the page. On a wide screen, drag the
   dividers either side of the map to resize the panels.
-- Right-click a city for options; on a touch screen, press and hold.
+- Right-click a city for options. On a touch screen, tap **⋯** on its row in the route's list, or tap the city on the map and then **options** in its details under the map.
 
 Right-click a city (on the map or in the route's list) and choose **Remove
 from route** to take it out; it stays on the map as a faint diamond, and
