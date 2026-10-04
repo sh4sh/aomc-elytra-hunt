@@ -15,7 +15,7 @@ The same steps are in the app under **How to use**.
 
 1. **Pick a route.** Routes are in the route list, numbered outward from 0,0.
    Pick one there, select any city on the map, or type your position into the
-   box on the map and press **Nearest route**. **Go to route #** jumps to a route by number.
+   x and z boxes on the map and press **Nearest route**. **Go to route #** jumps to a route by number.
 2. **Get the waypoints into your map mod.** With a route open, choose one:
    - **Xaero's Minimap:** press **Copy waypoints**, close Minecraft, and paste
      at the end of the waypoint file in

@@ -190,7 +190,8 @@
     <main>
       <canvas id="map"></canvas>
       <form id="locate">
-        <input id="locateInput" placeholder="Coordinates, e.g. x: 100, z: -200" autocomplete="off" aria-label="Coordinates" />
+        <input id="locateX" type="number" step="1" placeholder="x" autocomplete="off" aria-label="x coordinate" />
+        <input id="locateZ" type="number" step="1" placeholder="z" autocomplete="off" aria-label="z coordinate" />
         <button type="submit">Nearest route</button>
         <button id="locateGo" type="button" title="Move the map to these coordinates without opening a route">Go to coordinates</button>
         <button id="locateClear" type="button" aria-label="Clear the coordinates and markers">×</button>
@@ -241,7 +242,7 @@
         <h3>1. Pick a route</h3>
         <p>
           Routes are in the <button type="button" class="jump" data-target="batches">route list</button>, numbered
-          outward from 0,0. Pick one there, select any city on the map, or type your position into the box on the map
+          outward from 0,0. Pick one there, select any city on the map, or type your position into the x and z boxes on the map
           (or right-click the map and choose <em>Set my position here</em>) and press <em>Nearest route</em>.
         </p>
         <h3>2. Get the waypoints into your map mod</h3>

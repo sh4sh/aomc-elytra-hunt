@@ -191,7 +191,7 @@ main { position: relative; min-width: 0; min-height: 0; display: flex; flex-dire
 #zoom { position: absolute; top: 10px; right: 10px; display: flex; align-items: center; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 2px 4px; }
 #zoom button { border: 0; background: none; padding: 0 6px; font-size: 16px; line-height: 1.2; }
 #zoom input { width: 110px; }
-#locate input { width: 210px; padding: 3px 6px; font-size: 12px; background: var(--panel); }
+#locate input { width: 96px; padding: 3px 6px; font-size: 12px; background: var(--panel); }
 #locate button { padding: 3px 8px; font-size: 12px; white-space: nowrap; background: var(--panel); }
 #locateNote { white-space: nowrap; background: var(--panel); border-radius: 6px; padding: 3px 8px; }
 #locateNote:empty { display: none; }

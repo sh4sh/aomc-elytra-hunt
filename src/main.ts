@@ -969,9 +969,9 @@ $('aroundRandom').addEventListener('click', () => {
 });
 
 $('aroundUseMap').addEventListener('click', () => {
-  const pos = you ?? parseCoordinates(locateInput.value)[0];
+  const pos = you ?? locatePosition();
   if (!pos) {
-    aroundX.setCustomValidity('Type your position into the box on the map first, or enter it here.');
+    aroundX.setCustomValidity('Type your position into the x and z boxes on the map first, or enter it here.');
     aroundX.reportValidity();
     return;
   }
@@ -1045,7 +1045,41 @@ $('regroupUndo').addEventListener('click', () => {
 // ---------- locate ----------
 
 const locateForm = $<HTMLFormElement>('locate');
-const locateInput = $<HTMLInputElement>('locateInput');
+const locateX = $<HTMLInputElement>('locateX');
+const locateZ = $<HTMLInputElement>('locateZ');
+/** The coordinates typed into the two boxes on the map, or null while either is empty. */
+function locatePosition(): { x: number; z: number } | null {
+  if (locateX.value.trim() === '' || locateZ.value.trim() === '') return null;
+  const [x, z] = [Number(locateX.value), Number(locateZ.value)];
+  return Number.isFinite(x) && Number.isFinite(z) ? { x: Math.round(x), z: Math.round(z) } : null;
+}
+function setLocate(pos: { x: number; z: number } | null): void {
+  locateX.value = pos ? String(pos.x) : '';
+  locateZ.value = pos ? String(pos.z) : '';
+}
+
+/**
+ * Coordinates are entered as separate x and z boxes, but are often copied as one piece of text
+ * ("x: 100, z: -200", "100 64 -200"). Pasting such text into either box of a pair fills both.
+ */
+function pasteIntoBoth(xBox: HTMLInputElement, zBox: HTMLInputElement): void {
+  for (const box of [xBox, zBox]) {
+    box.addEventListener('paste', (e) => {
+      const pos = parseCoordinates(e.clipboardData?.getData('text') ?? '')[0];
+      // A single number is left to paste normally into the box it was aimed at.
+      if (!pos) return;
+      e.preventDefault();
+      xBox.value = String(pos.x);
+      zBox.value = String(pos.z);
+      // Tell anything watching the boxes that they changed.
+      xBox.dispatchEvent(new Event('input', { bubbles: true }));
+      zBox.dispatchEvent(new Event('input', { bubbles: true }));
+      zBox.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  }
+}
+pasteIntoBoth(locateX, locateZ);
+pasteIntoBoth(aroundX, aroundZ);
 const locateNote = $('locateNote');
 
 /** Open the batch holding the nearest city worth visiting. Returns false when there is none. */
@@ -1075,9 +1109,9 @@ let locateAfterSearch: { x: number; z: number } | null = null;
 
 locateForm.addEventListener('submit', (e) => {
   e.preventDefault();
-  const pos = parseCoordinates(locateInput.value)[0];
+  const pos = locatePosition();
   if (!pos) {
-    locateNote.textContent = 'Enter your position, like x: 100000, z: 200000.';
+    locateNote.textContent = 'Enter both x and z.';
     return;
   }
   you = { x: pos.x, z: pos.z };
@@ -1102,9 +1136,9 @@ locateForm.addEventListener('submit', (e) => {
 
 // Jump the map to typed coordinates, leaving the open route and the player's position as they are.
 $('locateGo').addEventListener('click', () => {
-  const pos = parseCoordinates(locateInput.value)[0];
+  const pos = locatePosition();
   if (!pos) {
-    locateNote.textContent = 'Enter coordinates, like x: 100000, z: 200000.';
+    locateNote.textContent = 'Enter both x and z.';
     return;
   }
   pin = { x: pos.x, z: pos.z };
@@ -1116,7 +1150,7 @@ $('locateGo').addEventListener('click', () => {
 $('locateClear').addEventListener('click', () => {
   you = null;
   pin = null;
-  locateInput.value = '';
+  setLocate(null);
   locateNote.textContent = '';
   renderMap();
 });
@@ -1674,7 +1708,7 @@ map.onMenu = (c, px, py, pos) => {
   }]);
   items.push(['Set my position here', () => {
     you = here;
-    locateInput.value = xzText(here);
+    setLocate(here);
     locateNote.textContent = '';
     renderMap();
   }]);
