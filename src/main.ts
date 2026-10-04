@@ -1994,7 +1994,13 @@ map.onHover = (c, px, py) => {
   tooltip.style.top = `${py + 14}px`;
 };
 map.onPick = (c) => {
-  if (c.batch >= 0) select(c.batch, true);
+  if (c.batch < 0) return;
+  // A city of the route that is already open leaves the map where it is.
+  if (c.batch !== selected) select(c.batch, true);
+  // Bring the city's row into view in the route's list, lit up as it is under the pointer.
+  const row = document.querySelectorAll('#cities li')[c.order];
+  row?.classList.add('hot');
+  row?.scrollIntoView({ block: 'center', behavior: 'smooth' });
 };
 
 // ---------- right-click menu ----------
