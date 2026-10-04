@@ -51,6 +51,8 @@ export class EndMap {
   onZoom: (level: number) => void = () => {};
   /** Right-click (or press and hold) on the map: the city under the pointer, if any, and the block position. */
   onMenu: (c: MapCity | null, px: number, py: number, pos: { x: number; z: number }) => void = () => {};
+  /** Called with the block at the centre of the view whenever the view moves. */
+  onView: (centre: { x: number; z: number }) => void = () => {};
   /** Block position under the cursor, or null when it leaves the map. */
   onCursor: (pos: { x: number; z: number } | null) => void = () => {};
 
@@ -366,6 +368,7 @@ export class EndMap {
     const { ctx, w, h } = this;
     ctx.fillStyle = '#0f0c17';
     ctx.fillRect(0, 0, w, h);
+    this.onView({ x: Math.round(this.cx), z: Math.round(this.cz) });
     if (!this.scene) return;
     const { cities, selectedBatch, hot, explored, you, pin, searchArea } = this.scene;
     // Distances and angle are drawn for the search being set up, so they follow the controls live.
@@ -537,5 +540,14 @@ export class EndMap {
       ctx.fillStyle = '#ece7f5';
       for (const c of route) ctx.fillText(String(c.order + 1), this.sx(c.city.x) + 7, this.sy(c.city.z) + 4);
     }
+
+    // A faint crosshair at the centre of the view: the spot the coordinates under the map refer to
+    // whenever the pointer is elsewhere (and always, on a touch screen).
+    ctx.strokeStyle = 'rgba(236, 231, 245, 0.45)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(Math.round(w / 2) + 0.5, h / 2 - 7); ctx.lineTo(Math.round(w / 2) + 0.5, h / 2 + 7);
+    ctx.moveTo(w / 2 - 7, Math.round(h / 2) + 0.5); ctx.lineTo(w / 2 + 7, Math.round(h / 2) + 0.5);
+    ctx.stroke();
   }
 }

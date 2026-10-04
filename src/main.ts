@@ -1720,8 +1720,20 @@ $('zoomOut').addEventListener('click', () => map.setZoom(map.zoom - 0.05));
 $('zoomIn').addEventListener('click', () => map.setZoom(map.zoom + 0.05));
 
 const cursor = $('cursor');
+// The readout never goes blank, so the bar under the map keeps its shape: it shows the block under
+// the pointer, or the centre of the view (the faint crosshair) when the pointer is not on the map.
+let pointerAt: { x: number; z: number } | null = null;
+let viewCentre = { x: 0, z: 0 };
+const showCoords = () => {
+  cursor.textContent = pointerAt ? xzText(pointerAt) : `centre ${xzText(viewCentre)}`;
+};
 map.onCursor = (pos) => {
-  cursor.textContent = pos ? xzText(pos) : '';
+  pointerAt = pos;
+  showCoords();
+};
+map.onView = (centre) => {
+  viewCentre = centre;
+  showCoords();
 };
 
 // ---------- resizable panels ----------
