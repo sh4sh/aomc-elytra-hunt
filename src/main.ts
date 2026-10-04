@@ -58,8 +58,6 @@ interface Saved {
   /** Batches the player put together by hand, each a list of city ids. */
   custom: string[][];
   chatName: string;
-  /** Which kind of search the form shows: around a position (the default) or a band out from End Spawn. */
-  mode: 'around' | 'band';
   /** Which map mod the export controls are shown for. */
   mapMod: 'xaero' | 'journeymap';
 }
@@ -71,8 +69,6 @@ function load(): Saved {
     const s = JSON.parse(localStorage.getItem(STORE) ?? 'null');
     if (s?.seed && s.filters) {
       const saved: Saved = { found: [], imported: [], skipMapped: true, shipsOnly: true, batchSize: BATCH_SIZE, batchShape: 'cluster', maxHop: DEFAULT_MAX_HOP, lineDeviation: DEFAULT_LINE_DEVIATION, excluded: [], moved: {}, custom: [], chatName: '', mapMod: 'xaero', ...s };
-      // Visitors from before the choice was saved stay on whatever they were using.
-      saved.mode ??= saved.filters.around ? 'around' : saved.found.length ? 'band' : 'around';
       // Fixed since the setting for it was removed.
       saved.shipsOnly = true;
       // Results saved before ships were tracked have no ship flag: search again.
@@ -82,7 +78,7 @@ function load(): Saved {
   } catch {
     // Fall through to defaults.
   }
-  return { seed: DEFAULT_SEED, filters: DEFAULT_FILTERS, found: [], imported: [], skipMapped: true, shipsOnly: true, batchSize: BATCH_SIZE, batchShape: 'cluster', maxHop: DEFAULT_MAX_HOP, lineDeviation: DEFAULT_LINE_DEVIATION, excluded: [], moved: {}, custom: [], chatName: '', mapMod: 'xaero', mode: 'around' };
+  return { seed: DEFAULT_SEED, filters: DEFAULT_FILTERS, found: [], imported: [], skipMapped: true, shipsOnly: true, batchSize: BATCH_SIZE, batchShape: 'cluster', maxHop: DEFAULT_MAX_HOP, lineDeviation: DEFAULT_LINE_DEVIATION, excluded: [], moved: {}, custom: [], chatName: '', mapMod: 'xaero' };
 }
 
 const state = load();
@@ -412,9 +408,7 @@ function renderBatches(): void {
       (state.excluded.length ? ` · ${fmt(state.excluded.length)} looted removed from routes` : '')
     : unbatched
       ? `No routes: ${fmt(unbatched)} cities, but no two are within the longest flight of each other. Raise the longest flight.`
-      : state.mode === 'around' && !state.found.length
-        ? 'Enter your position in the search settings, or press Random location, to find End Cities near you.'
-        : 'No cities yet. Set a range and press Find cities.';
+      : 'No cities yet. Set a range and press Find cities.';
 
   $<HTMLButtonElement>('regroup').disabled = done === 0;
   $<HTMLButtonElement>('regroupUndo').hidden = state.excluded.length === 0;
@@ -668,7 +662,7 @@ const progress = $<HTMLProgressElement>('progress');
 function fillForm(): void {
   seedInput.value = state.seed;
   showSeedReset();
-  for (const r of modeRadios) r.checked = r.value === state.mode;
+  for (const r of modeRadios) r.checked = (r.value === 'around') === !!state.filters.around;
   if (state.filters.around) {
     setAroundPosition(state.filters.around);
     aroundRadius.value = String(state.filters.around.radius);
@@ -733,7 +727,6 @@ function applyResult(seed: string, filters: Filters, cities: FoundCity[]): void 
   }
   state.seed = seed;
   state.filters = filters;
-  state.mode = filters.around ? 'around' : 'band';
   showSeedMode();
   state.found = cities;
   save();
@@ -1144,7 +1137,7 @@ $('searchReset').addEventListener('click', () => {
   if (worker) return;
   if (
     !confirm(
-      'Reset all search settings to their defaults and clear the current search? Your looted marks are kept. Custom routes are kept too, unless the world seed had been changed.',
+      'Reset all search settings to their defaults? Your looted marks are kept. Custom routes are kept too, unless the world seed had been changed.',
     )
   ) {
     return;
@@ -1160,30 +1153,20 @@ $('searchReset').addEventListener('click', () => {
   deviationInput.value = String(state.lineDeviation);
   skipBox.checked = true;
   showDeviation();
-  // Back to how a first visit looks: "Around a position" with nothing entered yet, and no cities shown.
-  if (state.seed !== DEFAULT_SEED) {
-    state.imported = [];
-    state.excluded = [];
-    state.moved = {};
-    state.custom = [];
-    tracker = new Tracker(DEFAULT_SEED);
-    tracker.setShared(sharedLooted);
-  }
+  // Fill the form from the defaults without touching the applied search, so the search below sees a change.
+  const applied = { seed: state.seed, filters: state.filters };
   state.seed = DEFAULT_SEED;
   state.filters = { ...DEFAULT_FILTERS, quadrants: [...DEFAULT_FILTERS.quadrants] };
-  state.mode = 'around';
-  state.found = [];
-  aroundX.value = '';
-  aroundZ.value = '';
-  aroundRadius.value = '10000';
   fillForm();
-  showSeedMode();
+  state.seed = applied.seed;
+  state.filters = applied.filters;
   $('searchWarning').hidden = true;
   save();
+  form.requestSubmit();
+  // If the search itself was already the default one, nothing re-ran, so regroup with the reset batch settings.
   selected = null;
   rebuild();
   render();
-  fitSearch(state.filters);
 });
 
 function showExploredNote(): void {
@@ -1726,6 +1709,5 @@ Promise.all([Explored.load(), Precomputed.load(), loadSharedLooted()]).then(([e,
   showExploredNote();
   rebuild();
   render();
-  // A first visit starts on "Around a position", which has nothing to search until a position is given.
-  if (!state.found.length && (!aroundMode() || aroundPosition())) form.requestSubmit();
+  if (!state.found.length) form.requestSubmit();
 });

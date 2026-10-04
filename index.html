@@ -20,8 +20,8 @@
         <summary><span class="settings-title">Search settings</span> <span id="settingsSummary"></span></summary>
       <form id="search">
         <div class="segmented" role="radiogroup" aria-label="Where to search">
+          <label><input type="radio" name="searchMode" value="band" /> Out from 0,0</label>
           <label><input type="radio" name="searchMode" value="around" /> Around a position</label>
-          <label><input type="radio" name="searchMode" value="band" /> Out from End Spawn</label>
         </div>
         <div id="aroundBox" class="panel around-only">
           <div class="row" id="aroundPosBox">
@@ -219,30 +219,24 @@
       <div id="detailEmpty" class="empty">
         <button id="helpBack" type="button" hidden></button>
         <h2>How to use</h2>
-        <h3>1. Find cities near you</h3>
-        <p>
-          In <button type="button" class="jump" data-target="settings">Search settings</button>, enter your position
-          and press <em>Search</em>, or press <em>Random location</em> for somewhere new. <em>Out from End Spawn</em>
-          searches a band around the centre of the End instead.
-        </p>
-        <h3>2. Pick a route</h3>
+        <h3>1. Pick a route</h3>
         <p>
           Routes are in the <button type="button" class="jump" data-target="batches">route list</button>, numbered
-          outward from your position (or from the centre of the End for an <em>Out from End Spawn</em> search). Pick one there, select any city on the map, or type your position into the box on the map
+          outward from 0,0. Pick one there, select any city on the map, or type your position into the box on the map
           (or right-click the map and choose <em>Set my position here</em>) and press <em>Nearest route</em>.
         </p>
-        <h3>3. Get the waypoints into your map mod</h3>
+        <h3>2. Get the waypoints into your map mod</h3>
         <p>
           With a route open, choose <em>Xaero's Minimap</em> to copy waypoints to paste into its waypoint file, or
           <em>JourneyMap / Other</em> to copy chat lines that become clickable waypoints.
         </p>
-        <h3>4. Tick cities off as you loot them</h3>
+        <h3>3. Tick cities off as you loot them</h3>
         <p>
           Use the checkboxes in the route, or right-click a city on the map (press and hold on a touch screen). Looted cities turn into an × and are left
           out of exports.
         </p>
         <div class="aomc-only help-step">
-        <h3>5. Share where you have been</h3>
+        <h3>4. Share where you have been</h3>
         <p>
           The best way is to upload your map of the End to the
           <a href="https://map.diorite.xyz/?dim=the_end" target="_blank" rel="noopener">community webmap</a>. By
@@ -258,6 +252,7 @@
         <ul>
           <li>For Minecraft Java Edition, not Bedrock. It follows the 1.19–1.21 world generation rules and is in use on a 26.2 server; a future version that changes End generation could put cities elsewhere.</li>
           <li>Small faint diamonds are cities with a ship that didn't fit a route. Right-click one to add it to the route you have open.</li>
+          <li>Far from 0,0? In <button type="button" class="jump" data-target="settings">Search settings</button>, choose <em>Around a position</em> to search a circle around your coordinates.</li>
           <li>Want to plan your own? Right-click any city and choose <em>Start a custom route with this city</em>, then right-click others to add them. Custom routes sit at the top of the route list.</li>
           <li class="aomc-only">Green shading is terrain already on the community webmap; by default, cities there are left out of routes.</li>
           <li><button type="button" class="jump" data-target="settings">Search settings</button> changes the distance, angle, route size and longest flight.</li>
