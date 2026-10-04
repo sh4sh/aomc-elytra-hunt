@@ -5,9 +5,12 @@ name: Update webmap data
 # about ten small requests, and a wider check for newly mapped regions happens
 # once a day. Nothing is committed unless the webmap actually changed.
 
+# Started once an hour by the Cloudflare relay in relay/, whose timer is punctual.
+# GitHub's own schedule is kept as a slow fallback in case the relay is down; it
+# often runs late or not at all.
 on:
   schedule:
-    - cron: '23 * * * *'
+    - cron: '53 */6 * * *'
   workflow_dispatch:
 
 permissions:

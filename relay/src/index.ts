@@ -1,24 +1,55 @@
-// Relay for the AOMC Elytra Hunt app: turns a player's looted-cities submission
-// into a GitHub issue, so players don't need a GitHub account. Runs as a
-// Cloudflare Worker. The GitHub token lives here as a secret and is never sent
+// Relay for the AOMC Elytra Hunt app. Runs as a Cloudflare Worker and does two jobs:
+//
+//  - turns a player's looted-cities submission into a GitHub issue, so players
+//    don't need a GitHub account;
+//  - once an hour, starts the repository's "Update webmap data" workflow.
+//    GitHub's own timer for scheduled workflows is unreliable; Cloudflare's is punctual.
+// The GitHub token lives here as a secret and is never sent
 // to the browser. Setup steps are in relay/README.md.
 
 import { issueFor, parseSubmission } from './validate';
 
 interface Env {
-  /** Fine-grained GitHub token with "Issues: read and write" on the one repository. Set with `wrangler secret put`. */
+  /**
+   * Fine-grained GitHub token for the one repository, with "Issues: read and write" (to file
+   * submissions) and "Actions: read and write" (to start the webmap update). Set with `wrangler secret put`.
+   */
   GITHUB_TOKEN: string;
   /** owner/name of the repository to file issues in. */
   REPO: string;
   /** The site allowed to call this relay, e.g. https://sh4sh.github.io */
   ALLOWED_ORIGIN: string;
+  /** File name of the workflow to start on the timer. */
+  WORKFLOW: string;
 }
 
 const MAX_BYTES = 100_000;
 /** One submission per visitor address per this many seconds. */
 const COOLDOWN_SECONDS = 60;
 
+/** Ask GitHub to run the webmap update workflow now. */
+async function startWebmapUpdate(env: Env): Promise<void> {
+  const res = await fetch(`https://api.github.com/repos/${env.REPO}/actions/workflows/${env.WORKFLOW}/dispatches`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${env.GITHUB_TOKEN}`,
+      Accept: 'application/vnd.github+json',
+      'Content-Type': 'application/json',
+      'User-Agent': 'aomc-looted-relay',
+    },
+    body: JSON.stringify({ ref: 'main' }),
+  });
+  // Shows up in `npx wrangler tail` and the Cloudflare dashboard's logs.
+  if (!res.ok) console.error(`Could not start ${env.WORKFLOW}: HTTP ${res.status} ${await res.text()}`);
+  else console.log(`Started ${env.WORKFLOW}`);
+}
+
 export default {
+  // Runs on the timer set under [triggers] in wrangler.toml.
+  async scheduled(_event: unknown, env: Env, ctx: { waitUntil(p: Promise<unknown>): void }): Promise<void> {
+    ctx.waitUntil(startWebmapUpdate(env));
+  },
+
   async fetch(request: Request, env: Env): Promise<Response> {
     const origin = request.headers.get('Origin') ?? '';
     // Local development servers are allowed alongside the real site.

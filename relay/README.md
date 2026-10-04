@@ -1,8 +1,13 @@
-# Looted-cities relay
+# Relay
 
-Lets players submit their looted cities from the app without a GitHub account.
-The app sends the list here; this relay files it as an issue on the repository.
-It runs as a Cloudflare Worker (the free plan is enough).
+A small Cloudflare Worker (the free plan is enough) that does two jobs:
+
+- **Looted-city submissions.** Lets players submit their looted cities from the
+  app without a GitHub account. The app sends the list here; the relay files it
+  as an issue on the repository.
+- **Hourly webmap update.** Once an hour it starts the repository's "Update
+  webmap data" workflow. GitHub's own timer for scheduled workflows often runs
+  late or skips runs; Cloudflare's is punctual.
 
 Nothing a player submits reaches the shared list by itself. Each submission is
 an issue for a maintainer to review and merge.
@@ -12,7 +17,9 @@ an issue for a maintainer to review and merge.
 1. **Make a GitHub token.** On GitHub: Settings → Developer settings →
    Personal access tokens → Fine-grained tokens → Generate new token.
    - Repository access: *Only select repositories* → `aomc-elytra-hunt`.
-   - Permissions → Repository permissions → **Issues: Read and write**.
+   - Permissions → Repository permissions → **Issues: Read and write** (to
+     file submissions) and **Actions: Read and write** (to start the webmap
+     update).
    - Nothing else. Copy the token.
 2. **Deploy the relay.** With a Cloudflare account:
    ```
@@ -43,6 +50,20 @@ git commit -am "Add looted cities from issue 12" && git push
 ```
 
 Then close the issue.
+
+## Hourly webmap update
+
+`wrangler.toml` has a timer (`[triggers]`) set to 23 minutes past each hour. When
+it fires, the relay asks GitHub to run `update-webmap.yml`. For that to work the
+token needs **Actions: Read and write** on the repository. If the token was made
+before this was added, edit it on GitHub (Settings → Developer settings →
+Fine-grained tokens → the token → Edit) and add that permission; the token
+itself stays the same, so nothing needs re-entering. Then run
+`npx wrangler deploy` from `relay/`.
+
+To check it: `npx wrangler tail` shows "Started update-webmap.yml" when the
+timer fires, and the run appears under the repository's Actions tab as started
+by you.
 
 ## Label
 
