@@ -84,6 +84,22 @@ describe('makeBatches', () => {
       expect(makeBatches([...field].reverse(), BATCH_SIZE, 'cluster', 2000)).toEqual(makeBatches(field, BATCH_SIZE, 'cluster', 2000));
     });
 
+    it('builds and numbers routes outward from the given start point', () => {
+      const from = { x: 18000, z: 6000 };
+      const centre = (b: City[]) =>
+        Math.hypot(b.reduce((t, c) => t + c.x, 0) / b.length - from.x, b.reduce((t, c) => t + c.z, 0) / b.length - from.z);
+      const batches = makeBatches(field, 9, 'cluster', 2000, 0, from);
+      expect(batches.length).toBeGreaterThan(2);
+      const d = batches.map(centre);
+      expect(d).toEqual([...d].sort((a, b) => a - b));
+      // Each route sets off from its end nearer the start point.
+      for (const b of batches) {
+        expect(Math.hypot(b[0].x - from.x, b[0].z - from.z)).toBeLessThanOrEqual(
+          Math.hypot(b[b.length - 1].x - from.x, b[b.length - 1].z - from.z),
+        );
+      }
+    });
+
     it('keeps a line within the allowed distance of straight', () => {
       // A string of cities close to the +x axis, with others well off to one side.
       const along: City[] = [];

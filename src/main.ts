@@ -225,6 +225,7 @@ function rebuild(done?: () => void): void {
     shape: state.batchShape,
     maxHop: state.maxHop,
     lineDeviation: state.lineDeviation,
+    origin: startPoint(),
   };
   const run = ++rebuildRun;
   batchWorker?.terminate();
@@ -259,6 +260,9 @@ function rebuild(done?: () => void): void {
   batchWorker.postMessage(job);
 }
 
+/** Where routes are built and numbered outward from: the centre of an around-a-position search, else 0,0. */
+const startPoint = () => (state.filters.around ? { x: state.filters.around.x, z: state.filters.around.z } : { x: 0, z: 0 });
+
 /** Second half of a rebuild: take the generated batches and apply hand-made moves and custom batches. */
 function finishRebuild(
   made: { batches: City[][]; size: number },
@@ -267,17 +271,6 @@ function finishRebuild(
 ): void {
   batches = made.batches;
   usedBatchSize = made.size;
-  const centre = state.filters.around;
-  if (centre) {
-    // Searching around a position: number the batches outward from there rather than from 0,0.
-    const far = (b: City[]) =>
-      Math.hypot(b.reduce((t, c) => t + c.x, 0) / b.length - centre.x, b.reduce((t, c) => t + c.z, 0) / b.length - centre.z);
-    batches = batches
-      .map((b) => ({ b, d: far(b) }))
-      .sort((p, q) => p.d - q.d)
-      .map((e) => e.b);
-  }
-
   // Hand-made moves are applied after batching, so adding a city to a batch never reshuffles the others.
   // A move holds while both cities still exist and its target is in a batch of its own accord.
   const batchOf = new Map<string, number>();
@@ -294,7 +287,7 @@ function finishRebuild(
     moved.add(id);
     touched.add(to);
   }
-  for (const b of touched) batches[b] = route(batches[b]);
+  for (const b of touched) batches[b] = route(batches[b], startPoint());
 
   // Custom batches take their cities out of wherever they were and are listed after the generated ones.
   const customs: City[][] = [];
@@ -308,7 +301,7 @@ function finishRebuild(
   batches = batches.filter((b) => b.length);
   generatedCount = batches.length;
   // An emptied custom batch is kept, so its number does not shift while the player is still building it.
-  batches.push(...customs.map((b) => (b.length > 1 ? route(b) : b)));
+  batches.push(...customs.map((b) => (b.length > 1 ? route(b, startPoint()) : b)));
   setBatchTags(batches.map((_, i) => (isCustom(i) ? `C${i - generatedCount + 1}` : String(i + 1))));
 
   const inBatch = new Set(batches.flat().map(cityId));

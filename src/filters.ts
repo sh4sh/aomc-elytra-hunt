@@ -25,16 +25,20 @@ export function passes(x: number, z: number, f: Filters): boolean {
   return f.quadrants.includes(quadrantOf(x, z));
 }
 
-const dist = (a: { x: number; z: number }, b: { x: number; z: number }) => Math.hypot(a.x - b.x, a.z - b.z);
+type Point = { x: number; z: number };
+const ORIGIN: Point = { x: 0, z: 0 };
+/** Routes start in rings this many blocks deep, working outward. */
+const START_BAND = 4000;
+const dist = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.z - b.z);
 
 /**
- * Order cities into a flight path: start nearest the origin, hop to the nearest
+ * Order cities into a flight path: start nearest the origin (0,0 unless given), hop to the nearest
  * unvisited city each time, then untangle crossings (2-opt).
  */
-export function route(cities: City[]): City[] {
+export function route(cities: City[], origin: Point = ORIGIN): City[] {
   const left = [...cities];
   const path: City[] = [];
-  let at = { x: 0, z: 0 };
+  let at: Point = origin;
   while (left.length) {
     let best = 0;
     for (let i = 1; i < left.length; i++) if (dist(left[i], at) < dist(left[best], at)) best = i;
@@ -122,8 +126,14 @@ export const DEFAULT_MAX_HOP = 2000;
  * through the batch's first city. With lineDeviation set, a line never takes a
  * city further than that many blocks to either side of that ray.
  */
-function chains(cities: City[], size: number, maxHop: number, shape: BatchShape, lineDeviation = 0): City[][] {
-  const origin = { x: 0, z: 0 };
+function chains(
+  cities: City[],
+  size: number,
+  maxHop: number,
+  shape: BatchShape,
+  lineDeviation = 0,
+  origin: Point = ORIGIN,
+): City[][] {
   const order = [...cities].sort((a, b) => dist(a, origin) - dist(b, origin) || a.x - b.x || a.z - b.z);
 
   // Cities bucketed into squares one hop wide, so "who is within reach" only looks at nine squares.
@@ -148,9 +158,12 @@ function chains(cities: City[], size: number, maxHop: number, shape: BatchShape,
 
   const batched = new Set<City>();
   const batches: City[][] = [];
-  // Start from the cities with the fewest neighbours: they can only ever be the end of a path.
+  // Start close to the origin and work outward, so routes fill the area nearest the player first and
+  // fewer cities are stranded between them. Within each band of distance, start from the cities with
+  // the fewest neighbours: those can only ever be the end of a path, so they are best used up early.
   const degree = new Map(order.map((c) => [c, reachable(c, new Set([c])).length]));
-  const starts = [...order].sort((a, b) => degree.get(a)! - degree.get(b)!);
+  const band = (c: City) => Math.floor(dist(c, origin) / START_BAND);
+  const starts = [...order].sort((a, b) => band(a) - band(b) || degree.get(a)! - degree.get(b)!);
 
   // A start that fails once may succeed later, after neighbouring batches have taken shape, so sweep until nothing changes.
   for (let found = true; found; ) {
@@ -226,7 +239,7 @@ function chains(cities: City[], size: number, maxHop: number, shape: BatchShape,
 }
 
 /** Shorten a path by untangling crossings, never creating a hop longer than maxHop, then start it at the end nearer 0,0. */
-function tidyPath(path: City[], maxHop: number): City[] {
+function tidyPath(path: City[], maxHop: number, origin: Point = ORIGIN): City[] {
   const p = [...path];
   for (let improved = true; improved; ) {
     improved = false;
@@ -243,7 +256,6 @@ function tidyPath(path: City[], maxHop: number): City[] {
       }
     }
   }
-  const origin = { x: 0, z: 0 };
   return dist(p[p.length - 1], origin) < dist(p[0], origin) ? p.reverse() : p;
 }
 
@@ -260,6 +272,9 @@ function tidyPath(path: City[], maxHop: number): City[] {
  *
  * lineDeviation (lines with a maxHop only) keeps each line within that many
  * blocks either side of straight; 0 means no limit.
+ *
+ * origin is where the player sets out from: 0,0, or the centre of a search
+ * around a position. Routes are built and numbered outward from it.
  */
 export function makeBatches(
   cities: City[],
@@ -267,14 +282,16 @@ export function makeBatches(
   shape: BatchShape = 'cluster',
   maxHop = 0,
   lineDeviation = 0,
+  origin: Point = ORIGIN,
 ): City[][] {
   if (!cities.length) return [];
   const routed =
     maxHop > 0
-      ? chains(cities, size, maxHop, shape, lineDeviation).map((p) => tidyPath(p, maxHop))
-      : (shape === 'line' ? lines(cities, size) : split(cities, size)).map(route);
-  // Number batches outward: batch 1 is the one centred closest to 0,0.
-  const centre = (b: City[]) => Math.hypot(b.reduce((t, c) => t + c.x, 0) / b.length, b.reduce((t, c) => t + c.z, 0) / b.length);
+      ? chains(cities, size, maxHop, shape, lineDeviation, origin).map((p) => tidyPath(p, maxHop, origin))
+      : (shape === 'line' ? lines(cities, size) : split(cities, size)).map((b) => route(b, origin));
+  // Number batches outward: batch 1 is the one centred closest to the origin.
+  const centre = (b: City[]) =>
+    Math.hypot(b.reduce((t, c) => t + c.x, 0) / b.length - origin.x, b.reduce((t, c) => t + c.z, 0) / b.length - origin.z);
   return routed
     .map((b) => ({ b, d: centre(b), key: Math.min(...b.map((c) => c.x * 1e7 + c.z)) }))
     .sort((p, q) => p.d - q.d || p.key - q.key)
@@ -288,6 +305,8 @@ export interface BatchJob {
   shape: BatchShape;
   maxHop: number;
   lineDeviation: number;
+  /** Where routes are built and numbered outward from. 0,0 if left out. */
+  origin?: Point;
 }
 
 /**
@@ -295,7 +314,7 @@ export interface BatchJob {
  * largest size that gives at least one (down to pairs). Returns the size used.
  */
 export function makeBatchesOrSmaller(job: BatchJob): { batches: City[][]; size: number } {
-  const attempt = (size: number) => makeBatches(job.cities, size, job.shape, job.maxHop, job.lineDeviation);
+  const attempt = (size: number) => makeBatches(job.cities, size, job.shape, job.maxHop, job.lineDeviation, job.origin);
   const batches = attempt(job.size);
   if (batches.length || job.cities.length < 2 || job.size <= 2) return { batches, size: job.size };
   // Halve the range each time rather than stepping down one by one, which matters for large sizes.
