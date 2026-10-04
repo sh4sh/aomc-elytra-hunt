@@ -48,8 +48,8 @@ details under the map.
 - Only cities with a ship are shown, since only ships hold elytra.
 - The app knows where ships generate, not whether someone has taken the
   elytra. "On the webmap" means someone has been near, not that it was looted.
-- A `?` can also mean a ship is uncertain. One predicted ship turned out not to
-  exist; see [How do we know the positions are right?](docs/accuracy.md)
+- Ship predictions were corrected against the game itself; see
+  [How do we know the positions are right?](docs/accuracy.md)
 - Your looted marks and settings are saved in your browser only, until you
   share them.
 

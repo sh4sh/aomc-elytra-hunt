@@ -8,6 +8,8 @@ import far from './fixtures/cubiomes-far-strip.json';
 // Fixtures were produced by cubiomes (MC 1.21 rules, built with -ffp-contract=off
 // so float maths matches Java) for every region in
 // [regMin, regMax) on both axes. Each entry is [chunkX, chunkZ, hasShip].
+// cubiomes was built with two corrections, both of which this code has too: the piece "depth"
+// tag widened to a full int, and tower bridges hung on the tower's chosen floor (see genTower).
 describe('End City positions and ships match cubiomes', () => {
   for (const c of cases) {
     it(`seed ${c.seed}, regions ${c.regMin}..${c.regMax}`, () => {
@@ -49,19 +51,35 @@ describe('End City positions and ships match cubiomes', () => {
     }
   });
 
-  // Found in game with a city but no ship (x: -554792, z: 8712), although this code and cubiomes both
-  // lay it out with one. The ship sits 3 blocks above a tower top, so it is flagged as a tight fit.
-  it('flags a ship that is a tight fit as uncertain', () => {
-    expect(endCityShip(856461443495910397n, -34675, 544)).toEqual({ ship: true, tight: true });
-    expect(shipCode(856461443495910397n, -34675, 544)).toBe(2);
-    // A city with no ship is never flagged.
-    expect(endCityShip(856461443495910397n, -76, 644)).toEqual({ ship: false, tight: false });
+  // Checked in a single-player copy of the world (and the first also on the server). cubiomes as
+  // published gives every one of these a ship; the game, and this code, only the last three.
+  it('agrees with the game on ships that hang from a tower bridge', () => {
+    const seed = 856461443495910397n;
+    const ship = (x: number, z: number) => endCityHasShip(seed, (x - 8) / 16, (z - 8) / 16);
+    for (const [x, z] of [
+      [-554792, 8712], [5176, -44680], [-22328, -43464], [66584, -25784],
+      [-44424, 49352], [-38344, 55752], [25336, 79064], [12888, 93800],
+    ]) {
+      expect(ship(x, z), `x: ${x}, z: ${z}`).toBe(false);
+    }
+    for (const [x, z] of [[63448, -49224], [81672, 39480], [-7944, 1976]]) {
+      expect(ship(x, z), `x: ${x}, z: ${z}`).toBe(true);
+    }
   });
 
-  it('flags only a small share of ships', () => {
-    const ships = cases[0].cities.filter(([, , ship]) => ship);
-    const tight = ships.filter(([cx, cz]) => endCityShip(BigInt(cases[0].seed), cx, cz).tight).length;
-    expect(tight / ships.length).toBeLessThan(0.02);
+  // Both checked in game: the layout has a ship, but all of it lies more than 8 chunks from the city's start.
+  it('leaves out ships the game never builds because they are too far from the city', () => {
+    const seed = 856461443495910397n;
+    for (const [x, z] of [[62152, 360], [-70328, -4088]]) expect(endCityHasShip(seed, (x - 8) / 16, (z - 8) / 16)).toBe(false);
+    // Also checked in game: half the ship is built, but not the half with the elytra, which is 9 chunks out.
+    expect(endCityHasShip(seed, (-546776 - 8) / 16, (5576 - 8) / 16)).toBe(false);
+    // Looted by players: the ship is partly out of reach, but the elytra, 8 chunks out, is not.
+    for (const [x, z] of [[-12712, 2952], [-17592, 3560]]) expect(endCityHasShip(seed, (x - 8) / 16, (z - 8) / 16)).toBe(true);
+  });
+
+  it('no longer marks any ship as uncertain', () => {
+    expect(endCityShip(856461443495910397n, -497, 123)).toEqual({ ship: true, tight: false });
+    expect(shipCode(856461443495910397n, -497, 123)).toBe(1);
   });
 
   it('finds the same cities when asked for just one square of the map', () => {

@@ -24,82 +24,109 @@ whether a ship is part of it. (cubiomes: `getEndCityPieces`.)
 
 ## What it was checked against
 
-The app's results were compared with cubiomes (version
-`e61f905`, Minecraft 1.21 rules) city by city:
+**City positions** were compared with cubiomes (version `e61f905`, Minecraft
+1.21 rules) city by city, and are identical everywhere tried:
 
-| Area | Seed | End Cities | Result |
+| Area | Seed | End Cities |
+|---|---|---|
+| Within about 22,400 blocks of 0,0 | the server's | 1,735 |
+| Within about 12,800 blocks of 0,0 | two unrelated seeds | 593 and 594 |
+| Around 96,000 blocks out | the server's | 39 |
+| Everything the community webmap covers, out to about 600,000 blocks west | the server's | 36,419 |
+
+**Ships** are a different story: cubiomes as published gets some wrong, which
+was found by visiting cities in the game. The app now follows the game. See the
+next section.
+
+The first three areas, and a strip from the far end of the last, are kept as
+automated tests (`npm test`) for positions and ships, against cubiomes with the
+corrections below applied. So are the cities that were checked in game.
+
+## Where the app differs from cubiomes, and why
+
+Three differences, all about ships. The first two are in
+[`cubiomes-fixes.patch`](../scripts/reference/cubiomes-fixes.patch).
+
+- **Where bridges leave a tower.** A thin tower picks one of its floors for its
+  bridges to leave from. cubiomes hangs the bridges on the tower's top floor
+  whatever was picked. When the picked floor is lower, that puts the bridge,
+  and a ship at its end, 4 or 8 blocks too high, clear of parts of the city
+  that it collides with in the game. The game discards a ship that collides,
+  so cubiomes reports ships that do not exist (and misses a few that do).
+- **A tag stored too small.** cubiomes keeps one internal value (a tag used to
+  decide whether overlapping parts of a city are allowed) in 8 bits, where the
+  game uses a full 32-bit number. Rarely, that lets a ship through that the
+  game would reject.
+- **Ships too far from their city.** The game builds no part of a structure
+  more than 8 chunks from the chunk it starts in. A ship at the end of a long
+  run of bridges can lie beyond that, and is cut off or missing. The app counts
+  a ship only if its elytra (which hangs at a known spot inside the ship) is
+  within reach. cubiomes does not consider this.
+
+Within 100,000 blocks on the server's seed, the first and third change the
+answer for 260 of 34,409 cities: 196 ships that were predicted are not there,
+and 64 that were not predicted are.
+
+One more thing differs in how cubiomes is built, not in its logic: far from
+0,0 a few results depend on doing arithmetic in 32-bit floats exactly as Java
+does. cubiomes has to be built with `-ffp-contract=off` to match; the app
+rounds explicitly.
+
+## How the corrections were found
+
+A player reported a city with no ship at x: -554792, z: 8712, where the app and
+cubiomes both predicted one. A single-player world with the server's seed (Java
+26.2) showed the same, so the cause was in the prediction, not on the server.
+Cities were then checked one by one in that world
+([issue #11](https://github.com/sh4sh/aomc-elytra-hunt/issues/11)):
+
+| City | cubiomes as published | App now | In game |
 |---|---|---|---|
-| Within about 22,400 blocks of 0,0 | the server's | 1,735 | positions and ships identical |
-| Within about 12,800 blocks of 0,0 | two unrelated seeds | 593 and 594 | positions and ships identical |
-| Around 96,000 blocks out | the server's | 39 | positions and ships identical |
-| Everything the community webmap covers, out to about 600,000 blocks west | the server's | 36,419 | positions identical; ships identical except 4 cities, explained below |
+| x: -554792, z: 8712 | ship | no ship | no ship |
+| x: 5176, z: -44680 | ship | no ship | no ship |
+| x: -22328, z: -43464 | ship | no ship | no ship |
+| x: 66584, z: -25784 | ship | no ship | no ship |
+| x: -44424, z: 49352 | ship | no ship | no ship |
+| x: -38344, z: 55752 | ship | no ship | no ship |
+| x: 25336, z: 79064 | ship | no ship | no ship |
+| x: 12888, z: 93800 | ship | no ship | no ship |
+| x: 63448, z: -49224 | ship | ship | ship |
+| x: 81672, z: 39480 | ship | ship | ship |
+| x: -7944, z: 1976 | ship | ship | ship |
+| x: 62152, z: 360 (ship wholly out of reach) | ship | no ship | no ship |
+| x: -70328, z: -4088 (ship wholly out of reach) | ship | no ship | no ship |
+| x: -546776, z: 5576 (ship partly out of reach, elytra one chunk too far) | ship | no ship | half a ship, no elytra |
 
-The first three, and a strip from the far end of the last, are kept as
-automated tests (`npm test`), so a change that breaks the maths is caught.
+The bridge correction was worked out from the first six results that came in.
+It then gave the right answer for the other five bridge cities before their
+results were known. The reach rule was proposed before any of its three
+cities was visited.
 
-## Where the app and cubiomes differ
-
-- **Four ships.** cubiomes stores one internal value (a tag used to decide
-  whether overlapping pieces of a city are allowed) in 8 bits, where the game
-  uses a full 32-bit number. In 4 of the 36,419 cities above that shortcut lets
-  a ship through that the game would reject. The app keeps the full number, and
-  agrees with cubiomes on all 36,419 once cubiomes is built with the same
-  width. Those cities are at x: -246328, z: -21064; x: -526984, z: 9000;
-  x: -211720, z: 22456; and x: -305848, z: 27528. The app says they have no
-  ship. This rests on reading how the game stores that value, not on visiting
-  them.
-- **Rounding.** Far from 0,0, a few results depend on doing arithmetic in
-  32-bit floats exactly as Java does. cubiomes has to be built with
-  `-ffp-contract=off` to match; the app rounds explicitly.
-
-## A ship that wasn't there
-
-One city so far has been found in game with no ship where the app, and cubiomes,
-both say there is one: x: -554792, z: 8712. The city itself was there.
-
-**We do not know why.** What we can say:
-
-- In the layout the app computes for that city, the ship sits directly above
-  another part of the city (a tower top) with 3 blocks of clearance. That is
-  unusual: about 0.3% of ships are within 4 blocks of another part.
-- The game discards a ship if it overlaps another part of the city. The piece
-  sizes used by cubiomes, and so by the app, are simplified. One possible
-  explanation is that the game saw an overlap there that this code does not.
-- That is a guess from a single case. It has not been tested against the
-  game's own code, and the real cause could be something else entirely.
-
-What the app does about it, as a precaution and not as a fix:
-
-- That city is recorded as having no ship. It stays on the map as a grey ×
-  labelled "End Ship reported missing", and is left out of routes.
-- Every ship within 4 blocks of another part of its city is marked **ship
-  uncertain** (a `?` in the route, and a note when you hover over it). These
-  cities stay in the routes. The mark means "we have one reason to doubt this
-  kind of ship", not "this ship is probably missing". Most of them may be fine.
-- Right-click a city to report that its ship was there, that the city had no
-  ship, or that there was no End City there at all.
-  Reports are reviewed before they change anything; enough of them would show
-  whether the doubt is justified, and the mark would be removed or widened to
-  match.
+The corrections rest on these checks and on reading how the game is known to
+behave, not on the game's source code. Of the 190 cities players have marked
+looted, the app agrees there is a ship at 188. The other two are the first and
+last cities in the table: both were ticked off by a player who had been there,
+and neither had an elytra.
 
 ## What has not been proven
 
-- **Minecraft 26.x.** The comparison is against cubiomes' 1.21 rules. Nothing
-  is known to have changed in End generation since, but that has not been
-  confirmed beyond a handful of in-game checks on the server, including one
-  city the app correctly reported as having no ship (x: -1208, z: 10312).
+- **Minecraft 26.x.** The comparison of positions is against cubiomes' 1.21
+  rules. The in-game checks above were made on 26.2, and agree.
+- **The reach rule, beyond three cities.** Two ships wholly out of reach and
+  one cut in half with its elytra just out of reach were checked, and all
+  three had no elytra. 157 ships within 100,000 blocks are left out by this
+  rule.
 - **Beyond the webmap's area.** The same code runs further out, and it accounts
   for the rings of empty void the End has beyond about 370,000 blocks, but
   nothing past roughly 600,000 blocks has been compared.
-- **Every ship.** See "A ship that wasn't there" above: at least one predicted
-  ship did not exist in game, for a reason that is not understood.
 - **Looted or not.** The app knows where ships generate, not whether someone
   has already taken the elytra.
 
 ## Checking it yourself
 
 [`scripts/reference/end-cities-ref.c`](../scripts/reference/end-cities-ref.c) is the small program used to get cubiomes'
-answers; build instructions are at the top of the file. It prints
+answers; build instructions are at the top of the file, and it needs
+[`cubiomes-fixes.patch`](../scripts/reference/cubiomes-fixes.patch) applied to cubiomes first. It prints
 `chunkX chunkZ hasShip` for every city in a range of regions, which can be
 compared with what the app finds for the same area. A city's block coordinates
 are its chunk coordinates times 16, plus 8.

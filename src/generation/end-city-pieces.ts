@@ -1,5 +1,6 @@
 // End City layout: which pieces a city is built from, and so whether it has a
-// ship (the only place elytra generate). Ported from cubiomes (finders.c, MIT licence).
+// ship (the only place elytra generate). Ported from cubiomes (finders.c, MIT licence),
+// with one correction, marked below, where cubiomes and the game part ways.
 
 import { JavaRandom } from './java-random';
 
@@ -31,8 +32,6 @@ interface Env {
   rng: JavaRandom;
   /** Set once a ship has been attempted; at most one per city. */
   ship: { tried: boolean };
-  /** Smallest clearance, in blocks, seen between the ship and a part of the city from another group. */
-  shipGap: { blocks: number };
   y: number;
 }
 
@@ -79,19 +78,6 @@ function recurse(gen: Gen, env: Env, current: Piece, depth: number): boolean {
     // Overlapping a piece from the same group as the parent is allowed; go on to check the next piece.
     if (hit && current.depth !== hit.depth) return false;
   }
-  // Note how close the ship comes to parts it is not allowed to overlap. See SHIP_TIGHT_BLOCKS.
-  for (const p of local.list) {
-    if (p.type !== T.SHIP) continue;
-    for (const q of env.list) {
-      if (q.depth === current.depth) continue;
-      const gap = Math.max(
-        Math.max(p.x0 - q.x1, q.x0 - p.x1),
-        Math.max(p.y0 - q.y1, q.y0 - p.y1),
-        Math.max(p.z0 - q.z1, q.z0 - p.z1),
-      );
-      if (gap < env.shipGap.blocks) env.shipGap.blocks = gap;
-    }
-  }
   env.list.push(...local.list);
   return true;
 }
@@ -115,7 +101,11 @@ const genTower: Gen = (env, current, depth) => {
   if (floor) {
     for (const [r, bx, by, bz] of TOWER_BRIDGES) {
       if (!rng.next(1)) continue;
-      const bridge = add(env, base, (rot + r) & 3, bx, by, bz, T.BRIDGE_END);
+      // Bridges leave the tower at the floor chosen above, which is not always its top one. cubiomes
+      // (as of e61f905) hangs them on the top piece; that puts some bridges, and the ships at their
+      // ends, 4 or 8 blocks too high, clear of parts they collide with in the game. Checked in game
+      // at eleven cities where the two readings disagree or might: this one matched every time.
+      const bridge = add(env, floor, (rot + r) & 3, bx, by, bz, T.BRIDGE_END);
       recurse(genBridge, env, bridge, depth + 1);
     }
   } else if (depth !== 7) {
@@ -203,25 +193,33 @@ export function chunkRandom(worldSeed: bigint, chunkX: number, chunkZ: number): 
 }
 
 /**
- * A ship this close to another part of its city is treated as uncertain. The game throws a ship away
- * if it overlaps another part, and the piece sizes used here are approximations: with clearance this
- * small the game may see an overlap that this code does not. One such city (3 blocks of clearance)
- * has been found in game with no ship. About 0.3% of ship cities are this tight.
+ * The game builds no part of a structure more than this many chunks from the chunk it starts in. A
+ * ship at the end of a long run of bridges can lie beyond that: it is then cut off, or missing
+ * altogether. Checked in game: two ships wholly out of reach were not there, and one with its elytra
+ * a single chunk out of reach was cut in half, without the elytra.
  */
-export const SHIP_TIGHT_BLOCKS = 4;
+const STRUCTURE_REACH_CHUNKS = 8;
 
-/** Whether the End City starting in this chunk has a ship, and whether that ship is a tight fit. */
+/**
+ * Whether the End City starting in this chunk has a ship with its elytra in reach. `tight` is always false now: it once marked
+ * ships that sat close to another part of the city as uncertain, before the real cause of a missing
+ * ship was found (see genTower). Kept so saved data and callers that read it still work.
+ */
 export function endCityShip(worldSeed: bigint, chunkX: number, chunkZ: number): { ship: boolean; tight: boolean } {
   const rng = chunkRandom(worldSeed, chunkX, chunkZ);
   const rot = rng.nextInt(4);
-  const env: Env = { list: [], rng, ship: { tried: false }, shipGap: { blocks: Infinity }, y: 0 };
+  const env: Env = { list: [], rng, ship: { tried: false }, y: 0 };
   let base = add(env, null, rot, chunkX * 16 + 8, 0, chunkZ * 16 + 8, T.BASE_FLOOR);
   base = add(env, base, rot, -1, 0, -1, T.SECOND_FLOOR_1);
   base = add(env, base, rot, -1, 4, -1, T.THIRD_FLOOR_1);
   base = add(env, base, rot, -1, 8, -1, T.THIRD_ROOF);
   recurse(genTower, env, base, 1);
-  const ship = env.list.some((p) => p.type === T.SHIP);
-  return { ship, tight: ship && env.shipGap.blocks <= SHIP_TIGHT_BLOCKS };
+  const ship = env.list.find((p) => p.type === T.SHIP);
+  if (!ship) return { ship: false, tight: false };
+  // The elytra hangs in a frame at 6, 5, 7 in the ship's template, turned with the ship.
+  const [dx, dz] = [[6, 7], [-7, 6], [-6, -7], [7, -6]][ship.rot];
+  const far = Math.max(Math.abs(((ship.x + dx) >> 4) - chunkX), Math.abs(((ship.z + dz) >> 4) - chunkZ));
+  return { ship: far <= STRUCTURE_REACH_CHUNKS, tight: false };
 }
 
 /** Whether the End City starting in this chunk includes a ship. */

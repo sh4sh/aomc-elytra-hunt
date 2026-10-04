@@ -1,0 +1,22 @@
+--- a/finders.h	2026-10-04 07:39:55
++++ b/finders.h	2026-10-04 16:19:40
+@@ -96,7 +96,7 @@
+     const char *name;   // structure piece name
+     Pos3 pos, bb0, bb1; // position and bounding box limits
+     uint8_t rot;        // rotation
+-    int8_t depth;
++    int depth;
+     int8_t type;
+     Piece *next;
+ };
+--- a/finders.c	2026-10-03 11:25:12
++++ b/finders.c	2026-10-04 16:19:40
+@@ -2461,7 +2461,7 @@
+             if (!next(env->rng, 1))
+                 continue;
+             int brot = (rot + binfo[i][0]) & 3;
+-            Piece *bridge = addEndCityPiece(env, base, brot,
++            Piece *bridge = addEndCityPiece(env, floor, brot,
+                 binfo[i][1], binfo[i][2], binfo[i][3], BRIDGE_END);
+             genPiecesRecusively(genBridge, env, bridge, depth+1);
+         }
