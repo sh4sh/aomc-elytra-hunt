@@ -10,6 +10,8 @@ export interface MapCity {
   visited: boolean;
   /** Set for cities shown outside the batches (batch is -1): why they were left out. */
   note?: string;
+  /** A player reported the ship, or the whole city, missing here: crossed off like a looted city. */
+  missing?: boolean;
   /** Drawn as a bright cross in the "everything explored so far" view: gold for looted, green for on the webmap. */
   trophy?: 'looted' | 'mapped';
 }
@@ -435,8 +437,8 @@ export class EndMap {
       } else {
         ctx.arc(x, y, r, 0, Math.PI * 2);
       }
-      if (c.visited) {
-        // Looted: crossed off, whether or not it is in a batch.
+      if (c.visited || c.missing) {
+        // Looted, or reported missing: crossed off, whether or not it is in a batch.
         const d = selected ? 4 : 3;
         ctx.beginPath();
         ctx.moveTo(x - d, y - d);

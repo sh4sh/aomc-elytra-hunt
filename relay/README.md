@@ -34,6 +34,24 @@ an issue for a maintainer to review and merge.
    `src/main.ts`, then commit and push. The "Submit looted" button appears once
    it is set.
 
+## Deploying from GitHub
+
+Once set up, the relay is published for you: whenever relay code changes on
+`main`, and whenever you press **Run workflow** on "Deploy the relay" in the
+repository's Actions tab. No terminal needed.
+
+One-time setup, so GitHub is allowed to publish to your Cloudflare account:
+
+1. In the Cloudflare dashboard: My Profile → API Tokens → Create Token → use the
+   **Edit Cloudflare Workers** template → create it, and copy the token.
+2. Find your **Account ID** on the Workers & Pages overview page in the
+   Cloudflare dashboard.
+3. In the GitHub repository: Settings → Secrets and variables → Actions → New
+   repository secret. Add `CLOUDFLARE_API_TOKEN` (the token) and
+   `CLOUDFLARE_ACCOUNT_ID` (the ID).
+
+`npx wrangler deploy` from `relay/` still works as before.
+
 ## Getting notified
 
 Issues filed by the relay are created with your token, so GitHub counts them as

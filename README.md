@@ -65,7 +65,8 @@ Only cities with a ship are ever shown, since only ships hold elytra.
 ### On the map
 
 - Filled dots are cities in a route, coloured by route.
-- An × is a looted city.
+- An × is a looted city, or one where a player reported the ship or the whole
+  city missing; hover over it to see which.
 - A `?` after a city's coordinates in a route means its ship is uncertain (see
   "How do we know the positions are right?" below). Right-click a city to report
   whether its ship was there.
@@ -168,7 +169,8 @@ both say there is one: x: -554792, z: 8712. The city itself was there.
 
 What the app does about it, as a precaution and not as a fix:
 
-- That city is recorded as having no ship and no longer appears in routes.
+- That city is recorded as having no ship. It stays on the map as a grey ×
+  labelled "End Ship reported missing", and is left out of routes.
 - Every ship within 4 blocks of another part of its city is marked **ship
   uncertain** (a `?` in the route, and a note when you hover over it). These
   cities stay in the routes. The mark means "we have one reason to doubt this

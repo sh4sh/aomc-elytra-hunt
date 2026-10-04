@@ -140,10 +140,12 @@ const MAX_BATCH_SIZE = 500;
 /** Cities per batch actually used: the setting, or fewer when no batch that large could be made. */
 let usedBatchSize = BATCH_SIZE;
 /**
- * Players' reports, published with the site. `gone` holds cities to leave out: ones found with no ship,
- * and places where there turned out to be no End City at all. `found` holds ships confirmed present.
+ * Players' reports, published with the site. `gone` holds cities to keep out of routes, with what was
+ * reported: found with no ship, or no End City there at all. `found` holds ships confirmed present.
  */
-let shipReports = { gone: new Set<string>(), found: new Set<string>() };
+let shipReports = { gone: new Map<string, 'missing' | 'no-city'>(), found: new Set<string>() };
+/** What the map and tooltips say about a city reported missing. */
+const MISSING_NOTE = { missing: 'End Ship reported missing', 'no-city': 'End City reported missing' };
 /**
  * Cities whose ship is a tight fit against another part of the city, and so may not have generated.
  * A confirmed report clears the doubt.
@@ -158,7 +160,7 @@ const batchTitle = (i: number) => (isCustom(i) ? `Custom ${i - generatedCount + 
 /** Cities that could not be fitted into a full batch within the longest-flight limit. */
 let unbatched = 0;
 /** Cities kept out of the batches but still drawn on the map, with the reason. */
-let outside: { city: City; note: string }[] = [];
+let outside: { city: City; note: string; missing?: boolean }[] = [];
 
 const save = () => {
   try {
@@ -197,16 +199,20 @@ function rebuild(done?: () => void): void {
   const mapped = state.skipMapped && explored && state.seed === DEFAULT_SEED ? explored : null;
   // Only ships hold elytra, so cities without one are never offered.
   // A city reported in game as having no ship is treated like any other shipless city.
-  const reports = state.seed === DEFAULT_SEED ? shipReports : { gone: new Set<string>(), found: new Set<string>() };
-  const withShip = state.found.filter((c) => c[2] && !reports.gone.has(`${c[0]},${c[1]}`));
+  // A city reported in game as missing its ship, or missing altogether, stays on the map but out of the routes.
+  const reports =
+    state.seed === DEFAULT_SEED ? shipReports : { gone: new Map<string, 'missing' | 'no-city'>(), found: new Set<string>() };
+  const withShip = state.found.filter((c) => c[2]);
   uncertainShips = new Set(
-    withShip.filter((c) => c[2] === 2 && !reports.found.has(`${c[0]},${c[1]}`)).map((c) => `${c[0]},${c[1]}`),
+    withShip
+      .filter((c) => c[2] === 2 && !reports.found.has(`${c[0]},${c[1]}`) && !reports.gone.has(`${c[0]},${c[1]}`))
+      .map((c) => `${c[0]},${c[1]}`),
   );
   shipless = state.found.length - withShip.length;
   skipped = 0;
 
   // Every city worth showing, with the reason it is kept out of the batches, if any.
-  const pool = new Map<string, { city: City; note?: string }>();
+  const pool = new Map<string, { city: City; note?: string; missing?: boolean }>();
   const seen = new Set<string>();
   const excluded = new Set(state.excluded);
   const add = (x: number, z: number, source: City['source'], ship: boolean) => {
@@ -216,6 +222,11 @@ function rebuild(done?: () => void): void {
     seen.add(key);
     const city: City = { x, z, source };
     let note: string | undefined;
+    const reported = reports.gone.get(cityId(city));
+    if (reported) {
+      pool.set(cityId(city), { city, note: MISSING_NOTE[reported], missing: true });
+      return;
+    }
     // Only while still looted: unticking a city puts it back.
     if (excluded.has(cityId(city)) && tracker.has(city)) note = 'looted, removed from routes';
     else if (source === 'seed' && mapped?.isMapped(x, z)) {
@@ -231,7 +242,7 @@ function rebuild(done?: () => void): void {
   outside = [];
   const cities: City[] = [];
   for (const entry of pool.values()) {
-    if (entry.note) outside.push({ city: entry.city, note: entry.note });
+    if (entry.note) outside.push({ city: entry.city, note: entry.note, missing: entry.missing });
     else cities.push(entry.city);
   }
   const job: BatchJob = {
@@ -355,7 +366,15 @@ function renderMap(): void {
     batch.forEach((city, order) => cities.push({ city, batch: b, order, color: color(b), visited: tracker.has(city) })),
   );
   for (const o of outside) {
-    cities.push({ city: o.city, batch: -1, order: 0, color: OUTSIDE_COLOR, visited: tracker.has(o.city), note: o.note });
+    cities.push({
+      city: o.city,
+      batch: -1,
+      order: 0,
+      color: OUTSIDE_COLOR,
+      visited: tracker.has(o.city),
+      note: o.note,
+      missing: o.missing,
+    });
   }
   if (showTrophies) {
     // Hidden extra: every looted city there is, wherever the current search happens to be looking.
@@ -1321,16 +1340,12 @@ showSharedNote();
 
 // ---------- ship reports ----------
 
+/** Whether the app's own layout marks this city's ship as a tight fit, whatever has been reported since. */
+const wasUncertain = (city: City) => state.found.some((c) => c[0] === city.x && c[1] === city.z && c[2] === 2);
+
 /** Send a player's report on whether a city's ship was there, for the maintainer to review. */
 async function reportShip(city: City, result: 'found' | 'missing' | 'no-city'): Promise<void> {
   const where = xzText(city);
-  const what = {
-    found: `the ship at ${where} was there`,
-    missing: `there is an End City at ${where} but no ship`,
-    'no-city': `there is no End City at ${where} at all`,
-  }[result];
-  // "Missing" reports are confirmed in the little window they are chosen from; a "found" report asks here.
-  if (result === 'found' && !confirm(`Report that ${what}? It is sent for review, and nothing changes until it is accepted.`)) return;
   if (!SUBMIT_URL) {
     // Without the relay, the report is filed by hand as a GitHub issue.
     const headline = { found: 'ship found', missing: 'no ship', 'no-city': 'no End City' }[result];
@@ -1342,7 +1357,14 @@ async function reportShip(city: City, result: 'found' | 'missing' | 'no-city'): 
     const res = await fetch(SUBMIT_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ kind: 'ship', city: cityId(city), result, name: state.chatName }),
+      body: JSON.stringify({
+        kind: 'ship',
+        city: cityId(city),
+        result,
+        name: state.chatName,
+        // Lets the maintainer see whether the app had already flagged this ship as doubtful.
+        uncertain: wasUncertain(city),
+      }),
     });
     const body = await res.json().catch(() => ({}));
     locateNote.textContent = res.ok ? 'Report sent for review. Thank you!' : (body.error ?? 'That did not go through. Please try again later.');
@@ -1351,16 +1373,24 @@ async function reportShip(city: City, result: 'found' | 'missing' | 'no-city'): 
   }
 }
 
-// The little window for reporting something missing: pick which, then send.
+// The little window for a report: pick what was found, give a username, then send.
 const reportBox = $('reportBox');
 const reportForm = $<HTMLFormElement>('reportForm');
+const reportName = $<HTMLInputElement>('reportName');
 let reportCity: City | null = null;
-function openReport(city: City): void {
+/** Open the window for a city. `found` asks about a ship being present; otherwise about something missing. */
+function openReport(city: City, found = false): void {
   reportCity = city;
+  $('reportTitle').textContent = found ? 'Report a ship' : 'Report missing structure';
   $('reportWhere').textContent = `At ${xzText(city)}`;
   reportForm.reset();
+  // Only the choices that fit are offered, with the first of them selected.
+  for (const row of reportForm.querySelectorAll<HTMLElement>('.report-missing')) row.hidden = found;
+  for (const row of reportForm.querySelectorAll<HTMLElement>('.report-found')) row.hidden = !found;
+  reportForm.querySelector<HTMLInputElement>(`input[value="${found ? 'found' : 'missing'}"]`)!.checked = true;
+  reportName.value = state.chatName;
   reportBox.hidden = false;
-  reportForm.querySelector<HTMLInputElement>('input[name="reportKind"]:checked')?.focus();
+  reportName.focus();
 }
 const closeReport = () => {
   reportBox.hidden = true;
@@ -1370,12 +1400,18 @@ $('reportCancel').addEventListener('click', closeReport);
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && !reportBox.hidden) closeReport();
 });
+reportName.addEventListener('input', () => {
+  reportName.value = cleanUsername(reportName.value);
+});
 reportForm.addEventListener('submit', (e) => {
   e.preventDefault();
   const city = reportCity;
   const kind = new FormData(reportForm).get('reportKind');
+  // Remembered for next time, and shared with the other places a username is asked for.
+  state.chatName = reportName.value;
+  save();
   closeReport();
-  if (city && (kind === 'missing' || kind === 'no-city')) void reportShip(city, kind);
+  if (city && (kind === 'missing' || kind === 'no-city' || kind === 'found')) void reportShip(city, kind);
 });
 
 async function loadShipReports(): Promise<{ missing?: string[]; found?: string[]; noCity?: string[] }> {
@@ -1481,7 +1517,9 @@ map.onHover = (c, px, py) => {
   if (!c) return;
   tooltip.textContent =
     c.batch < 0
-      ? `${xzText(c.city)} · not in a route: ${c.note}`
+      ? c.missing
+        ? `${xzText(c.city)} · ${c.note}`
+        : `${xzText(c.city)} · not in a route: ${c.note}`
       : `${waypointName(c.batch, c.order)} · ${xzText(c.city)}${c.visited ? ' · looted' : ''}` +
         (uncertainShips.has(cityId(c.city)) ? ' · ship uncertain' : '');
   tooltip.style.left = `${px + 14}px`;
@@ -1514,6 +1552,11 @@ function rebuildKeeping(id: string | null): void {
 
 /** The right-click choices for a city: looted marks and batch membership. */
 function addCityItems(c: MapCity, items: [string, () => void][]): void {
+  if (c.missing) {
+    // Nothing to loot or route here; the one useful thing is to say the report was wrong.
+    if (state.seed === DEFAULT_SEED) items.push(['Report: the ship is here after all', () => openReport(c.city, true)]);
+    return;
+  }
   const id = cityId(c.city);
   // After a change the batches are rebuilt; keep the same one open afterwards.
   const openCustom = selected !== null && isCustom(selected) ? selected - generatedCount : -1;
@@ -1547,7 +1590,7 @@ function addCityItems(c: MapCity, items: [string, () => void][]): void {
 
   // Reports go to the maintainer for review; nothing changes for anyone until one is accepted.
   if (state.seed === DEFAULT_SEED) {
-    if (uncertainShips.has(id)) items.push(['Report: the ship was there', () => reportShip(c.city, 'found')]);
+    if (uncertainShips.has(id)) items.push(['Report: the ship was there', () => openReport(c.city, true)]);
     items.push(['Report missing structure', () => openReport(c.city)]);
   }
 
@@ -1618,6 +1661,16 @@ map.onMenu = (c, px, py, pos) => {
     locateNote.textContent = '';
     renderMap();
   }]);
+
+  // Shown in a fixed order: looted mark, coordinates, position, routes, then reports.
+  const group = (label: string) =>
+    /^(Mark as|On the shared)/.test(label) ? 0
+    : label === 'Copy coordinates' ? 1
+    : label === 'Set my position here' ? 2
+    : label.startsWith('Report') ? 4
+    : 3;
+  // Sorting keeps the order within a group, so "Add to route" stays ahead of "Start a custom route".
+  items.sort((p, q) => group(p[0]) - group(q[0]));
 
   const title = document.createElement('div');
   title.className = 'menu-title';
@@ -1794,7 +1847,13 @@ async function loadSharedLooted(): Promise<string[]> {
 }
 
 Promise.all([Explored.load(), Precomputed.load(), loadSharedLooted(), loadShipReports()]).then(([e, p, looted, ships]) => {
-  shipReports = { gone: new Set([...(ships.missing ?? []), ...(ships.noCity ?? [])]), found: new Set(ships.found ?? []) };
+  shipReports = {
+    gone: new Map([
+      ...(ships.missing ?? []).map((id): [string, 'missing'] => [id, 'missing']),
+      ...(ships.noCity ?? []).map((id): [string, 'no-city'] => [id, 'no-city']),
+    ]),
+    found: new Set(ships.found ?? []),
+  };
   // Results saved by an older version lack newer details (such as uncertain ships). Where the search is
   // one the pre-generated file answers instantly, refresh them from it.
   if (p?.covers(state.seed, state.filters) && state.found.length) {

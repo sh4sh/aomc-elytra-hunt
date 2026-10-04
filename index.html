@@ -206,8 +206,13 @@
         <form id="reportForm">
           <strong id="reportTitle">Report missing structure</strong>
           <p id="reportWhere" class="hint"></p>
-          <label class="check"><input type="radio" name="reportKind" value="missing" checked /> The End City is here, but it has no ship</label>
-          <label class="check"><input type="radio" name="reportKind" value="no-city" /> There is no End City here at all</label>
+          <label class="check report-missing"><input type="radio" name="reportKind" value="missing" /> The End City is here, but it has no ship</label>
+          <label class="check report-missing"><input type="radio" name="reportKind" value="no-city" /> There is no End City here at all</label>
+          <label class="check report-found"><input type="radio" name="reportKind" value="found" /> The ship is here</label>
+          <label class="field">
+            <strong>Your Minecraft username</strong>
+            <input id="reportName" autocomplete="off" spellcheck="false" maxlength="16" placeholder="Optional" />
+          </label>
           <p class="hint">Reports are reviewed before anything changes for other players.</p>
           <div class="row">
             <button type="submit" class="primary">Send report</button>
@@ -217,7 +222,7 @@
       </div>
       <footer id="mapbar">
         <span class="key"><i class="dot"></i> in a route</span>
-        <span class="key"><i class="cross">×</i> looted</span>
+        <span class="key"><i class="cross">×</i> looted, or reported missing</span>
         <span class="key"><i class="dot diamond"></i> not in a route</span>
         <span class="key"><i class="dot square area"></i> search area</span>
         <span class="key aomc-only"><i class="dot square green"></i> already on the webmap</span>
@@ -265,7 +270,7 @@
         <ul>
           <li>For Minecraft Java Edition, not Bedrock. It follows the 1.19–1.21 world generation rules and is in use on a 26.2 server; a future version that changes End generation could put cities elsewhere.</li>
           <li>A <em>?</em> after a city in a route means its ship is uncertain: it is an unusually tight fit in that city, and one ship like that turned out not to exist. Most may be fine. If you visit one, right-click it and report whether the ship was there.</li>
-          <li>Found a city with no ship, or no city where the app shows one? Right-click it, choose <em>Report missing structure</em> and pick which.</li>
+          <li>Found a city with no ship, or no city where the app shows one? Right-click it, choose <em>Report missing structure</em> and pick which. Once accepted, it shows as a grey × for everyone and is left out of routes; hover over it to see what was reported.</li>
           <li>Small faint diamonds are cities with a ship that didn't fit a route. Right-click one to add it to the route you have open.</li>
           <li>Far from 0,0? In <button type="button" class="jump" data-target="settings">Search settings</button>, choose <em>Near my coordinates</em> to search a circle around your coordinates.</li>
           <li>Want to plan your own? Right-click any city and choose <em>Start a custom route with this city</em>, then right-click others to add them. Custom routes sit at the top of the route list.</li>

@@ -223,6 +223,7 @@ main { position: relative; min-width: 0; min-height: 0; display: flex; flex-dire
 }
 .popup[hidden] { display: none; }
 .popup form { gap: 10px; }
+.popup label[hidden] { display: none; }
 #menu .menu-title { padding: 4px 8px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 #menu button { border: 0; background: none; text-align: left; padding: 6px 8px; }
 #menu button:hover { background: var(--panel-2); }

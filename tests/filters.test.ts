@@ -386,9 +386,14 @@ describe('ship reports through the relay', async () => {
     for (const result of ['found', 'missing', 'no-city'] as const) {
       expect(parseShipReport({ kind: 'ship', city: '-554792,8712', result, name: 'Steve_01' })).toEqual({
         ok: true,
-        value: { name: 'Steve_01', city: '-554792,8712', result },
+        value: { name: 'Steve_01', city: '-554792,8712', result, uncertain: false },
       });
     }
+  });
+
+  it('carries whether the app had marked the ship as uncertain', () => {
+    const r = parseShipReport({ city: '1,2', result: 'missing', uncertain: true });
+    expect(r.ok && r.value.uncertain).toBe(true);
   });
 
   it('refuses anything else', () => {
@@ -399,11 +404,13 @@ describe('ship reports through the relay', async () => {
 
   it('writes an issue the merge script can read back', () => {
     const line = /^ship-report: (missing|found|no-city) (-?\d+,-?\d+)$/gm;
-    const noShip = issueForShip({ name: 'Steve_01', city: '-554792,8712', result: 'missing' });
+    const noShip = issueForShip({ name: 'Steve_01', city: '-554792,8712', result: 'missing', uncertain: true });
+    expect(noShip.body).toContain('had marked this ship as uncertain');
     expect(noShip.title).toBe('Ship report: no ship at x: -554792, z: 8712');
     expect(noShip.labels).toEqual(['ship-report']);
     expect([...noShip.body.matchAll(line)].map((m) => [m[1], m[2]])).toEqual([['missing', '-554792,8712']]);
-    const noCity = issueForShip({ name: 'Steve_01', city: '30000,-4000', result: 'no-city' });
+    const noCity = issueForShip({ name: 'Steve_01', city: '30000,-4000', result: 'no-city', uncertain: false });
+    expect(noCity.body).toContain('had **not** marked this ship as uncertain');
     expect(noCity.title).toBe('Ship report: no End City at x: 30000, z: -4000');
     expect([...noCity.body.matchAll(line)].map((m) => [m[1], m[2]])).toEqual([['no-city', '30000,-4000']]);
   });

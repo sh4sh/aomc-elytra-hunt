@@ -57,17 +57,19 @@ export interface ShipReport {
   name: string;
   city: string;
   result: ShipResult;
+  /** Whether the app had already marked this city's ship as uncertain when the report was made. */
+  uncertain: boolean;
 }
 
 export const SHIP_LABEL = 'ship-report';
 
 export function parseShipReport(input: unknown): { ok: true; value: ShipReport } | { ok: false; error: string } {
   if (!input || typeof input !== 'object') return { ok: false, error: 'Expected a JSON object.' };
-  const { name, city, result } = input as { name?: unknown; city?: unknown; result?: unknown };
+  const { name, city, result, uncertain } = input as { name?: unknown; city?: unknown; result?: unknown; uncertain?: unknown };
   if (typeof city !== 'string' || !/^-?\d{1,8},-?\d{1,8}$/.test(city)) return { ok: false, error: 'The city must look like "x,z".' };
   if (!SHIP_RESULTS.includes(result as ShipResult)) return { ok: false, error: 'Say what was found: the ship, no ship, or no city.' };
   const who = typeof name === 'string' ? name.replace(/[^A-Za-z0-9_]/g, '').slice(0, 32) : '';
-  return { ok: true, value: { name: who || 'anonymous', city, result: result as ShipResult } };
+  return { ok: true, value: { name: who || 'anonymous', city, result: result as ShipResult, uncertain: uncertain === true } };
 }
 
 export function issueForShip(r: ShipReport): { title: string; body: string; labels: string[] } {
@@ -85,6 +87,11 @@ export function issueForShip(r: ShipReport): { title: string; body: string; labe
       `Reported through the app by **${r.name}**. Not verified.`,
       '',
       detail,
+      '',
+      // Says whether the app saw this coming: a way to tell if the "ship uncertain" mark is earning its keep.
+      r.uncertain
+        ? 'The app **had marked this ship as uncertain** (a tight fit against another part of the city).'
+        : 'The app had **not** marked this ship as uncertain.',
       '',
       'To accept, reply to this issue with `/merge`. To reject, close it.',
       '',
