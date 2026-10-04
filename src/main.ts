@@ -1320,7 +1320,9 @@ let chatStep = 0;
 let chatStepRoute = '';
 const currentChatLines = () => {
   const i = selected;
-  return i === null ? [] : batches[i].flatMap((c, k) => (tracker.has(c) ? [] : [cityChatLine(c, i, k)]));
+  return i === null
+    ? []
+    : batches[i].flatMap((c, k) => (tracker.has(c) ? [] : [{ name: waypointName(i, k), line: cityChatLine(c, i, k) }]));
 };
 function showChatStep(): void {
   const lines = currentChatLines();
@@ -1334,13 +1336,35 @@ function showChatStep(): void {
     ? 'Nothing to copy'
     : chatStep >= lines.length
       ? `All ${lines.length} copied`
-      : `Copy line ${chatStep + 1} of ${lines.length}`;
+      : `Copy ${lines[chatStep].name} (${chatStep + 1} of ${lines.length})`;
   (copyChatBtn as HTMLButtonElement).disabled = !lines.length || chatStep >= lines.length;
+
+  // The lines copied so far, each one a button that copies it again without moving the count.
+  const done = $('chatDone');
+  done.hidden = !chatStep;
+  done.replaceChildren(
+    'Copied so far (press one to copy it again): ',
+    ...lines.slice(0, chatStep).map(({ name, line }, k) => {
+      const again = document.createElement('button');
+      again.type = 'button';
+      again.className = 'chat';
+      again.textContent = name;
+      if (k === chatStep - 1) again.classList.add('latest');
+      again.addEventListener('click', async () => {
+        again.textContent = (await copyText(line)) ? 'copied' : 'failed';
+        setTimeout(() => (again.textContent = name), 1500);
+      });
+      return again;
+    }),
+  );
 }
+/** When the last line was copied, so the second press of a double click does not skip a line. */
+let chatCopiedAt = 0;
 copyChatBtn.addEventListener('click', async () => {
   const lines = currentChatLines();
-  if (chatStep >= lines.length) return;
-  if (await copyText(lines[chatStep])) {
+  if (chatStep >= lines.length || Date.now() - chatCopiedAt < 700) return;
+  if (await copyText(lines[chatStep].line)) {
+    chatCopiedAt = Date.now();
     chatStep++;
     showChatStep();
   } else {
@@ -1364,7 +1388,7 @@ function showMapMod(): void {
   $('chatTitle').hidden = state.mapMod !== 'xaero';
   $('chatModNote').textContent =
     state.mapMod === 'xaero'
-      ? "Xaero's Minimap shows each line as a shared waypoint with an Add button. This way is new and not yet tested in game: if nothing appears, use the waypoint file above."
+      ? "Xaero's Minimap shows each line as a shared waypoint with an Add button."
       : 'JourneyMap makes each line clickable, and clicking it creates the waypoint.';
   showChatHint();
 }

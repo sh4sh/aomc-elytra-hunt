@@ -24,7 +24,7 @@ The same steps are in the app under **How to use**.
      Or, without closing Minecraft, add them through chat: enter your username
      and press the copy button once per line, pasting each into chat while in
      the End. Xaero's Minimap shows each as a shared waypoint with an Add
-     button. The chat way is not yet tested in game.
+     button.
    - **JourneyMap / Other:** enter your username, then press the copy button
      once per line, pasting each into chat while in the End (Minecraft's chat
      takes one message at a time). They are whispers
