@@ -40,22 +40,30 @@ for (let i = 0; i < args.length; i++) {
 
 const list = JSON.parse(readFileSync(FILE, 'utf8'));
 const cities = new Set(list.cities);
+// Cities a player found already looted by someone else: the app warns about the cities around them.
+const already = new Set(list.alreadyLooted ?? []);
 const before = cities.size;
 for (const [file, text] of sources) {
   let rows = 0;
   for (const line of text.split(/\r?\n/)) {
-    const m = line.match(/^\s*(-?\d+)\s*,\s*(-?\d+)/);
+    const m = line.match(/^\s*(-?\d+)\s*,\s*(-?\d+)\s*(?:,\s*(already)\s*$)?/);
     if (!m) continue; // Header or blank line.
     cities.add(`${Number(m[1])},${Number(m[2])}`);
+    if (m[3]) already.add(`${Number(m[1])},${Number(m[2])}`);
     rows++;
   }
   console.log(`${file}: ${rows} cities`);
 }
 
-const sorted = [...cities].sort((a, b) => {
+const byPosition = (a, b) => {
   const [ax, az] = a.split(',').map(Number);
   const [bx, bz] = b.split(',').map(Number);
   return ax - bx || az - bz;
-});
-writeFileSync(FILE, JSON.stringify({ updatedAt: new Date().toISOString(), cities: sorted }) + '\n');
+};
+const sorted = [...cities].sort(byPosition);
+writeFileSync(
+  FILE,
+  JSON.stringify({ updatedAt: new Date().toISOString(), cities: sorted, alreadyLooted: [...already].sort(byPosition) }) + '\n',
+);
+if (already.size) console.log(`${already.size} found already looted.`);
 console.log(`${cities.size - before} new, ${cities.size} on the shared list. Wrote ${FILE}`);

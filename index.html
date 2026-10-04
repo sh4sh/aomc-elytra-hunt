@@ -77,6 +77,8 @@
         <p class="hint">In blocks. Cities that can't be reached in a full route within this are left without a route (small faint diamonds on the map); right-click one to add it to a route. 0 means no limit. If no route of the chosen size fits at all, smaller routes are made, down to 2 cities.</p>
         <label class="check aomc-only"><input id="skipMapped" type="checkbox" /> Leave out cities already on the webmap</label>
         <p id="exploredNote" class="hint aomc-only"></p>
+        <label class="check"><input id="skipPossible" type="checkbox" /> Leave out cities that are possibly looted</label>
+        <p class="hint">Possibly looted means within 2,000 blocks of a city someone found already looted. Right-click a city and choose <em>Mark as found already looted</em> when you arrive to an empty ship.</p>
         <details id="advanced">
           <summary>Advanced</summary>
           <label id="angleBox" class="band-only">
@@ -225,6 +227,7 @@
       <footer id="mapbar">
         <span class="key"><i class="dot"></i> in a route</span>
         <span class="key"><i class="cross">×</i> looted, or reported missing</span>
+        <span class="key"><i class="dot hollow"></i> possibly looted</span>
         <span class="key"><i class="dot diamond"></i> not in a route</span>
         <span class="key"><i class="dot square area"></i> search area</span>
         <span class="key aomc-only"><i class="dot square green"></i> already on the webmap</span>
@@ -267,6 +270,12 @@
           Your looted ticks stay in this browser. You can also send them in from
           <button type="button" class="jump" data-target="share">Share progress</button>; once accepted, those cities
           show as looted for all players.
+        </p>
+        <p>
+          Got there and the elytra was already gone? Right-click the city and choose
+          <em>Mark as found already looted</em>. Someone hunted there before, so cities within 2,000 blocks of it
+          are shown as possibly looted: a hollow dot on the map and a <code>?</code> in the route (hover over it to see why). Send these in too,
+          and everyone gets the warning.
         </p>
         </div>
         <h3>Good to know</h3>

@@ -8,21 +8,32 @@ import { cityId } from './types';
 export class Tracker {
   private visited = new Map<string, string>();
   private shared = new Set<string>();
+  /** Cities this visitor found already looted by someone else on arrival. Each is in `visited` too. */
+  private already = new Set<string>();
+  private sharedAlready = new Set<string>();
+  /** Every already-looted city as [x, z], worked out when first asked for. */
+  private priorPoints: [number, number][] | null = null;
   private readonly key: string;
+  private readonly alreadyKey: string;
 
   constructor(seed: string) {
     this.key = `end-cities:visited:${seed}`;
+    this.alreadyKey = `end-cities:found-looted:${seed}`;
     try {
       const raw = localStorage.getItem(this.key);
       if (raw) this.visited = new Map(Object.entries(JSON.parse(raw)));
+      const found = localStorage.getItem(this.alreadyKey);
+      if (found) this.already = new Set(JSON.parse(found));
     } catch {
       // Storage unavailable or corrupt: start empty.
     }
   }
 
   private save(): void {
+    this.priorPoints = null;
     try {
       localStorage.setItem(this.key, JSON.stringify(Object.fromEntries(this.visited)));
+      localStorage.setItem(this.alreadyKey, JSON.stringify([...this.already]));
     } catch {
       // Still works for this session.
     }
@@ -37,8 +48,38 @@ export class Tracker {
     return this.shared.has(cityId(c));
   }
 
-  setShared(ids: string[]): void {
+  setShared(ids: string[], already: string[] = []): void {
     this.shared = new Set(ids);
+    this.sharedAlready = new Set(already);
+    this.priorPoints = null;
+  }
+
+  /** Found already looted on arrival, by this visitor or according to the shared list. */
+  isAlready(c: { x: number; z: number }): boolean {
+    return this.already.has(cityId(c)) || this.sharedAlready.has(cityId(c));
+  }
+
+  /** Mark a city as found already looted (which also marks it looted), or take that back and leave it looted. */
+  setAlready(c: { x: number; z: number }, found: boolean): void {
+    if (found) {
+      if (!this.visited.has(cityId(c))) this.visited.set(cityId(c), new Date().toISOString());
+      this.already.add(cityId(c));
+    } else this.already.delete(cityId(c));
+    this.save();
+  }
+
+  /** This visitor's own "found already looted" marks that are not on the shared list yet, as "x,z". */
+  ownAlready(): string[] {
+    return [...this.already].filter((id) => !this.sharedAlready.has(id));
+  }
+
+  /** Whether a city found already looted lies within this many blocks: a sign someone hunted here before. */
+  nearAlready(c: { x: number; z: number }, radius: number): boolean {
+    this.priorPoints ??= [...new Set([...this.already, ...this.sharedAlready])].map((id) => {
+      const [x, z] = id.split(',').map(Number);
+      return [x, z];
+    });
+    return this.priorPoints.some(([x, z]) => Math.hypot(x - c.x, z - c.z) <= radius);
   }
 
   /** This visitor's own marks that are not on the shared list yet, as "x,z". */
@@ -57,12 +98,16 @@ export class Tracker {
 
   set(c: { x: number; z: number }, visited: boolean): void {
     if (visited) this.visited.set(cityId(c), new Date().toISOString());
-    else this.visited.delete(cityId(c));
+    else {
+      this.visited.delete(cityId(c));
+      this.already.delete(cityId(c));
+    }
     this.save();
   }
 
   clear(): void {
     this.visited.clear();
+    this.already.clear();
     this.save();
   }
 

@@ -12,6 +12,8 @@ export interface MapCity {
   note?: string;
   /** A player reported the ship, or the whole city, missing here: crossed off like a looted city. */
   missing?: boolean;
+  /** Near a city someone found already looted, so possibly looted too: drawn hollow. */
+  possible?: boolean;
   /** Drawn as a bright cross in the "everything explored so far" view: gold for looted, green for on the webmap. */
   trophy?: 'looted' | 'mapped';
 }
@@ -473,6 +475,10 @@ export class EndMap {
         ctx.globalAlpha = 0.75;
         ctx.strokeStyle = c.color;
         ctx.lineWidth = 1;
+        ctx.stroke();
+      } else if (c.possible) {
+        ctx.strokeStyle = c.color;
+        ctx.lineWidth = 1.5;
         ctx.stroke();
       } else {
         ctx.fillStyle = c.color;

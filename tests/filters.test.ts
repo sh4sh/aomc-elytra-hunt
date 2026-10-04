@@ -250,7 +250,7 @@ describe('looted submission relay', async () => {
 
   it('accepts coordinates and a username, dropping duplicates', () => {
     const r = parseSubmission({ name: 'Steve_01', cities: ['10264,3864', '-500,9000', '10264,3864'] });
-    expect(r).toEqual({ ok: true, value: { name: 'Steve_01', cities: ['10264,3864', '-500,9000'] } });
+    expect(r).toEqual({ ok: true, value: { name: 'Steve_01', cities: ['10264,3864', '-500,9000'], already: [] } });
   });
 
   it('refuses anything that is not plain coordinates', () => {
@@ -267,7 +267,7 @@ describe('looted submission relay', async () => {
   });
 
   it('writes an issue the merge script can read back', () => {
-    const { title, body, labels } = issueFor({ name: 'Steve_01', cities: ['10264,3864', '-500,9000'] });
+    const { title, body, labels } = issueFor({ name: 'Steve_01', cities: ['10264,3864', '-500,9000'], already: [] });
     expect(title).toBe('Looted cities from Steve_01 (2)');
     expect(labels).toEqual(['map-submission']);
     const rows = body.split('\n').filter((l) => /^\s*-?\d+\s*,\s*-?\d+/.test(l));
@@ -431,5 +431,30 @@ describe("Xaero's Minimap chat lines", async () => {
   it('keeps the fields intact', () => {
     expect(shareLine(a, 'a:b', '123', 11).split(':')).toHaveLength(10);
     expect(shareLine(a, 'a:b', '123', 11)).toContain(':a b:12:');
+  });
+});
+
+describe('found already looted', async () => {
+  const { Tracker } = await import('../src/tracker');
+  const { parseSubmission, issueFor } = await import('../relay/src/validate');
+
+  it('flags the cities around one found already looted', () => {
+    const t = new Tracker('test');
+    t.setAlready({ x: 1000, z: 1000 }, true);
+    expect(t.has({ x: 1000, z: 1000 })).toBe(true);
+    expect(t.nearAlready({ x: 2500, z: 1000 }, 2000)).toBe(true);
+    expect(t.nearAlready({ x: 4000, z: 1000 }, 2000)).toBe(false);
+    t.set({ x: 1000, z: 1000 }, false);
+    expect(t.nearAlready({ x: 2500, z: 1000 }, 2000)).toBe(false);
+    t.setShared(['0,0'], ['0,0']);
+    expect(t.nearAlready({ x: 100, z: 100 }, 2000)).toBe(true);
+    expect(t.ownAlready()).toEqual([]);
+  });
+
+  it('travels in a submission as marked rows', () => {
+    const parsed = parseSubmission({ name: 'Steve', cities: ['1,2', '3,4'], already: ['3,4', '9,9', 'x'] });
+    if (!parsed.ok) throw new Error(parsed.error);
+    expect(parsed.value.already).toEqual(['3,4']);
+    expect(issueFor(parsed.value).body).toContain('1,2\n3,4,already\n');
   });
 });

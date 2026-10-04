@@ -54,6 +54,8 @@ interface Saved {
   excluded: string[];
   /** Cities moved by hand: city id -> id of a city in the batch it was added to. */
   moved: Record<string, string>;
+  /** Keep cities near one found already looted out of the routes. */
+  skipPossible?: boolean;
   /** Minecraft username to whisper JourneyMap chat lines to, or empty to write them for public chat. */
   /** Batches the player put together by hand, each a list of city ids. */
   custom: string[][];
@@ -153,6 +155,11 @@ const MISSING_NOTE = { missing: 'End Ship reported missing', 'no-city': 'End Cit
  * A confirmed report clears the doubt.
  */
 let uncertainShips = new Set<string>();
+/** A city this close (in blocks) to one found already looted counts as possibly looted. */
+const POSSIBLE_RADIUS = 2000;
+const POSSIBLE_NOTE = 'possibly looted: near a city found already looted';
+/** Not looted as far as anyone has said, but near a city someone found already looted. */
+const possible = (c: City): boolean => !tracker.has(c) && tracker.nearAlready(c, POSSIBLE_RADIUS);
 /** How many of `batches` were generated; the player's custom batches follow them. */
 let generatedCount = 0;
 
@@ -236,7 +243,7 @@ function rebuild(done?: () => void): void {
       // Ships near mapped terrain may still be unlooted, so keep them visible.
       if (!ship) return;
       note = 'has a ship, but already on the webmap';
-    }
+    } else if (state.skipPossible && possible(city)) note = POSSIBLE_NOTE;
     pool.set(cityId(city), { city, note });
   };
   for (const [x, z, ship] of withShip) add(x, z, 'seed', !!ship);
@@ -365,7 +372,9 @@ function previewFilters(): Filters {
 function renderMap(): void {
   const cities: MapCity[] = [];
   batches.forEach((batch, b) =>
-    batch.forEach((city, order) => cities.push({ city, batch: b, order, color: color(b), visited: tracker.has(city) })),
+    batch.forEach((city, order) =>
+      cities.push({ city, batch: b, order, color: color(b), visited: tracker.has(city), possible: possible(city) }),
+    ),
   );
   for (const o of outside) {
     cities.push({
@@ -434,6 +443,7 @@ function renderBatches(): void {
   renderSettingsSummary();
   const total = batches.reduce((n, b) => n + b.length, 0);
   const done = batches.reduce((n, b) => n + looted(b), 0);
+  const maybeCount = batches.flat().filter(possible).length;
   $('stats').textContent = total
     ? `${fmt(total)} cities · ${fmt(batches.length)} routes · ${fmt(done)} looted` +
       (shipless ? ` · ${fmt(shipless)} without a ship left out` : '') +
@@ -443,6 +453,7 @@ function renderBatches(): void {
         : '') +
       (unbatched ? ` · ${fmt(unbatched)} without a route` : '') +
       (uncertainShips.size ? ` · ${fmt(uncertainShips.size)} with an uncertain ship (marked ?)` : '') +
+      (maybeCount ? ` · ${fmt(maybeCount)} possibly looted (marked ?)` : '') +
       (state.excluded.length ? ` · ${fmt(state.excluded.length)} looted removed from routes` : '')
     : unbatched
       ? `No routes: ${fmt(unbatched)} cities, but no two are within the longest flight of each other. Raise the longest flight.`
@@ -552,6 +563,9 @@ function renderDetail(): void {
       const box = document.createElement('input');
       box.type = 'checkbox';
       box.checked = tracker.has(c);
+      const maybe = possible(c);
+      if (maybe) label.title += ` · ${POSSIBLE_NOTE}`;
+      if (tracker.isAlready(c)) label.title += ' · found already looted';
       if (tracker.isShared(c)) {
         // On the shared list: looted for everyone, so it can't be unticked here.
         box.disabled = true;
@@ -566,7 +580,7 @@ function renderDetail(): void {
       n.textContent = String(k + 1);
       const xz = document.createElement('span');
       xz.className = 'xz';
-      xz.textContent = xzText(c) + (unsure ? ' ?' : '');
+      xz.textContent = xzText(c) + (unsure || maybe ? ' ?' : '');
       const hop = document.createElement('span');
       hop.className = 'hop';
       hop.textContent = k ? `+${fmt(Math.round(Math.hypot(c.x - batch[k - 1].x, c.z - batch[k - 1].z)))}` : 'start here';
@@ -764,7 +778,7 @@ function applyResult(seed: string, filters: Filters, cities: FoundCity[]): void 
     state.moved = {};
     state.custom = [];
     tracker = new Tracker(seed);
-    tracker.setShared(seed === DEFAULT_SEED ? sharedLooted : []);
+    tracker.setShared(seed === DEFAULT_SEED ? sharedLooted : [], seed === DEFAULT_SEED ? sharedAlready : []);
   }
   state.seed = seed;
   state.filters = filters;
@@ -1211,6 +1225,16 @@ shapeSelect.addEventListener('change', () => {
   render();
 });
 
+const possibleBox = $<HTMLInputElement>('skipPossible');
+possibleBox.checked = !!state.skipPossible;
+possibleBox.addEventListener('change', () => {
+  state.skipPossible = possibleBox.checked;
+  save();
+  selected = null;
+  rebuild();
+  render();
+});
+
 const skipBox = $<HTMLInputElement>('skipMapped');
 skipBox.checked = state.skipMapped;
 skipBox.addEventListener('change', () => {
@@ -1236,6 +1260,8 @@ $('searchReset').addEventListener('click', () => {
   state.maxHop = DEFAULT_MAX_HOP;
   state.lineDeviation = DEFAULT_LINE_DEVIATION;
   state.skipMapped = true;
+  state.skipPossible = false;
+  possibleBox.checked = false;
   sizeInput.value = String(state.batchSize);
   shapeSelect.value = state.batchShape;
   hopInput.value = String(state.maxHop);
@@ -1570,7 +1596,8 @@ submitBtn.addEventListener('click', async () => {
     submitNote.textContent = 'The shared list is only for the default server seed.';
     return;
   }
-  const cities = tracker.ownNew();
+  const already = tracker.ownAlready();
+  const cities = [...new Set([...tracker.ownNew(), ...already])];
   if (!cities.length) {
     submitNote.textContent = 'Nothing new to submit: mark some cities as looted first.';
     return;
@@ -1582,7 +1609,7 @@ submitBtn.addEventListener('click', async () => {
     const res = await fetch(SUBMIT_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: submitName.value, cities }),
+      body: JSON.stringify({ name: submitName.value, cities, already }),
     });
     const body = await res.json().catch(() => ({}));
     submitNote.textContent = res.ok
@@ -1649,7 +1676,8 @@ map.onHover = (c, px, py) => {
       ? c.missing
         ? `${xzText(c.city)} · ${c.note}`
         : `${xzText(c.city)} · not in a route: ${c.note}`
-      : `${waypointName(c.batch, c.order)} · ${xzText(c.city)}${c.visited ? ' · looted' : ''}` +
+      : `${waypointName(c.batch, c.order)} · ${xzText(c.city)}${c.visited ? (tracker.isAlready(c.city) ? ' · found already looted' : ' · looted') : ''}` +
+        (c.possible ? ` · ${POSSIBLE_NOTE}` : '') +
         (uncertainShips.has(cityId(c.city)) ? ' · ship uncertain' : '');
   tooltip.style.left = `${px + 14}px`;
   tooltip.style.top = `${py + 14}px`;
@@ -1703,6 +1731,10 @@ function addCityItems(c: MapCity, items: [string, () => void][]): void {
       window.open(ISSUES_URL, '_blank', 'noopener');
     }]);
   } else if (c.visited) {
+    if (!tracker.isAlready(c.city)) items.push(['Mark as found already looted', () => {
+      tracker.setAlready(c.city, true);
+      reselect();
+    }]);
     items.push(['Mark as not looted', () => {
       if (!confirm(`Mark the city at ${xzText(c.city)} as not looted?`)) return;
       tracker.set(c.city, false);
@@ -1714,6 +1746,11 @@ function addCityItems(c: MapCity, items: [string, () => void][]): void {
     items.push(['Mark as looted', () => {
       tracker.set(c.city, true);
       render();
+    }]);
+    // Someone got here first: the cities around it may well be looted too.
+    items.push(['Mark as found already looted', () => {
+      tracker.setAlready(c.city, true);
+      reselect();
     }]);
   }
 
@@ -1978,12 +2015,15 @@ settings.open = state.found.length === 0;
 
 /** Looted cities published with the site, for the default server's world only. */
 let sharedLooted: string[] = [];
-async function loadSharedLooted(): Promise<string[]> {
+/** The ones among them that a player found already looted on arrival. */
+let sharedAlready: string[] = [];
+async function loadSharedLooted(): Promise<{ cities: string[]; already: string[] }> {
   try {
     const res = await fetch('./looted.json');
-    return res.ok ? ((await res.json()).cities ?? []) : [];
+    const list = res.ok ? await res.json() : {};
+    return { cities: list.cities ?? [], already: list.alreadyLooted ?? [] };
   } catch {
-    return [];
+    return { cities: [], already: [] };
   }
 }
 
@@ -2003,8 +2043,9 @@ Promise.all([Explored.load(), Precomputed.load(), loadSharedLooted(), loadShipRe
   }
   explored = e;
   precomputed = p;
-  sharedLooted = looted;
-  if (state.seed === DEFAULT_SEED) tracker.setShared(sharedLooted);
+  sharedLooted = looted.cities;
+  sharedAlready = looted.already;
+  if (state.seed === DEFAULT_SEED) tracker.setShared(sharedLooted, sharedAlready);
   showSharedNote();
   showExploredNote();
   rebuild();

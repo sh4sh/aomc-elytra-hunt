@@ -8,13 +8,15 @@ const MAX_NAME = 32;
 export interface Submission {
   name: string;
   cities: string[];
+  /** The ones among `cities` that the player found already looted by someone else. */
+  already: string[];
 }
 
 export type Parsed = { ok: true; value: Submission } | { ok: false; error: string };
 
 export function parseSubmission(input: unknown): Parsed {
   if (!input || typeof input !== 'object') return { ok: false, error: 'Expected a JSON object.' };
-  const { name, cities } = input as { name?: unknown; cities?: unknown };
+  const { name, cities, already } = input as { name?: unknown; cities?: unknown; already?: unknown };
   if (!Array.isArray(cities) || cities.length === 0) return { ok: false, error: 'No cities to submit.' };
   if (cities.length > MAX_CITIES) return { ok: false, error: `Too many cities at once (the limit is ${MAX_CITIES}).` };
   const clean = new Set<string>();
@@ -23,26 +25,32 @@ export function parseSubmission(input: unknown): Parsed {
     if (typeof c !== 'string' || !/^-?\d{1,8},-?\d{1,8}$/.test(c)) return { ok: false, error: 'Cities must look like "x,z".' };
     clean.add(c);
   }
+  const prior = new Set<string>();
+  for (const c of Array.isArray(already) ? already : []) if (typeof c === 'string' && clean.has(c)) prior.add(c);
   // The name is shown in the issue title: keep only characters a Minecraft username can have.
   const who = typeof name === 'string' ? name.replace(/[^A-Za-z0-9_]/g, '').slice(0, MAX_NAME) : '';
-  return { ok: true, value: { name: who || 'anonymous', cities: [...clean] } };
+  return { ok: true, value: { name: who || 'anonymous', cities: [...clean], already: [...prior] } };
 }
 
 /** Label put on every submission, so they are easy to find among other issues. It must exist in the repository. */
 export const LABEL = 'map-submission';
 
 export function issueFor(s: Submission): { title: string; body: string; labels: string[] } {
+  const prior = new Set(s.already);
   return {
     labels: [LABEL],
     title: `Looted cities from ${s.name} (${s.cities.length})`,
     body: [
       `Submitted through the app by **${s.name}**. Not verified.`,
+      ...(prior.size
+        ? ['', `${prior.size} of these were found already looted by someone else (rows ending in \`already\`).`]
+        : []),
       '',
       'To add these to the shared list, run `npm run looted -- --issue <this issue number>`, then commit and push.',
       '',
       '```csv',
       'x,z',
-      ...s.cities,
+      ...s.cities.map((c) => (prior.has(c) ? `${c},already` : c)),
       '```',
     ].join('\n'),
   };

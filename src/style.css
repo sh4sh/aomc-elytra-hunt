@@ -263,6 +263,7 @@ body:not(.other-seed) .other-only { display: none; }
 #mapbar .key { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
 #mapbar .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-sizing: border-box; }
 #mapbar .dot.ring { background: none; border: 2px solid; }
+#mapbar .dot.hollow { background: none; border: 1.5px solid var(--accent); }
 #mapbar .cross { font-style: normal; font-weight: 700; font-size: 14px; line-height: 1; color: #8a8299; }
 #mapbar .dot.diamond { background: none; border: 1px solid var(--muted); border-radius: 0; transform: rotate(45deg) scale(0.8); }
 #mapbar .dot.square { border-radius: 2px; }

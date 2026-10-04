@@ -72,9 +72,15 @@ Only cities with a ship are ever shown, since only ships hold elytra.
 - Filled dots are cities in a route, coloured by route.
 - An × is a looted city, or one where a player reported the ship or the whole
   city missing; hover over it to see which.
-- A `?` after a city's coordinates in a route means its ship is uncertain (see
-  "How do we know the positions are right?" below). Right-click a city to report
-  whether its ship was there.
+- A hollow dot, and a `?` after a city's coordinates in a route, means the city
+  is possibly looted: it is within 2,000 blocks of a city a player found
+  already looted, so an earlier hunt probably passed through. It is a guess.
+  When you arrive to an empty ship, right-click the city and choose **Mark as
+  found already looted**; these marks are sent along with **Share progress**.
+  **Leave out cities that are possibly looted** keeps them out of the routes.
+- A `?` can also mean the city's ship is uncertain (see "How do we know the
+  positions are right?" below). Hover over the city to see which it is.
+  Right-click a city to report whether its ship was there.
 - A small faint diamond is a city with a ship that is not in any route.
   Right-click it to add it to the route you have open.
 - Green shading is terrain already on the community webmap.
