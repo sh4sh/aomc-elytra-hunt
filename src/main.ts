@@ -1,7 +1,7 @@
 import { lookalike, type Constellation } from './constellations';
 import { Explored } from './explored';
-import { endCityHasShip } from './generation/end-city-pieces';
-import { END_CITY, candidateChunk, chunkToBlock } from './generation/end-cities';
+import { endCityHasShip, shipCode } from './generation/end-city-pieces';
+import { END_CITY, candidateChunk, chunkToBlock, findEndCities } from './generation/end-cities';
 import { EndTerrain } from './generation/end-terrain';
 import { BATCH_SIZE, DEFAULT_MAX_HOP, makeBatchesOrSmaller, passes, route, type BatchJob, type BatchShape } from './filters';
 import type { FindRequest, FindResponse, FoundCity } from './generation/worker';
@@ -41,7 +41,6 @@ interface Saved {
   found: FoundCity[];
   imported: [number, number][];
   /** Leave out cities that already show up on the community webmap. */
-  skipMapped: boolean;
   /** Leave out cities that generate without a ship, since only ships hold elytra. */
   shipsOnly: boolean;
   /** Cities per batch. A full shulker box is 27. */
@@ -55,10 +54,18 @@ interface Saved {
   excluded: string[];
   /** Cities moved by hand: city id -> id of a city in the batch it was added to. */
   moved: Record<string, string>;
+  /** Put cities already on the webmap in the routes too. Normally they are left out as probably looted. */
+  includeMapped?: boolean;
+  /** Cities from beyond the search area that "+1 city" brought into a route. */
+  extra?: FoundCity[];
   /** Cities taken out of their route by hand. They stay on the map without a route. */
   dropped?: string[];
-  /** Cities added with "+1 city", oldest first: they go at the end of their route, in this order. */
+  /** Cities added to a route by hand, oldest first: they go at the end of their route, in this order. */
   appended?: string[];
+  /** Routes put in an order by hand: the city ids in that order, under the id of one city that belongs to the route. */
+  orders?: Record<string, string[]>;
+  /** Changes made by hand to routes, oldest first, so the latest can be taken back. */
+  edits?: RouteEdit[];
   /** Keep cities near one found already looted out of the routes. */
   skipPossible?: boolean;
   /** Minecraft username to whisper JourneyMap chat lines to, or empty to write them for public chat. */
@@ -75,7 +82,7 @@ function load(): Saved {
   try {
     const s = JSON.parse(localStorage.getItem(STORE) ?? 'null');
     if (s?.seed && s.filters) {
-      const saved: Saved = { found: [], imported: [], skipMapped: true, shipsOnly: true, batchSize: BATCH_SIZE, batchShape: 'cluster', maxHop: DEFAULT_MAX_HOP, lineDeviation: DEFAULT_LINE_DEVIATION, excluded: [], moved: {}, custom: [], chatName: '', mapMod: 'xaero', ...s };
+      const saved: Saved = { found: [], imported: [], shipsOnly: true, batchSize: BATCH_SIZE, batchShape: 'cluster', maxHop: DEFAULT_MAX_HOP, lineDeviation: DEFAULT_LINE_DEVIATION, excluded: [], moved: {}, custom: [], chatName: '', mapMod: 'xaero', ...s };
       // Fixed since the setting for it was removed.
       saved.shipsOnly = true;
       // Results saved before ships were tracked have no ship flag: search again.
@@ -85,7 +92,7 @@ function load(): Saved {
   } catch {
     // Fall through to defaults.
   }
-  return { seed: DEFAULT_SEED, filters: DEFAULT_FILTERS, found: [], imported: [], skipMapped: true, shipsOnly: true, batchSize: BATCH_SIZE, batchShape: 'cluster', maxHop: DEFAULT_MAX_HOP, lineDeviation: DEFAULT_LINE_DEVIATION, excluded: [], moved: {}, custom: [], chatName: '', mapMod: 'xaero' };
+  return { seed: DEFAULT_SEED, filters: DEFAULT_FILTERS, found: [], imported: [], shipsOnly: true, batchSize: BATCH_SIZE, batchShape: 'cluster', maxHop: DEFAULT_MAX_HOP, lineDeviation: DEFAULT_LINE_DEVIATION, excluded: [], moved: {}, custom: [], chatName: '', mapMod: 'xaero' };
 }
 
 const state = load();
@@ -197,11 +204,84 @@ const isCustom = (i: number) => i >= generatedCount;
 const batchTitle = (i: number) => (isCustom(i) ? `Custom ${i - generatedCount + 1}` : `Route ${i + 1}`);
 /** Cities that could not be fitted into a full batch within the longest-flight limit. */
 let unbatched = 0;
+/** A change made by hand to a route: a city added to it, or its order changed (`before` being the order it had, if any). */
+type RouteEdit = { kind: 'add'; id: string } | { kind: 'order'; key: string; before: string[] | null };
+const pushEdit = (e: RouteEdit) => {
+  state.edits = [...(state.edits ?? []), e].slice(-100);
+};
+
+/** The cities in the order the ids give; any not among them keep their order, at the end. */
+function inOrder(batch: City[], ids: string[]): City[] {
+  const at = new Map(ids.map((id, k) => [id, k]));
+  return [...batch].sort((p, q) => (at.get(cityId(p)) ?? Infinity) - (at.get(cityId(q)) ?? Infinity) || batch.indexOf(p) - batch.indexOf(q));
+}
+
+/** What a route's hand-made order is saved under: for a generated route, a city that belongs to it of its own accord. */
+function orderKey(i: number): string | null {
+  if (isCustom(i)) return `custom:${i - generatedCount}`;
+  const own = batches[i].map(cityId).filter((id) => !(id in state.moved));
+  return own.find((id) => state.orders?.[id]) ?? own[0] ?? null;
+}
+
+/** Give route i a new order, or with null return it to the order it was worked out in. */
+function writeOrder(i: number, key: string, ids: string[] | null): void {
+  if (isCustom(i)) {
+    const k = i - generatedCount;
+    // Cities of the custom route that are not on show just now keep their place at the end.
+    if (ids) state.custom[k] = [...ids, ...state.custom[k].filter((id) => !ids.includes(id))];
+  } else if (ids) (state.orders ??= {})[key] = ids;
+  else delete state.orders?.[key];
+  save();
+  if (!ids) return rebuildKeeping(key);
+  batches[i] = inOrder(batches[i], ids);
+  render();
+}
+
+/** Move the city at one place in the open route to another. */
+function moveCity(i: number, from: number, to: number): void {
+  const key = orderKey(i);
+  if (!key || from === to || to < 0 || to >= batches[i].length) return;
+  const ids = batches[i].map(cityId);
+  pushEdit({ kind: 'order', key, before: isCustom(i) ? [...state.custom[i - generatedCount]] : (state.orders?.[key] ?? null) });
+  ids.splice(to, 0, ...ids.splice(from, 1));
+  writeOrder(i, key, ids);
+}
+
+/** The latest hand-made change to route i that can still be taken back. */
+function lastEdit(i: number): RouteEdit | undefined {
+  const here = new Set(batches[i].map(cityId));
+  const key = orderKey(i);
+  return [...(state.edits ?? [])].reverse().find((e) => (e.kind === 'add' ? here.has(e.id) : e.key === key));
+}
+
 const REMOVED_NOTE = 'removed from its route by hand';
+const EXTRA_NOTE = 'outside the search area, added with +1 city';
+/** How far past the search area "+1 city" will look from a route's last stop, in blocks. */
+const BEYOND_BLOCKS = 4000;
+/**
+ * The same, where the cities have to be generated on the spot (another seed, or past the pre-generated
+ * area). Kept small so the press stays instant: this far takes a few hundredths of a second.
+ */
+const BEYOND_LIVE_BLOCKS = 2500;
+
+/** Every End City within a distance of a spot, whatever the search settings say. */
+function citiesAround(at: { x: number; z: number }, radius: number): FoundCity[] {
+  const circle: Filters = { ...state.filters, around: { x: at.x, z: at.z, radius } };
+  if (precomputed?.covers(state.seed, circle)) return precomputed.search(circle);
+  circle.around!.radius = Math.min(radius, BEYOND_LIVE_BLOCKS);
+  const seed = BigInt(state.seed);
+  return findEndCities(seed, {
+    maxBlocks: 0,
+    bounds: searchBounds(circle),
+    accept: (x, z) => passes(x, z, circle),
+  }).map(([cx, cz]): FoundCity => [chunkToBlock(cx), chunkToBlock(cz), shipCode(seed, cx, cz)]);
+}
 /** Take a city off the removed-by-hand list, as when it is added to a route again. */
 const undrop = (id: string) => {
   if (state.dropped) state.dropped = state.dropped.filter((x) => x !== id);
 };
+/** The place in the open route of the row being dragged, while a drag is under way. */
+let dragFrom: number | null = null;
 /** Cities kept out of the batches but still drawn on the map, with the reason. */
 let outside: { city: City; note: string; missing?: boolean }[] = [];
 
@@ -239,15 +319,16 @@ function showBatching(busy: boolean): void {
  */
 function rebuild(done?: () => void): void {
   // The webmap only describes the default server's world.
-  const mapped = state.skipMapped && explored && state.seed === DEFAULT_SEED ? explored : null;
+  const mapped = !state.includeMapped && explored && state.seed === DEFAULT_SEED ? explored : null;
   // Only ships hold elytra, so cities without one are never offered.
   // A city reported in game as having no ship is treated like any other shipless city.
   // A city reported in game as missing its ship, or missing altogether, stays on the map but out of the routes.
   const reports =
     state.seed === DEFAULT_SEED ? shipReports : { gone: new Map<string, 'missing' | 'no-city'>(), found: new Set<string>() };
   const withShip = state.found.filter((c) => c[2]);
+  const extra = state.extra ?? [];
   uncertainShips = new Set(
-    withShip
+    [...withShip, ...extra]
       .filter((c) => c[2] === 2 && !reports.found.has(`${c[0]},${c[1]}`) && !reports.gone.has(`${c[0]},${c[1]}`))
       .map((c) => `${c[0]},${c[1]}`),
   );
@@ -281,6 +362,14 @@ function rebuild(done?: () => void): void {
     pool.set(cityId(city), { city, note });
   };
   for (const [x, z, ship] of withShip) add(x, z, 'seed', !!ship);
+  // Cities "+1 city" brought in from beyond the search: on the map, but never batched of their own accord.
+  for (const [x, z] of extra) {
+    const id = `${x},${z}`;
+    if (pool.has(id)) continue;
+    add(x, z, 'seed', true);
+    const entry = pool.get(id);
+    if (entry && !entry.note) entry.note = EXTRA_NOTE;
+  }
 
   outside = [];
   const cities: City[] = [];
@@ -347,7 +436,6 @@ function finishRebuild(
   const batchOf = new Map<string, number>();
   batches.forEach((batch, b) => batch.forEach((c) => batchOf.set(cityId(c), b)));
   const moved = new Set<string>();
-  const touched = new Set<number>();
   const appended = state.appended ?? [];
   const tails = new Map<number, string[]>();
   for (const [id, anchor] of Object.entries(state.moved)) {
@@ -357,18 +445,21 @@ function finishRebuild(
     if (from === to) continue;
     if (from !== undefined) batches[from] = batches[from].filter((c) => cityId(c) !== id);
     moved.add(id);
-    // A "+1 city" addition waits, to go on the end once the rest of the route is in order.
-    if (appended.includes(id)) {
-      tails.set(to, [...(tails.get(to) ?? []), id]);
-      continue;
-    }
-    batches[to].push(pool.get(id)!.city);
-    touched.add(to);
+    // Cities added by hand go on the end, in the order they were added.
+    tails.set(to, [...(tails.get(to) ?? []), id]);
   }
-  for (const b of touched) batches[b] = route(batches[b], startPoint());
   for (const [b, ids] of tails) {
     ids.sort((p, q) => appended.indexOf(p) - appended.indexOf(q));
     batches[b] = [...batches[b], ...ids.map((id) => pool.get(id)!.city)];
+  }
+  // Then any order given by hand. One that no longer fits its route (the routes were regrouped) is forgotten.
+  for (const [key, ids] of Object.entries(state.orders ?? {})) {
+    const b = batchOf.get(key);
+    if (b === undefined || key in state.moved) continue;
+    const known = new Set(ids);
+    const own = batches[b].filter((c) => !moved.has(cityId(c)));
+    if (own.filter((c) => known.has(cityId(c))).length * 2 < own.length) delete state.orders![key];
+    else batches[b] = inOrder(batches[b], ids);
   }
 
   // Custom batches take their cities out of wherever they were and are listed after the generated ones.
@@ -607,7 +698,9 @@ function renderDetail(): void {
   });
   $('detailTitle').textContent = batchTitle(i);
   $('customDelete').hidden = !isCustom(i);
-  $('addOneUndo').hidden = !batch.some((c) => state.appended?.includes(cityId(c)));
+  $('addOneUndo').hidden = !lastEdit(i);
+  const orderedKey = orderKey(i);
+  $('orderReset').hidden = isCustom(i) || !orderedKey || !state.orders?.[orderedKey];
   renderStars(batch, color(i));
   showChatStep();
   let longest = 0;
@@ -668,6 +761,35 @@ function renderDetail(): void {
         e.stopPropagation();
         chat.textContent = (await copyText(cityChatLine(c, i, k))) ? 'copied' : 'failed';
         setTimeout(() => (chat.textContent = 'chat'), 1500);
+      });
+      // Rows can be dragged into a new order. Nothing is drawn for it until a drag is under way.
+      li.draggable = batch.length > 1;
+      li.addEventListener('dragstart', (e) => {
+        dragFrom = k;
+        e.dataTransfer?.setData('text/plain', xzText(c));
+        if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+      });
+      const clearDrop = () => li.classList.remove('drop-before', 'drop-after');
+      li.addEventListener('dragover', (e) => {
+        if (dragFrom === null) return;
+        e.preventDefault();
+        const box = li.getBoundingClientRect();
+        const after = e.clientY > box.top + box.height / 2;
+        li.classList.toggle('drop-before', !after);
+        li.classList.toggle('drop-after', after);
+      });
+      li.addEventListener('dragleave', clearDrop);
+      li.addEventListener('dragend', () => (dragFrom = null));
+      li.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const after = li.classList.contains('drop-after');
+        clearDrop();
+        const from = dragFrom;
+        dragFrom = null;
+        if (from === null || from === k) return;
+        // Taking the row out first shifts everything after it up by one.
+        const to = (after ? k + 1 : k) - (from < k ? 1 : 0);
+        moveCity(i, from, to);
       });
       label.append(box, n, xz, hop);
       label.append(chat);
@@ -856,6 +978,9 @@ function applyResult(seed: string, filters: Filters, cities: FoundCity[]): void 
     state.moved = {};
     state.appended = [];
     state.dropped = [];
+    state.extra = [];
+    state.orders = {};
+    state.edits = [];
     state.custom = [];
     tracker = new Tracker(seed);
     tracker.setShared(seed === DEFAULT_SEED ? sharedLooted : [], seed === DEFAULT_SEED ? sharedAlready : []);
@@ -1305,20 +1430,21 @@ shapeSelect.addEventListener('change', () => {
   render();
 });
 
-const possibleBox = $<HTMLInputElement>('skipPossible');
-possibleBox.checked = !!state.skipPossible;
-possibleBox.addEventListener('change', () => {
-  state.skipPossible = possibleBox.checked;
+const mappedBox = $<HTMLInputElement>('includeMapped');
+mappedBox.checked = !!state.includeMapped;
+mappedBox.addEventListener('change', () => {
+  state.includeMapped = mappedBox.checked;
   save();
   selected = null;
   rebuild();
   render();
+  showExploredNote();
 });
 
-const skipBox = $<HTMLInputElement>('skipMapped');
-skipBox.checked = state.skipMapped;
-skipBox.addEventListener('change', () => {
-  state.skipMapped = skipBox.checked;
+const possibleBox = $<HTMLInputElement>('skipPossible');
+possibleBox.checked = !!state.skipPossible;
+possibleBox.addEventListener('change', () => {
+  state.skipPossible = possibleBox.checked;
   save();
   selected = null;
   rebuild();
@@ -1339,14 +1465,15 @@ $('searchReset').addEventListener('click', () => {
   state.batchShape = 'cluster';
   state.maxHop = DEFAULT_MAX_HOP;
   state.lineDeviation = DEFAULT_LINE_DEVIATION;
-  state.skipMapped = true;
   state.skipPossible = false;
   possibleBox.checked = false;
+  state.includeMapped = false;
+  mappedBox.checked = false;
+  showExploredNote();
   sizeInput.value = String(state.batchSize);
   shapeSelect.value = state.batchShape;
   hopInput.value = String(state.maxHop);
   deviationInput.value = String(state.lineDeviation);
-  skipBox.checked = true;
   showDeviation();
   // Fill the form from the defaults without touching the applied search, so the search below sees a change.
   const applied = { seed: state.seed, filters: state.filters };
@@ -1367,11 +1494,10 @@ $('searchReset').addEventListener('click', () => {
 function showExploredNote(): void {
   const note = $('exploredNote');
   if (!explored) {
-    note.textContent = 'No webmap data loaded. Run "npm run explored" to fetch it.';
-    skipBox.disabled = true;
+    note.textContent = 'No webmap data loaded, so cities already on the webmap could not be left out.';
     return;
   }
-  note.textContent = `Webmap data from ${new Date(explored.fetchedAt).toLocaleDateString()}.`;
+  note.textContent = `Cities already on the webmap are ${state.includeMapped ? 'included in' : 'left out of'} the routes. Webmap data from ${new Date(explored.fetchedAt).toLocaleDateString()}.`;
 }
 
 // ---------- export ----------
@@ -1549,12 +1675,15 @@ $('customDelete').addEventListener('click', () => {
 $('markAll').addEventListener('click', () => markAll(true));
 
 // Adds the city nearest the route's last stop that has no route, at the end: a quick way to fly a little further.
+// Additions made before changes were kept track of can still be taken back.
+if (!state.edits && state.appended?.length) state.edits = state.appended.map((id) => ({ kind: 'add', id }));
 const addOneBtn = $('addOne');
 addOneBtn.addEventListener('click', () => {
   if (selected === null) return;
   const batch = batches[selected];
   let best: City | null = null;
   let bestDist = Infinity;
+  let beyond: FoundCity | null = null;
   for (const o of outside) {
     if (o.missing || tracker.has(o.city)) continue;
     const last = batch[batch.length - 1];
@@ -1562,6 +1691,24 @@ addOneBtn.addEventListener('click', () => {
     const d = Math.hypot(last.x - o.city.x, last.z - o.city.z);
     if (d < bestDist) [best, bestDist] = [o.city, d];
   }
+  // A city just beyond the search area is taken when it is closer than anything inside it.
+  const last = batch[batch.length - 1];
+  if (last) {
+    const known = new Set([...batches.flat(), ...outside.map((o) => o.city)].map(cityId));
+    const aomc = state.seed === DEFAULT_SEED;
+    for (const found of citiesAround(last, Math.min(bestDist, BEYOND_BLOCKS))) {
+      const city: City = { x: found[0], z: found[1], source: 'seed' };
+      const id = cityId(city);
+      if (!found[2] || known.has(id) || tracker.has(city)) continue;
+      if (aomc && (shipReports.gone.has(id) || (!state.includeMapped && explored?.isMapped(city.x, city.z)))) continue;
+      const d = Math.hypot(last.x - city.x, last.z - city.z);
+      if (d < bestDist) {
+        [best, bestDist] = [city, d];
+        beyond = found;
+      }
+    }
+  }
+  if (beyond) state.extra = [...(state.extra ?? []), beyond];
   const say = (text: string) => {
     addOneBtn.textContent = text;
     setTimeout(() => (addOneBtn.textContent = '+1 city'), 2000);
@@ -1570,6 +1717,7 @@ addOneBtn.addEventListener('click', () => {
   const id = cityId(best);
   undrop(id);
   state.appended = [...(state.appended ?? []).filter((x) => x !== id), id];
+  pushEdit({ kind: 'add', id });
   if (isCustom(selected)) {
     const k = selected - generatedCount;
     state.custom[k].push(id);
@@ -1589,14 +1737,18 @@ addOneBtn.addEventListener('click', () => {
   rebuildKeeping(cityId(anchor));
 });
 
-// Takes the latest "+1 city" addition back out of the open route.
+// Takes back the latest change made by hand to the open route: a city added, or its order changed.
 $('addOneUndo').addEventListener('click', () => {
   if (selected === null) return;
+  const edit = lastEdit(selected);
+  if (!edit) return;
+  state.edits = state.edits!.filter((e) => e !== edit);
+  if (edit.kind === 'order') return writeOrder(selected, edit.key, edit.before);
+  const id = edit.id;
   const batch = batches[selected];
-  const here = new Set(batch.map(cityId));
-  const id = [...(state.appended ?? [])].reverse().find((x) => here.has(x));
-  if (!id) return;
-  state.appended = state.appended!.filter((x) => x !== id);
+  state.appended = (state.appended ?? []).filter((x) => x !== id);
+  // One brought in from beyond the search goes back out of sight.
+  if (state.extra) state.extra = state.extra.filter((c) => `${c[0]},${c[1]}` !== id);
   if (isCustom(selected)) {
     const k = selected - generatedCount;
     state.custom[k] = state.custom[k].filter((x) => x !== id);
@@ -1611,6 +1763,16 @@ $('addOneUndo').addEventListener('click', () => {
   delete state.moved[id];
   save();
   rebuildKeeping(keep ? cityId(keep) : null);
+});
+
+// Back to the order the route was worked out in. Cities added by hand stay, at the end.
+$('orderReset').addEventListener('click', () => {
+  if (selected === null) return;
+  const key = orderKey(selected);
+  const before = key ? state.orders?.[key] : undefined;
+  if (!key || !before) return;
+  pushEdit({ kind: 'order', key, before });
+  writeOrder(selected, key, null);
 });
 $('markNone').addEventListener('click', () => markAll(false));
 
@@ -1930,6 +2092,8 @@ function addCityItems(c: MapCity, items: [string, () => void][]): void {
       if (anchor) {
         items.push([`Add to route ${target + 1}`, () => {
           undrop(id);
+          state.appended = [...(state.appended ?? []).filter((x) => x !== id), id];
+          pushEdit({ kind: 'add', id });
           state.moved[id] = cityId(anchor);
           save();
           rebuildKeeping(cityId(anchor));
@@ -1937,6 +2101,12 @@ function addCityItems(c: MapCity, items: [string, () => void][]): void {
       }
     }
     items.push(['Start a custom route with this city', () => addToCustom(state.custom.length)]);
+  }
+  // Its place in the open route.
+  if (selected !== null && c.batch === selected) {
+    const open = selected;
+    if (c.order > 0) items.push(['Move up', () => moveCity(open, c.order, c.order - 1)]);
+    if (c.order < batches[open].length - 1) items.push(['Move down', () => moveCity(open, c.order, c.order + 1)]);
   }
   // Cities moved in by hand, or in a custom route, have their own way out below.
   if (c.batch >= 0 && inCustom < 0 && !(id in state.moved)) {

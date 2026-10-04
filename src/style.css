@@ -145,6 +145,9 @@ ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: col
 #cities li.looted label { color: var(--muted); text-decoration: line-through; }
 /* Found already looted by someone else: amber, so it stands out from the player's own looted cities. */
 #cities li.already label { color: #e0954a; }
+/* Where a dragged city would land. */
+#cities li.drop-before { box-shadow: 0 -2px 0 var(--accent); }
+#cities li.drop-after { box-shadow: 0 2px 0 var(--accent); }
 #cities .n { width: 1.6em; text-align: right; color: var(--muted); }
 #cities .xz { flex: 1; }
 #cities .hop { color: var(--muted); font-size: 12px; }

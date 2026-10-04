@@ -36,7 +36,7 @@ The same steps are in the app under **How to use**.
    right-clicking a city on the map or in the route's list. Looted cities are left out of exports.
 4. **Share where you have been.** The best way is to upload your map of the End
    to the [community webmap](https://map.diorite.xyz/?dim=the_end) with its
-   upload button: by default, areas on the webmap are left out of the routes
+   upload button: areas on the webmap are left out of the routes
    once the app's webmap data is refreshed. Your looted ticks are saved in your
    browser only; you can also send them in from **Share progress**, and once
    accepted those cities show as looted for all players. Or send the exported
@@ -58,9 +58,11 @@ considered and how they are grouped:
 - **Longest flight between cities:** no hop inside a route is longer than this.
   Cities that can't be reached in a full route are left without a route. If no route of the
   chosen size fits at all, smaller routes are made, down to 2 cities.
-- **Leave out cities already on the webmap.**
 - **Advanced → Angle:** stay near the diagonals or near the axes, or search
   every direction (the default).
+- **Advanced → Include cities already on the webmap:** cities in areas on the
+  community webmap are normally left out of the routes, since someone has been
+  there. Tick this to route them anyway.
 - **Advanced → World seed:** for using the app with another world. Everything
   specific to the About Oliver server (the webmap filter and shading, the shared
   looted list and submitting to it) is hidden for other seeds.
@@ -109,7 +111,17 @@ from route** to take it out; it stays on the map as a faint diamond, and
 **Put back in its route** on the same menu returns it.
 
 **+1 city**, in an open route, adds the city nearest the route's last stop that
-is not in any route, as the new last stop. The **↶** button beside it takes the latest one out.
+is not in any route, as the new last stop. It also looks up to 4,000 blocks
+from that last stop, past the edge of the search area, and takes a city from
+there if that one is closer (2,500 blocks with another seed or beyond 100,000
+blocks out, where cities are generated on the spot). 
+
+Cities added to a route by hand, with **+1 city** or **Add to route**, go at the
+end of it. To change a route's order, drag a city up or down its list, or
+right-click it and choose **Move up** or **Move down**. The **↶** button takes
+back the latest change to the open route, whether a city added or a change of
+order. **Original order** puts the route back in the order it was worked out
+in; cities you added stay, at the end.
 
 **Rebuild routes without looted** regroups the remaining cities into fresh routes
 once some have been looted.
