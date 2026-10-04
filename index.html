@@ -42,18 +42,10 @@
           <label>To <input id="maxDist" type="number" min="1000" step="500" required /></label>
         </div>
         <p class="hint">Blocks from 0,0 along the longer axis.</p>
-        <fieldset id="quadrants">
-          <legend>Quadrants</legend>
-          <label><input type="checkbox" value="NW" /> NW <small>−x −z</small></label>
-          <label><input type="checkbox" value="NE" /> NE <small>+x −z</small></label>
-          <label><input type="checkbox" value="SW" /> SW <small>−x +z</small></label>
-          <label><input type="checkbox" value="SE" /> SE <small>+x +z</small></label>
-        </fieldset>
         </div>
-        <div class="subhead">
-          <strong>Fine tuning</strong>
-          <span class="hint">Optional. Changes here apply straight away.</span>
-        </div>
+        <details id="fineTuning">
+          <summary><strong>Fine tuning (optional)</strong></summary>
+          <p class="hint">Route size and shape, flight limits and which cities to leave out. Changes here apply straight away.</p>
         <div class="row">
           <label>Cities per route <input id="batchSize" type="number" min="1" step="1" /></label>
           <label>
@@ -75,9 +67,17 @@
         </div>
         <label>Longest flight between cities <input id="maxHop" type="number" min="0" step="250" /></label>
         <p class="hint">In blocks. Cities that can't be reached in a full route within this are left without a route (small faint diamonds on the map); right-click one to add it to a route. 0 means no limit. If no route of the chosen size fits at all, smaller routes are made, down to 2 cities.</p>
+        <fieldset id="quadrants" class="band-only">
+          <legend>Quadrants</legend>
+          <label><input type="checkbox" value="NW" /> NW <small>−x −z</small></label>
+          <label><input type="checkbox" value="NE" /> NE <small>+x −z</small></label>
+          <label><input type="checkbox" value="SW" /> SW <small>−x +z</small></label>
+          <label><input type="checkbox" value="SE" /> SE <small>+x +z</small></label>
+        </fieldset>
         <p id="exploredNote" class="hint aomc-only"></p>
         <label class="check"><input id="skipPossible" type="checkbox" /> Leave out cities that are possibly looted</label>
-        <p class="hint">Possibly looted means within 2,000 blocks of a city someone found already looted. Right-click a city and choose <em>Mark as found already looted</em> when you arrive to an empty ship.</p>
+        <p class="hint">Possibly looted means within 2,000 blocks of a city someone found already looted. Right-click a city and choose <em>Mark as looted by someone else</em> when you arrive to an empty ship.</p>
+        </details>
         <details id="advanced">
           <summary>Advanced</summary>
           <label id="angleBox" class="band-only">
@@ -121,9 +121,10 @@
         The map shows the last search that worked.
       </p>
       <p id="stats" class="stats"></p>
+      <p id="pathNote" class="hint path-note" hidden></p>
       <div class="row">
-        <button id="regroup" type="button" title="Rebuild the routes from cities that are not looted yet">Rebuild routes without looted</button>
-        <button id="regroupUndo" type="button" hidden>Put looted back</button>
+        <button id="regroup" type="button" title="Make fresh routes from the cities that are not looted yet">Regroup remaining cities</button>
+        <button id="regroupUndo" type="button" title="Undo the regrouping: put the looted cities back in the routes" aria-label="Undo the regrouping" class="iconbtn" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5 4 10l5 5"/><path d="M4 10h10a5 5 0 0 1 0 10h-3"/></svg></button>
       </div>
       <div id="batchBusy" class="busy" role="status" hidden>
         <progress></progress>
@@ -209,11 +210,11 @@
       <div id="menu" hidden></div>
       <div id="reportBox" class="popup" role="dialog" aria-labelledby="reportTitle" hidden>
         <form id="reportForm">
-          <strong id="reportTitle">Report missing structure</strong>
+          <strong id="reportTitle">Report incorrect</strong>
           <p id="reportWhere" class="hint"></p>
           <label class="check report-missing"><input type="radio" name="reportKind" value="missing" /> The End City is here, but it has no ship</label>
           <label class="check report-missing"><input type="radio" name="reportKind" value="no-city" /> There is no End City here at all</label>
-          <label class="check report-found"><input type="radio" name="reportKind" value="found" /> The ship is here</label>
+          <label class="check report-found"><input type="radio" name="reportKind" value="found" /> The ship is here after all</label>
           <label class="field">
             <strong>Your Minecraft username</strong>
             <input id="reportName" autocomplete="off" spellcheck="false" maxlength="16" placeholder="Optional" />
@@ -226,16 +227,20 @@
         </form>
       </div>
       <footer id="mapbar">
+        <div id="picked" hidden>
+          <span id="pickedText"></span>
+          <button id="pickedCopy" type="button" class="textlink">copy coordinates</button>
+        </div>
         <span class="key"><i class="dot"></i> in a route</span>
-        <span class="key"><i class="cross">×</i> looted, or reported missing</span>
-        <span class="key"><i class="cross amber">×</i> found already looted</span>
-        <span class="key"><i class="dot hollow"></i> possibly looted</span>
-        <span class="key"><i class="dash"></i> earlier flight path?</span>
-        <span class="key"><i class="dot diamond"></i> not in a route</span>
+        <span class="key" data-key="looted"><i class="cross">×</i> looted, or reported missing</span>
+        <span class="key" data-key="already"><i class="cross amber">×</i> looted by someone else</span>
+        <span class="key" data-key="possible"><i class="dot hollow"></i> possibly looted</span>
+        <span class="key" data-key="path"><i class="dash"></i> earlier flight path?</span>
+        <span class="key" data-key="outside"><i class="dot diamond"></i> not in a route</span>
         <span class="key"><i class="dot square area"></i> search area</span>
         <span class="key aomc-only"><i class="dot square green"></i> already on the webmap</span>
-        <span class="controls mouse-only">Drag to pan · scroll or use the slider to zoom · click a city to open its route and jump to it in the list · right-click for options</span>
-        <span class="controls touch-only">Two fingers to move the map · pinch or use the slider to zoom · tap a city to open its route · press and hold for options</span>
+        <span class="controls mouse-only">Drag to pan · scroll or use the slider to zoom · click a city to open its route and see its details · right-click for options</span>
+        <span class="controls touch-only">Two fingers to move the map · pinch or use the slider to zoom · tap a city to open its route and see its details · press and hold for options</span>
         <span id="cursor"></span>
       </footer>
     </main>
@@ -247,19 +252,20 @@
         <h2>How to use</h2>
         <h3>1. Pick a route</h3>
         <p>
-          Routes are in the <button type="button" class="jump" data-target="batches">route list</button>, numbered
-          outward from 0,0. Pick one there, select any city on the map, or type your position into the x and z boxes on the map
+          Routes are in the <button type="button" class="jump" data-target="batches">route list</button>, ordered
+          by total flying: Route 1 takes the least, counting the flight from 0,0 (or from your coordinates, in a
+          search near them) to its first city plus the route itself. Pick one there, select any city on the map, or type your position into the x and z boxes on the map
           (or right-click the map and choose <em>Set my position here</em>) and press <em>Nearest route</em>.
         </p>
         <h3>2. Get the waypoints into your map mod</h3>
         <p>
-          With a route open, choose <em>Xaero's Minimap</em> to copy waypoints to paste into its waypoint file, or
-          <em>JourneyMap / Other</em> to copy chat lines that become clickable waypoints. Xaero's Minimap can take
-          chat lines too.
+          With a route open, choose your map mod, enter your username, then go down the route's list pressing
+          <em>copy</em> beside each city and pasting it into chat: each one becomes a waypoint. For Xaero's Minimap, a whole route can also be pasted
+          into its waypoint file.
         </p>
         <h3>3. Tick cities off as you loot them</h3>
         <p>
-          Use the checkboxes in the route, or right-click a city on the map or in the route's list (on a touch screen, press and hold it on the map). Looted cities turn into an × and are left
+          If you like, delete each city's waypoint in your map mod as you go, so you can keep track in game of where you still need to go. Use the checkboxes in the route, or right-click a city on the map or in the route's list (on a touch screen, press and hold it on the map). Looted cities turn into an × and are left
           out of exports.
         </p>
         <div class="aomc-only help-step">
@@ -276,7 +282,7 @@
         </p>
         <p>
           Got there and the elytra was already gone? Right-click the city and choose
-          <em>Mark as found already looted</em>. It turns amber, with a <code>!</code> in the route. Someone hunted there before, so cities within 2,000 blocks of it
+          <em>Mark as looted by someone else</em>. It turns amber, with a <code>!</code> in the route. Someone hunted there before, so cities within 2,000 blocks of it
           are shown as possibly looted: a hollow dot on the map and a <code>?</code> in the route (hover over it to see why). A city stops being possibly looted once a city
           between it and the already-looted one is looted the ordinary way, since the earlier hunter did not come
           that way. Send these in too, and everyone gets the warning.
@@ -291,12 +297,14 @@
         </div>
         <h3>Good to know</h3>
         <ul>
+          <li class="mouse-only">Moving the map: drag to pan, scroll or use the slider to zoom, click a city to open its route, right-click for options.</li>
+          <li class="touch-only">Moving the map: two fingers to pan, pinch or use the slider to zoom, tap a city to open its route, press and hold for options.</li>
           <li>For Minecraft Java Edition, not Bedrock. It follows the 1.19–1.21 world generation rules and is in use on a 26.2 server; a future version that changes End generation could put cities elsewhere.</li>
           <li>A <em>?</em> after a city in a route means its ship is uncertain: it is an unusually tight fit in that city, and one ship like that turned out not to exist. Most may be fine. If you visit one, right-click it and report whether the ship was there.</li>
-          <li>Found a city with no ship, or no city where the app shows one? Right-click it, choose <em>Report missing structure</em> and pick which. Once accepted, it shows as a grey × for everyone and is left out of routes; hover over it to see what was reported.</li>
+          <li>Found a city with no ship, or no city where the app shows one? Right-click it, choose <em>Report incorrect…</em> and pick which. Once accepted, it shows as a grey × for everyone and is left out of routes; hover over it to see what was reported.</li>
           <li>Small faint diamonds are cities with a ship that didn't fit a route. Right-click one to add it to the route you have open.</li>
           <li>Far from 0,0? In <button type="button" class="jump" data-target="settings">Search settings</button>, choose <em>Near my coordinates</em> to search a circle around your coordinates.</li>
-          <li>To change the order of a route, drag a city up or down its list, or right-click it (press and hold on the map) and choose <em>Move up</em> or <em>Move down</em>. Cities you add to a route go at the end. <em>↶</em> takes back your last change, and <em>Original order</em> undoes the reordering but keeps the cities you added.</li>
+          <li>To change the order of a route, drag a city up or down its list, or right-click it (press and hold on the map) and choose <em>Move up</em> or <em>Move down</em>. Cities you add to a route go at the end. The undo arrow takes back your last change, and <em>Original order</em> undoes the reordering but keeps the cities you added.</li>
           <li>Want to plan your own? Right-click any city and choose <em>Start a custom route with this city</em>, then right-click others to add them. Custom routes sit at the top of the route list.</li>
           <li class="aomc-only">Green shading is terrain already on the community webmap; cities there are left out of routes, unless you tick <em>Include cities already on the webmap</em> under Advanced.</li>
           <li><button type="button" class="jump" data-target="settings">Search settings</button> changes the distance, angle, route size and longest flight.</li>
@@ -311,72 +319,92 @@
           <p id="starCredit" class="hint credit"></p>
         </div>
         <p id="detailMeta" class="hint"></p>
+        <p id="routeDone" class="route-done" hidden>Route complete: every city in it is looted.</p>
+        <details id="exportBox" class="fold" open>
+        <summary><strong>Add this route to your map mod</strong></summary>
         <div class="segmented" role="radiogroup" aria-label="Map mod">
           <label><input type="radio" name="mapMod" value="xaero" /> Xaero's Minimap</label>
           <label><input type="radio" name="mapMod" value="journeymap" /> JourneyMap / Other</label>
         </div>
 
-        <div id="xaeroPanel" class="panel">
-          <div class="row">
-            <button id="copy" type="button" class="primary">Copy waypoints</button>
-          </div>
-          <ol class="steps">
-            <li>Press <em>Copy waypoints</em>. Looted cities are left out.</li>
-            <li>Close Minecraft.</li>
-            <li>
-              Open the waypoint file in <code>.minecraft/xaero/minimap/&lt;your server&gt;/dim%1/</code> and paste at
-              the end of it.
-            </li>
-          </ol>
-          <p class="hint">
-            No waypoint file in that folder yet?
-            <button id="download" type="button" class="textlink">Download one</button> and put it there instead.
-          </p>
-        </div>
-
         <div id="chatPanel" class="panel">
-          <p id="chatTitle"><strong>Or add them through chat</strong>, without closing Minecraft:</p>
-          <label class="field">
+          <p id="chatNameLine" class="hint" hidden>
+            Whispering to <strong id="chatNameShown"></strong> ·
+            <button id="chatNameChange" type="button" class="textlink">change</button>
+          </p>
+          <label id="chatNameField" class="field">
             <strong>Your Minecraft username</strong>
             <input id="chatName" autocomplete="off" spellcheck="false" maxlength="16" placeholder="Type your username here, e.g. Steve_01" />
           </label>
-          <div class="row">
-            <button id="copyChat" type="button" class="primary">Copy first line</button>
-            <button id="copyChatRestart" type="button">Start over</button>
-          </div>
-          <p id="chatDone" class="hint chat-done" hidden></p>
-          <p class="hint">
-            Minecraft's chat takes one message at a time, so the lines are copied one by one: press the button, paste
-            into chat and send, come back and press it again for the next. Do this while in the End.
-            <span id="chatModNote"></span> Looted cities are left out. Each city below also has its own
-            <em>chat</em> button.
-          </p>
+          <ol class="steps">
+            <li>In the End, press <em>copy</em> beside the first city in the list below, then paste into chat and send.</li>
+            <li id="chatModNote"></li>
+            <li>Do the same for each city, going down the list. A city's <em>copy</em> button stays lit once you have copied it.</li>
+            <li>(Optional) As you loot each city, delete its waypoint in your map mod, so you can keep track in game of where you still need to go.</li>
+          </ol>
           <p id="chatHint" class="hint"></p>
         </div>
 
-        <div id="journeymapPanel" class="panel" hidden>
+        <details id="xaeroPanel" class="more">
+          <summary>Upload all at once, with the waypoint file</summary>
+          <div class="row">
+            <button id="copy" type="button">Copy waypoints</button>
+          </div>
+          <ol class="steps">
+            <li>Press <em>Copy waypoints</em> and close Minecraft.</li>
+            <li>
+              Paste at the end of the waypoint file in
+              <code>.minecraft/xaero/minimap/&lt;your server&gt;/dim%1/</code>
+            </li>
+          </ol>
           <p class="hint">
-            <strong>Other map mods:</strong> these lines are written for JourneyMap. Mods that pick coordinates out of
-            chat may read them too, but that hasn't been tested. Failing that, each line still shows the city's
-            x, y and z to enter by hand.
+            No file there yet? <button id="download" type="button" class="textlink">Download one</button> and put it
+            in that folder.
           </p>
-          <p class="hint">
-            Already have Xaero's Minimap waypoints for this server? JourneyMap can read them: add the route the Xaero
-            way, then press <em>Import External</em> in JourneyMap's Waypoint Manager.
-          </p>
-        </div>
+        </details>
 
-        <div class="row">
-          <button id="markAll" type="button">Mark all looted</button>
-          <button id="markNone" type="button">Clear</button>
-          <button id="addOne" type="button" title="Add the nearest city to this route's last stop that is not in any route, as the new last stop. It may come from just outside the search area">+1 city</button>
-          <button id="addOneUndo" type="button" title="Undo the last change to this route: a city added, or its order changed" aria-label="Undo the last change to this route" hidden>↶</button>
-          <button id="orderReset" type="button" title="Put this route back in the order it was worked out in. Cities you added stay, at the end" hidden>Original order</button>
-          <button id="customDelete" type="button" hidden>Delete this custom route</button>
+        <details id="journeymapPanel" class="more" hidden>
+          <summary>Other map mods, or Xaero waypoints you already have</summary>
+          <p class="hint">
+            The lines are written for JourneyMap. Other mods that read coordinates from chat may pick them up
+            (untested); if not, each line still shows x, y and z to enter by hand.
+          </p>
+          <p class="hint">
+            JourneyMap can also read Xaero's Minimap waypoints: press <em>Import External</em> in its Waypoint
+            Manager.
+          </p>
+        </details>
+
+        </details>
+
+        <p id="currentCity" class="current-city" hidden></p>
+        <div class="row actions">
+          <button id="nextCity" type="button" title="Mark the current city as looted and move on to the next one">Next city</button>
+          <button id="nextCityAlready" type="button" title="The current city's elytra was already gone: mark it as looted by someone else and move on to the next one">Looted by someone else</button>
         </div>
+        <p id="routeNote" class="hint" role="status" hidden></p>
+        <div class="row quiet">
+          <button id="markAll" type="button" class="textlink">Mark all looted</button>
+          <button id="markNone" type="button" class="textlink">Clear all</button>
+          <button id="customDelete" type="button" class="textlink" hidden>Delete this custom route</button>
+          <span class="undo-redo">
+            <button id="addOneUndo" type="button" class="iconbtn" title="Undo your last change to this route: looted marks, a city added, or its order changed" aria-label="Undo your last change to this route" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5 4 10l5 5"/><path d="M4 10h10a5 5 0 0 1 0 10h-3"/></svg></button>
+            <button id="routeRedo" type="button" class="iconbtn" title="Redo the change you just undid" aria-label="Redo the change you just undid" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5 5 5-5 5"/><path d="M20 10H10a5 5 0 0 0 0 10h3"/></svg></button>
+          </span>
+        </div>
+        <p class="hint">
+          <em>Next city</em> ticks off the city you are at (circled on the map). If its elytra was already gone,
+          press <em>Looted by someone else</em> instead. You can also tick any city in the list.
+        </p>
         <ol id="cities"></ol>
+        <div class="row actions">
+          <button id="addOne" type="button" title="Add the nearest city to this route's last stop that is not in any route, as the new last stop. It may come from just outside the search area">Add +1 city to route</button>
+          <button id="orderReset" type="button" title="Put this route back in the order it was worked out in. Cities you added stay, at the end" hidden>Original order</button>
+        </div>
       </div>
     </section>
+
+    <button id="backToMap" type="button" hidden>↑ Map</button>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

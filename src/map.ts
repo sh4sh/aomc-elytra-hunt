@@ -1,4 +1,5 @@
 import type { Trajectory } from './trajectory';
+import { waypointName } from './xaero';
 import type { Explored } from './explored';
 import type { City, Filters } from './types';
 
@@ -554,16 +555,17 @@ export class EndMap {
       ctx.fillText('you', x + 10, y - 6);
     }
 
-    // Where the open route begins.
-    if (route.length) {
-      const x = this.sx(route[0].city.x), y = this.sy(route[0].city.z);
+    // Where the player is up to in the open route: its first city that is not looted yet.
+    const current = route.find((c) => !c.visited);
+    if (current) {
+      const x = this.sx(current.city.x), y = this.sy(current.city.z);
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.arc(x, y, 8, 0, Math.PI * 2);
       ctx.stroke();
       ctx.font = 'bold 11px system-ui, sans-serif';
-      const label = 'Start here';
+      const label = `${current === route[0] ? 'Start here' : 'Current city'}: ${waypointName(current.batch, current.order)}`;
       const width = ctx.measureText(label).width;
       // A dark plate behind the words keeps them readable over other cities.
       ctx.fillStyle = 'rgba(15, 12, 23, 0.85)';

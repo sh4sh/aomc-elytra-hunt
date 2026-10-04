@@ -13,26 +13,29 @@ or another map mod as waypoints.
 
 The same steps are in the app under **How to use**.
 
-1. **Pick a route.** Routes are in the route list, numbered outward from 0,0.
+1. **Pick a route.** Routes are in the route list, ordered by total flying: Route 1 takes the
+   least, counting the flight from 0,0 (or from your coordinates, in a search
+   near them) to its first city plus the route itself.
    Pick one there, select any city on the map, or type your position into the
    x and z boxes on the map and press **Nearest route**. **Go to route #** jumps to a route by number.
 2. **Get the waypoints into your map mod.** With a route open, choose one:
-   - **Xaero's Minimap:** press **Copy waypoints**, close Minecraft, and paste
-     at the end of the waypoint file in
+   - **Xaero's Minimap:** enter your username, then go down the route's list
+     pressing **copy** beside each city and pasting it into chat while in the End. Each shows up as
+     a shared waypoint with an Add button. To add a whole route at once, open
+     **Upload all at once, with the waypoint file**: press **Copy waypoints**, close
+     Minecraft, and paste at the end of the waypoint file in
      `.minecraft/xaero/minimap/<your server>/dim%1/`. Back that file up first.
      If the folder has no waypoint file yet, use **Download one** instead.
-     Or, without closing Minecraft, add them through chat: enter your username
-     and press the copy button once per line, pasting each into chat while in
-     the End. Xaero's Minimap shows each as a shared waypoint with an Add
-     button.
-   - **JourneyMap / Other:** enter your username, then press the copy button
-     once per line, pasting each into chat while in the End (Minecraft's chat
-     takes one message at a time). They are whispers
+   - **JourneyMap / Other:** enter your username, then go down the route's
+     list pressing **copy** beside each city and pasting it into chat while in
+     the End (Minecraft's chat takes one message at a time). They are whispers
      to yourself, and JourneyMap makes each one clickable. If you also have
      Xaero's waypoints for the server, JourneyMap's Waypoint Manager can import
      them with **Import External**. Other map mods that read coordinates from
      chat may pick the lines up too; that is untested.
-3. **Tick cities off as you loot them**, with the checkboxes in the route or by
+3. **Tick cities off as you loot them**, and, if you like, delete each
+   one's waypoint in your map mod as you go, so you can keep track in game of where you still
+   need to go. Tick them with the checkboxes in the route or by
    right-clicking a city on the map or in the route's list. Looted cities are left out of exports.
 4. **Share where you have been.** The best way is to upload your map of the End
    to the [community webmap](https://map.diorite.xyz/?dim=the_end) with its
@@ -51,13 +54,16 @@ considered and how they are grouped:
   End, or a circle of a chosen radius around coordinates you enter.
 - **From / To:** how far from 0,0 to look, measured along the longer axis. A search
   covering more than 25,000 cities is refused with a prompt to narrow it.
-- **Quadrants:** which quarters of the map to search.
+- **Fine tuning (optional):** folded away until you open it; changes there
+  apply straight away. It holds the settings listed next, up to Advanced.
 - **Cities per route:** 27 fills one shulker box; anything from 1 to 500 works.
 - **Route shape:** compact clusters, or lines heading outward. For lines you can also set
   how far a line may stray to either side of straight.
 - **Longest flight between cities:** no hop inside a route is longer than this.
   Cities that can't be reached in a full route are left without a route. If no route of the
   chosen size fits at all, smaller routes are made, down to 2 cities.
+- **Quadrants:** which quarters of the map to search (Near End Spawn only).
+- **Leave out cities that are possibly looted.**
 - **Advanced → Angle:** stay near the diagonals or near the axes, or search
   every direction (the default).
 - **Advanced → Include cities already on the webmap:** cities in areas on the
@@ -83,7 +89,7 @@ Only cities with a ship are ever shown, since only ships hold elytra.
   joining them) has been looted the ordinary way: the earlier hunter did not
   come that way.
   When you arrive to an empty ship, right-click the city and choose **Mark as
-  found already looted**; these marks are sent along with **Share progress**.
+  looted by someone else**; these marks are sent along with **Share progress**.
   **Leave out cities that are possibly looted** keeps them out of the routes.
 - A dashed amber line is a possible earlier flight path: a guess at where a
   previous hunter flew, drawn when three or more cities found already looted
@@ -110,22 +116,27 @@ Right-click a city (on the map or in the route's list) and choose **Remove
 from route** to take it out; it stays on the map as a faint diamond, and
 **Put back in its route** on the same menu returns it.
 
-**+1 city**, in an open route, adds the city nearest the route's last stop that
+**Next city**, in an open route, marks the city you are at (the first one not
+looted yet, circled on the map) as looted and moves on to the next. **Looted by
+someone else** does the same when the elytra was already gone.
+
+**Add +1 city to route**, below a route's list, adds the city nearest the route's last stop that
 is not in any route, as the new last stop. It also looks up to 4,000 blocks
 from that last stop, past the edge of the search area, and takes a city from
 there if that one is closer (2,500 blocks with another seed or beyond 100,000
 blocks out, where cities are generated on the spot). It never picks a city
 that is being left out as already on the webmap or as possibly looted.
 
-Cities added to a route by hand, with **+1 city** or **Add to route**, go at the
+Cities added to a route by hand, with **Add +1 city to route** or the right-click **Add to route**, go at the
 end of it. To change a route's order, drag a city up or down its list, or
-right-click it and choose **Move up** or **Move down**. The **↶** button takes
-back the latest change to the open route, whether a city added or a change of
-order. **Original order** puts the route back in the order it was worked out
+right-click it and choose **Move up** or **Move down**. The undo arrow, under
+**Next city**, takes back your latest change to the open route: looted marks
+(a single city, **Mark all looted** or **Clear all**), a city added, or a change
+of order. The redo arrow beside it makes an undone change again. **Original order** puts the route back in the order it was worked out
 in; cities you added stay, at the end.
 
-**Rebuild routes without looted** regroups the remaining cities into fresh routes
-once some have been looted.
+**Regroup remaining cities** makes fresh routes from the cities that are not
+looted yet; the undo arrow beside it puts the looted ones back.
 
 **Custom routes:** right-click any city and choose **Start a custom route with
 this city**, then right-click others to add them to it. Custom routes are listed

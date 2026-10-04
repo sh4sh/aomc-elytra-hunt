@@ -17,7 +17,7 @@ body {
   margin: 0;
   height: 100vh;
   display: grid;
-  grid-template-columns: var(--left, 300px) 7px minmax(0, 1fr) 7px var(--right, 320px);
+  grid-template-columns: var(--left, 300px) 7px minmax(0, 1fr) 7px var(--right, 350px);
   background: var(--bg);
   color: var(--text);
 }
@@ -97,11 +97,26 @@ progress { width: 100%; accent-color: var(--accent); }
 
 details { border-top: 1px solid var(--line); padding-top: 10px; }
 details[open] { display: flex; flex-direction: column; gap: 8px; }
+details[hidden] { display: none; }
+/* A fold inside a panel: no rule above it, its heading in the text colour. */
+details.fold { border-top: 0; padding-top: 0; }
+details.fold > summary { color: var(--text); }
+label.field[hidden] { display: none; }
 summary { cursor: pointer; color: var(--muted); }
 #settings { border-top: 0; padding-top: 0; }
 #settings summary { color: var(--text); }
 #share summary { color: var(--text); font-weight: 600; }
 #settings .settings-title { font-weight: 600; }
+/* Folded by default, but not to be missed: a full-width bar in the accent colour. */
+#fineTuning { border-top: 0; padding-top: 0; }
+#fineTuning > summary {
+  padding: 8px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--text);
+}
+#fineTuning[open] > summary { margin-bottom: 2px; }
 #settingsSummary { display: block; margin: 2px 0 0 16px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 #settings[open] #settingsSummary { display: none; }
 
@@ -119,7 +134,7 @@ ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: col
 #batches li button {
   width: 100%;
   display: grid;
-  grid-template-columns: 12px 1fr auto;
+  grid-template-columns: 12px 1fr auto auto;
   align-items: center;
   gap: 8px;
   text-align: left;
@@ -130,10 +145,19 @@ ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: col
 .swatch { width: 12px; height: 12px; border-radius: 50%; }
 .count { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 
+/* A long route scrolls inside its own box, so the rest of the panel stays in reach. */
+#cities {
+  max-height: max(220px, 45vh);
+  overflow-y: auto;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 2px 0;
+}
+#cities li { flex-shrink: 0; }
 #cities li label {
   flex-direction: row;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   padding: 4px 6px;
   border-radius: 6px;
   color: var(--text);
@@ -142,6 +166,7 @@ ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: col
   cursor: pointer;
 }
 #cities li label:hover, #cities li.hot label { background: var(--panel-2); }
+#cities li.current .n { color: var(--accent); font-weight: 700; }
 #cities li.looted label { color: var(--muted); text-decoration: line-through; }
 /* Found already looted by someone else: amber, so it stands out from the player's own looted cities. */
 #cities li.already label { color: #e0954a; }
@@ -149,7 +174,47 @@ ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: col
 #cities li.drop-before { box-shadow: 0 -2px 0 var(--accent); }
 #cities li.drop-after { box-shadow: 0 2px 0 var(--accent); }
 #cities .n { width: 1.6em; text-align: right; color: var(--muted); }
-#cities .xz { flex: 1; }
+#cities .xz { flex: 1; min-width: 0; }
+#cities .xz span { white-space: nowrap; }
+#cities .hop[hidden] { display: none; }
+#cities .chat { flex: none; padding: 0 4px; font-size: 11px; color: var(--muted); background: none; }
+/* In a narrow panel the distance from the last city gives way first, so the coordinates keep their line. */
+#cities { container-type: inline-size; scrollbar-width: thin; }
+@container (max-width: 300px) {
+  #cities .hop:not(.start) { display: none; }
+}
+#cities .chat:hover { color: var(--text); }
+/* Already copied this visit: stays in the accent colour, to show how far down the list you are. */
+#cities .chat.was-copied { color: var(--accent); border-color: var(--accent); }
+#cities .chat.flash { animation: chat-flash 1.5s ease-out; }
+@keyframes chat-flash {
+  0%, 25% { background: var(--accent); color: #1a1326; border-color: var(--accent); }
+  100% { background: transparent; }
+}
+/* Holding a row opens its menu; the phone's own text selection and callout would get in the way. */
+@media (pointer: coarse) {
+  #cities li label { -webkit-touch-callout: none; user-select: none; }
+}
+.path-note span { display: block; }
+/* The route's own buttons: one tidy row that fills the panel's width, a size down from the main buttons. */
+.actions { gap: 6px; }
+.actions button { flex: 1 1 auto; padding: 5px 8px; font-size: 13px; }
+/* Lesser actions as plain links, so they do not compete with the row above. */
+.row.quiet { gap: 14px; font-size: 12px; }
+.current-city { margin: 6px 0 0; display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.current-city[hidden] { display: none; }
+.current-city strong { color: var(--text); font-size: 14px; }
+/* Undo and redo: small drawn arrows, quiet until hovered. */
+.iconbtn { border: 0; background: none; padding: 2px; color: var(--muted); line-height: 0; }
+.iconbtn:hover:not(:disabled) { color: var(--text); }
+.iconbtn:disabled { opacity: 0.3; }
+.iconbtn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.iconbtn[hidden] { display: none; }
+.row.quiet { align-items: center; }
+.undo-redo { margin-left: auto; display: flex; gap: 10px; }
+.route-done { color: var(--muted); font-size: 13px; }
+.controls[hidden] { display: none; }
+.key[hidden] { display: none; }
 #cities .hop { color: var(--muted); font-size: 12px; }
 #cities .hop.start { color: var(--accent); font-weight: 600; }
 .segmented { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--accent); border-radius: 8px; overflow: hidden; margin: 6px 0 8px; }
@@ -160,17 +225,22 @@ ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: col
 .segmented input { position: absolute; opacity: 0; pointer-events: none; }
 .panel { display: flex; flex-direction: column; gap: 8px; }
 .panel[hidden] { display: none; }
+/* Second-choice ways of doing something, folded away under a quiet heading. */
+details.more { display: flex; flex-direction: column; gap: 8px; }
+details.more[hidden] { display: none; }
+details.more > summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+details.more[open] > summary { margin-bottom: 8px; color: var(--text); }
+details.more > * + * { margin-top: 8px; }
 label.field strong { color: var(--text); font-size: 13px; }
 label.field input { border-color: var(--accent); }
-#cities .chat { padding: 0 6px; font-size: 11px; color: var(--muted); background: none; }
-#cities .chat:hover { color: var(--text); }
-.chat-done .chat { padding: 0 6px; margin: 0 2px 2px 0; font-size: 11px; color: var(--muted); }
-.chat-done .chat:hover, .chat-done .chat.latest { color: var(--text); }
 
 main { position: relative; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 /* One finger scrolls the page as usual; the browser's own pinch and double-tap zoom stay off the map. */
 #map { width: 100%; flex: 1; min-height: 0; display: block; cursor: grab; touch-action: pan-x pan-y; }
 #map.dragging { cursor: grabbing; }
+/* What is known about the city last clicked, on a line of its own above the legend. */
+#picked { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; color: var(--text); font-size: 13px; font-variant-numeric: tabular-nums; }
+#picked[hidden] { display: none; }
 #tooltip {
   position: absolute;
   pointer-events: none;
@@ -235,6 +305,7 @@ main { position: relative; min-width: 0; min-height: 0; display: flex; flex-dire
 #menu .menu-title { padding: 4px 8px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 #menu button { border: 0; background: none; text-align: left; padding: 6px 8px; }
 #menu button:hover { background: var(--panel-2); }
+#menu .menu-rule { height: 1px; margin: 4px 0; background: var(--line); }
 .goose { display: block; margin-top: 4px; cursor: pointer; width: fit-content; }
 #gooseTally { display: block; color: var(--text); }
 #gooseTally:empty { display: none; }
@@ -280,11 +351,26 @@ body:not(.other-seed) .other-only { display: none; }
 /* A fixed width, so the bar does not reflow as the numbers change. */
 #cursor { margin-left: auto; color: var(--text); font-variant-numeric: tabular-nums; white-space: pre; width: 31ch; text-align: right; overflow: hidden; }
 
+/* Narrow screens only: a way back up to the map from far down a route's list. */
+#backToMap { display: none; }
 @media (max-width: 900px) {
+  #backToMap:not([hidden]) {
+    display: block;
+    position: fixed;
+    right: 12px;
+    bottom: 12px;
+    z-index: 40;
+    padding: 8px 14px;
+    border-radius: 999px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  }
   body { grid-template-columns: 1fr; grid-template-rows: auto 60vh auto; height: auto; }
   .resizer { display: none; }
   .wide-only { display: none; }
   #sidebar, #detail { border: 0; }
+  /* The route's cities are the last thing on the page here, so they run on with it: a scroll box inside
+     a scrolling page is awkward under a finger. */
+  #cities { max-height: none; overflow-y: visible; border: 0; padding: 0; }
 }
 
 /* Touch screens: iPhones zoom the whole page in when a field with text smaller than 16px is focused,
@@ -293,6 +379,12 @@ body:not(.other-seed) .other-only { display: none; }
 .touch-only { display: none; }
 @media (pointer: coarse) {
   .touch-only { display: inline; }
+  li.touch-only { display: list-item; }
+  /* Room for a fingertip. */
+  .actions button { padding: 9px 8px; }
+  .row.quiet .textlink { padding: 8px 0; font-size: 14px; }
+  .iconbtn { padding: 8px; }
+  .iconbtn svg { width: 22px; height: 22px; }
   .mouse-only { display: none; }
   input:not([type]), input[type='number'], textarea, select,
   #pager input, #pager select, #locate input, #angleFrom { font-size: 16px; }

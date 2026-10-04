@@ -66,6 +66,10 @@ interface Saved {
   orders?: Record<string, string[]>;
   /** Changes made by hand to routes, oldest first, so the latest can be taken back. */
   edits?: RouteEdit[];
+  /** Whether the "add to your map mod" section of a route is unfolded. */
+  exportOpen?: boolean;
+  /** Changes that undo took back, latest last, so they can be made again. */
+  redo?: RouteEdit[];
   /** Keep cities near one found already looted out of the routes. */
   skipPossible?: boolean;
   /** Minecraft username to whisper JourneyMap chat lines to, or empty to write them for public chat. */
@@ -205,10 +209,23 @@ const batchTitle = (i: number) => (isCustom(i) ? `Custom ${i - generatedCount + 
 /** Cities that could not be fitted into a full batch within the longest-flight limit. */
 let unbatched = 0;
 /** A change made by hand to a route: a city added to it, or its order changed (`before` being the order it had, if any). */
-type RouteEdit = { kind: 'add'; id: string } | { kind: 'order'; key: string; before: string[] | null };
+type RouteEdit =
+  | { kind: 'add'; id: string }
+  | { kind: 'order'; key: string; before: string[] | null }
+  // Looted marks changed: what each city's mark was before (0 not looted, 1 looted, 2 looted by someone else).
+  | { kind: 'marks'; before: [string, 0 | 1 | 2][] }
+  // Only ever waiting to be redone: a city that undo took back out, and how it had been held in its route.
+  | { kind: 'readd'; id: string; anchor?: string; custom?: number; extra?: FoundCity };
 const pushEdit = (e: RouteEdit) => {
   state.edits = [...(state.edits ?? []), e].slice(-100);
+  // A fresh change leaves nothing to redo.
+  state.redo = [];
 };
+/** Call just before changing the looted marks of these cities, so the change can be taken back. */
+function recordMarks(cities: { x: number; z: number }[]): void {
+  pushEdit({ kind: 'marks', before: cities.map((c) => [cityId(c), tracker.isAlready(c) ? 2 : tracker.has(c) ? 1 : 0]) });
+  save();
+}
 
 /** The cities in the order the ids give; any not among them keep their order, at the end. */
 function inOrder(batch: City[], ids: string[]): City[] {
@@ -247,16 +264,21 @@ function moveCity(i: number, from: number, to: number): void {
   writeOrder(i, key, ids);
 }
 
-/** The latest hand-made change to route i that can still be taken back. */
-function lastEdit(i: number): RouteEdit | undefined {
+/** The latest hand-made change to route i that can still be taken back (or, from the redo list, made again). */
+function lastEdit(i: number, from: RouteEdit[] | undefined = state.edits): RouteEdit | undefined {
   const here = new Set(batches[i].map(cityId));
   const key = orderKey(i);
-  return [...(state.edits ?? [])].reverse().find((e) => (e.kind === 'add' ? here.has(e.id) : e.key === key));
+  return [...(from ?? [])].reverse().find((e) =>
+    e.kind === 'order' ? e.key === key
+    : e.kind === 'marks' ? e.before.some(([id]) => here.has(id))
+    : e.kind === 'readd' ? (e.custom !== undefined ? isCustom(i) && i - generatedCount === e.custom : !!e.anchor && here.has(e.anchor))
+    : here.has(e.id),
+  );
 }
 
 const REMOVED_NOTE = 'removed from its route by hand';
 const MAPPED_NOTE = 'has a ship, but already on the webmap';
-const EXTRA_NOTE = 'outside the search area, added with +1 city';
+const EXTRA_NOTE = 'outside the search area, added with Add +1 city to route';
 /** How far past the search area "+1 city" will look from a route's last stop, in blocks. */
 const BEYOND_BLOCKS = 4000;
 /**
@@ -422,6 +444,9 @@ function rebuild(done?: () => void): void {
 /** Where routes are built and numbered outward from: the centre of an around-a-position search, else 0,0. */
 const startPoint = () => (state.filters.around ? { x: state.filters.around.x, z: state.filters.around.z } : { x: 0, z: 0 });
 
+/** Total flying along a route, in blocks. */
+const routeLength = (b: City[]) => b.reduce((t, c, k) => t + (k ? Math.hypot(c.x - b[k - 1].x, c.z - b[k - 1].z) : 0), 0);
+
 /** Second half of a rebuild: take the generated batches and apply hand-made moves and custom batches. */
 function finishRebuild(
   made: { batches: City[][]; size: number },
@@ -431,6 +456,10 @@ function finishRebuild(
   // Cities taken out by hand leave after batching, so removing one never reshuffles the other routes.
   const dropped = new Set(state.dropped ?? []);
   batches = dropped.size ? made.batches.map((b) => b.filter((c) => !dropped.has(cityId(c)))) : made.batches;
+  // Route 1 is the least flying in all: from the point of origin to the route's first city, then along the route.
+  const origin = startPoint();
+  const cost = new Map(batches.map((b) => [b, (b.length ? Math.hypot(b[0].x - origin.x, b[0].z - origin.z) : 0) + routeLength(b)]));
+  batches = [...batches].sort((p, q) => cost.get(p)! - cost.get(q)!);
   usedBatchSize = made.size;
   // Hand-made moves are applied after batching, so adding a city to a batch never reshuffles the others.
   // A move holds while both cities still exist and its target is in a batch of its own accord.
@@ -557,6 +586,17 @@ function renderMap(): void {
     if (state.seed === DEFAULT_SEED) for (const city of webmapCities ?? []) mark(city, 'mapped', 'in an area on the webmap');
     for (const city of lootedCities()) mark(city, 'looted', 'looted');
   }
+  // The legend only explains marks that are on the map just now.
+  const legend = {
+    looted: cities.some((c) => (c.visited && !c.already) || c.missing),
+    already: cities.some((c) => c.already),
+    possible: cities.some((c) => c.possible),
+    path: earlierPaths().length > 0,
+    outside: cities.some((c) => c.batch < 0 && !c.visited && !c.missing),
+  };
+  for (const key of document.querySelectorAll<HTMLElement>('#mapbar [data-key]')) {
+    key.hidden = !legend[key.dataset.key as keyof typeof legend];
+  }
   map.setScene({
     cities,
     selectedBatch: selected,
@@ -597,30 +637,40 @@ function renderBatches(): void {
   const total = batches.reduce((n, b) => n + b.length, 0);
   const done = batches.reduce((n, b) => n + looted(b), 0);
   const maybeCount = batches.flat().filter(possible).length;
+  // Earlier flight paths get a line of their own, and only when there is something to say: the paths
+  // drawn, then the reports that nearly made one and what stopped them.
+  const study = earlierStudy();
+  const pathNote = $('pathNote');
+  pathNote.hidden = !study.paths.length && !study.near.length;
+  pathNote.replaceChildren(
+    ...[...study.paths.map((t) => `Possible earlier flight path (${describeTrajectory(t)}).`), ...study.near.map((why) => `${why[0].toUpperCase()}${why.slice(1)}.`)].map(
+      (text) => Object.assign(document.createElement('span'), { textContent: text }),
+    ),
+  );
+  // The line itself says what a player acts on; the rest of the tally is there on hover.
+  $('stats').title = total
+    ? [
+        shipless ? `${fmt(shipless)} cities without a ship left out` : '',
+        skipped ? `${fmt(skipped)} left out as already on the webmap` : '',
+        unbatched ? `${fmt(unbatched)} without a route (faint diamonds)` : '',
+        uncertainShips.size ? `${fmt(uncertainShips.size)} with an uncertain ship (marked ?)` : '',
+        maybeCount ? `${fmt(maybeCount)} possibly looted (marked ?)` : '',
+        state.excluded.length ? `${fmt(state.excluded.length)} looted removed from routes` : '',
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : '';
   $('stats').textContent = total
     ? `${fmt(total)} cities · ${fmt(batches.length)} routes · ${fmt(done)} looted` +
-      (shipless ? ` · ${fmt(shipless)} without a ship left out` : '') +
-      (skipped ? ` · ${fmt(skipped)} left out as already mapped` : '') +
       (usedBatchSize < state.batchSize && generatedCount
         ? ` · no route of ${state.batchSize} fits here, so routes of ${usedBatchSize} were made`
-        : '') +
-      (unbatched ? ` · ${fmt(unbatched)} without a route` : '') +
-      (uncertainShips.size ? ` · ${fmt(uncertainShips.size)} with an uncertain ship (marked ?)` : '') +
-      (maybeCount ? ` · ${fmt(maybeCount)} possibly looted (marked ?)` : '') +
-      earlierPaths()
-        .map((t) => ` · possible earlier flight path (${describeTrajectory(t)})`)
-        .join('') +
-      // Reports that nearly made a path, and what stopped them.
-      earlierStudy()
-        .near.map((why) => ` · ${why}`)
-        .join('') +
-      (state.excluded.length ? ` · ${fmt(state.excluded.length)} looted removed from routes` : '')
+        : '')
     : unbatched
       ? `No routes: ${fmt(unbatched)} cities, but no two are within the longest flight of each other. Raise the longest flight.`
       : 'No cities yet. Set a range and press Find cities.';
 
   $<HTMLButtonElement>('regroup').disabled = done === 0;
-  $<HTMLButtonElement>('regroupUndo').hidden = state.excluded.length === 0;
+  $<HTMLButtonElement>('regroupUndo').disabled = state.excluded.length === 0;
 
   const pages = Math.max(1, Math.ceil(generatedCount / PAGE_SIZE));
   // Jump to the selected batch's page when the selection changes, e.g. after clicking a city on the map.
@@ -672,8 +722,23 @@ function renderBatches(): void {
       const count = document.createElement('span');
       count.className = 'count';
       count.textContent = `${n}/${batch.length}`;
-      btn.append(sw, name, count);
-      btn.addEventListener('click', () => select(i, true));
+      // How much flying the route takes in all: getting to its first city, then the route itself.
+      const start = startPoint();
+      const reach = batch.length ? Math.hypot(batch[0].x - start.x, batch[0].z - start.z) : 0;
+      const along = routeLength(batch);
+      const round = (blocks: number) => fmt(Math.round(blocks / 100) * 100);
+      const dist = document.createElement('span');
+      dist.className = 'count';
+      dist.textContent = batch.length ? `${round(reach + along)} blocks` : '';
+      btn.title = batch.length
+        ? `About ${round(reach + along)} blocks of flying in all: ${round(reach)} to reach the first city, then ${round(along)} along the route`
+        : '';
+      btn.append(sw, name, dist, count);
+      btn.addEventListener('click', () => {
+        select(i, true);
+        // On a narrow screen the map and the route's details are further down the page: go there.
+        if (matchMedia('(max-width: 900px)').matches) $('map').scrollIntoView({ block: 'start', behavior: 'smooth' });
+      });
       li.append(btn);
       return li;
     }),
@@ -699,26 +764,50 @@ function renderDetail(): void {
   });
   $('detailTitle').textContent = batchTitle(i);
   $('customDelete').hidden = !isCustom(i);
-  $('addOneUndo').hidden = !lastEdit(i);
+  // Always there, faded when there is nothing to undo or redo, so they do not jump in and out.
+  $<HTMLButtonElement>('addOneUndo').disabled = !lastEdit(i);
+  $<HTMLButtonElement>('routeRedo').disabled = !lastEdit(i, state.redo);
+  // Nothing left to export from a route that is all looted: say so in place of the map-mod section.
+  const complete = batch.length > 0 && batch.every((c) => tracker.has(c));
+  $('routeDone').hidden = !complete;
+  $('exportBox').hidden = complete;
+  // Which city the two buttons below act on: the first one not looted yet.
+  const at = batch.findIndex((c) => !tracker.has(c));
+  const currentCity = $('currentCity');
+  currentCity.hidden = at < 0;
+  if (at >= 0) {
+    currentCity.replaceChildren(
+      Object.assign(document.createElement('strong'), { textContent: `Current city: ${waypointName(i, at)}` }),
+      Object.assign(document.createElement('span'), { textContent: `${at + 1} of ${batch.length} · ${xzText(batch[at])}` }),
+    );
+  }
+  ($('nextCity') as HTMLButtonElement).disabled = batch.every((c) => tracker.has(c));
+  ($('nextCityAlready') as HTMLButtonElement).disabled = batch.every((c) => tracker.has(c));
   const orderedKey = orderKey(i);
   $('orderReset').hidden = isCustom(i) || !orderedKey || !state.orders?.[orderedKey];
   renderStars(batch, color(i));
-  showChatStep();
   let longest = 0;
   batch.forEach((c, k) => {
     if (k) longest = Math.max(longest, Math.hypot(c.x - batch[k - 1].x, c.z - batch[k - 1].z));
   });
+  // The line says what matters at a glance; the breakdown is there on hover.
+  const reach = batch.length ? Math.hypot(batch[0].x - startPoint().x, batch[0].z - startPoint().z) : 0;
+  const hundreds = (blocks: number) => fmt(Math.round(blocks / 100) * 100);
   $('detailMeta').textContent =
-    `${batch.length} cities · ${looted(batch)} looted · about ${fmt(Math.round(length / 100) * 100)} blocks of flying` +
-    ` · longest flight ${fmt(Math.round(longest))}` +
+    `${batch.length} cities · ${looted(batch)} looted · about ${hundreds(length + reach)} blocks` +
     (!isCustom(i) && batch.length < usedBatchSize ? ' · short route' : '') +
     (isCustom(i) && !batch.length ? ' · right-click a city on the map to add it' : '');
+  $('detailMeta').title = batch.length
+    ? `${hundreds(reach)} blocks to reach the first city, then ${hundreds(length)} along the route. Longest flight between cities: ${fmt(Math.round(longest))}.`
+    : '';
 
   $('cities').replaceChildren(
     ...batch.map((c, k) => {
       const li = document.createElement('li');
       li.classList.toggle('looted', tracker.has(c));
       li.classList.toggle('hot', c === hot);
+      // The first city not looted yet is where the player is up to: the "current city" circle on the map.
+      li.classList.toggle('current', c === batch.find((x) => !tracker.has(x)));
       const label = document.createElement('label');
       label.title = waypointName(i, k);
       const unsure = uncertainShips.has(cityId(c));
@@ -731,13 +820,14 @@ function renderDetail(): void {
       if (maybeNote) label.title += ` · ${maybeNote}`;
       const already = tracker.isAlready(c);
       li.classList.toggle('already', already);
-      if (already) label.title += ' · found already looted';
+      if (already) label.title += ' · looted by someone else';
       if (tracker.isShared(c)) {
         // On the shared list: looted for everyone, so it can't be unticked here.
         box.disabled = true;
         label.title += ' · on the shared looted list';
       }
       box.addEventListener('change', () => {
+        recordMarks([c]);
         tracker.set(c, box.checked);
         render();
       });
@@ -746,22 +836,39 @@ function renderDetail(): void {
       n.textContent = String(k + 1);
       const xz = document.createElement('span');
       xz.className = 'xz';
-      xz.textContent = xzText(c) + (unsure || maybe ? ' ?' : '') + (already ? ' !' : '');
+      // Two halves that each stay whole: in a narrow panel the z drops to a second line, never cut off,
+      // and the marks stay with it.
+      const half = (text: string) => Object.assign(document.createElement('span'), { textContent: text });
+      xz.append(half(`x: ${c.x},`), ' ', half(`z: ${c.z}` + (unsure || maybe ? ' ?' : '') + (already ? ' !' : '')));
       const hop = document.createElement('span');
       hop.className = 'hop';
-      hop.textContent = k ? `+${fmt(Math.round(Math.hypot(c.x - batch[k - 1].x, c.z - batch[k - 1].z)))}` : 'start here';
+      hop.textContent = k ? `+${fmt(Math.round(Math.hypot(c.x - batch[k - 1].x, c.z - batch[k - 1].z)))}` : 'start';
       if (!k) hop.classList.add('start');
       const chat = document.createElement('button');
       chat.type = 'button';
       chat.className = 'chat';
-      chat.textContent = 'chat';
-      chat.title = 'Copy this city as a chat line that becomes a waypoint';
+      chat.textContent = 'copy';
+      chat.title = 'Copy this city as a chat line: paste it into Minecraft chat to make its waypoint';
+      chat.classList.toggle('was-copied', copiedLines.has(copiedKey(c)));
       chat.addEventListener('click', async (e) => {
         // Inside the row's label: don't let the click tick the looted box.
         e.preventDefault();
         e.stopPropagation();
-        chat.textContent = (await copyText(cityChatLine(c, i, k))) ? 'copied' : 'failed';
-        setTimeout(() => (chat.textContent = 'chat'), 1500);
+        const ok = await copyText(cityChatLine(c, i, k));
+        chat.textContent = ok ? 'copied' : 'failed';
+        if (ok) {
+          copiedLines.add(copiedKey(c));
+          chat.classList.add('was-copied');
+        }
+        // Lights up, then fades back while the word is showing.
+        chat.classList.toggle('flash', ok);
+        // The longer word takes the distance's place for a moment, so the coordinates do not move.
+        hop.hidden = true;
+        setTimeout(() => {
+          chat.textContent = 'copy';
+          chat.classList.remove('flash');
+          hop.hidden = false;
+        }, 1500);
       });
       // Rows can be dragged into a new order. Nothing is drawn for it until a drag is under way.
       li.draggable = batch.length > 1;
@@ -792,13 +899,39 @@ function renderDetail(): void {
         const to = (after ? k + 1 : k) - (from < k ? 1 : 0);
         moveCity(i, from, to);
       });
-      label.append(box, n, xz, hop);
-      label.append(chat);
+      label.append(box, n, xz, hop, chat);
       // The same menu as right-clicking the city's dot on the map.
+      const menuAt = (x: number, y: number) => {
+        const city: MapCity = { city: c, batch: i, order: k, color: color(i), visited: tracker.has(c), possible: possible(c) };
+        openMenu(city, x, y, c);
+      };
       label.addEventListener('contextmenu', (e) => {
         e.preventDefault();
-        const city: MapCity = { city: c, batch: i, order: k, color: color(i), visited: tracker.has(c), possible: possible(c) };
-        openMenu(city, e.clientX, e.clientY, c);
+        menuAt(e.clientX, e.clientY);
+      });
+      // Under a finger, pressing and holding opens it, as on the map. Not every phone treats that as a right-click.
+      let hold: ReturnType<typeof setTimeout> | undefined;
+      let held = false;
+      label.addEventListener('pointerdown', (e) => {
+        if (e.pointerType === 'mouse') return;
+        const { clientX, clientY } = e;
+        held = false;
+        hold = setTimeout(() => {
+          held = true;
+          menuAt(clientX, clientY);
+        }, 550);
+      });
+      // A finger that moves is scrolling the list, not holding.
+      for (const type of ['pointermove', 'pointerup', 'pointercancel', 'pointerleave'] as const) {
+        label.addEventListener(type, (e) => {
+          if (type === 'pointermove' && Math.hypot(e.movementX, e.movementY) < 4) return;
+          clearTimeout(hold);
+        });
+      }
+      label.addEventListener('click', (e) => {
+        // Lifting the finger after a hold must not tick the looted box as well.
+        if (held) e.preventDefault();
+        held = false;
       });
       label.addEventListener('mouseenter', () => setHot(c));
       label.addEventListener('mouseleave', () => setHot(null));
@@ -982,6 +1115,7 @@ function applyResult(seed: string, filters: Filters, cities: FoundCity[]): void 
     state.extra = [];
     state.orders = {};
     state.edits = [];
+    state.redo = [];
     state.custom = [];
     tracker = new Tracker(seed);
     tracker.setShared(seed === DEFAULT_SEED ? sharedLooted : [], seed === DEFAULT_SEED ? sharedAlready : []);
@@ -1076,6 +1210,8 @@ form.addEventListener('submit', (e) => {
     return;
   }
   if (!filters.around && !filters.quadrants.length) {
+    // The quadrants are folded away under Fine tuning: open it so the message has somewhere to show.
+    $<HTMLDetailsElement>('fineTuning').open = true;
     quadBoxes[0].setCustomValidity('Pick at least one quadrant.');
     quadBoxes[0].reportValidity();
     return;
@@ -1545,69 +1681,11 @@ function cityChatLine(c: City, i: number, k: number): string {
     ? shareLine(c, name, k < 99 ? String(k + 1) : 'EC', batchColor(i), state.chatName)
     : chatLine(c, name, state.chatName);
 }
-// Chat lines are copied one at a time, because Minecraft's chat sends a single message per paste:
-// several lines pasted together arrive as one long message. Each press copies the next line.
-const copyChatBtn = $('copyChat');
-let chatStep = 0;
-/** Which route the stepping belongs to, so opening another route starts from its first line. */
-let chatStepRoute = '';
-const currentChatLines = () => {
-  const i = selected;
-  return i === null
-    ? []
-    : batches[i].flatMap((c, k) => (tracker.has(c) ? [] : [{ name: waypointName(i, k), line: cityChatLine(c, i, k) }]));
-};
-function showChatStep(): void {
-  const lines = currentChatLines();
-  const route = selected === null ? '' : state.mapMod + batches[selected].map(cityId).join(';');
-  if (route !== chatStepRoute) {
-    chatStepRoute = route;
-    chatStep = 0;
-  }
-  if (chatStep >= lines.length) chatStep = lines.length ? lines.length : 0;
-  copyChatBtn.textContent = !lines.length
-    ? 'Nothing to copy'
-    : chatStep >= lines.length
-      ? `All ${lines.length} copied`
-      : `Copy ${lines[chatStep].name} (${chatStep + 1} of ${lines.length})`;
-  (copyChatBtn as HTMLButtonElement).disabled = !lines.length || chatStep >= lines.length;
-
-  // The lines copied so far, each one a button that copies it again without moving the count.
-  const done = $('chatDone');
-  done.hidden = !chatStep;
-  done.replaceChildren(
-    'Copied so far (press one to copy it again): ',
-    ...lines.slice(0, chatStep).map(({ name, line }, k) => {
-      const again = document.createElement('button');
-      again.type = 'button';
-      again.className = 'chat';
-      again.textContent = name;
-      if (k === chatStep - 1) again.classList.add('latest');
-      again.addEventListener('click', async () => {
-        again.textContent = (await copyText(line)) ? 'copied' : 'failed';
-        setTimeout(() => (again.textContent = name), 1500);
-      });
-      return again;
-    }),
-  );
-}
-/** When the last line was copied, so the second press of a double click does not skip a line. */
-let chatCopiedAt = 0;
-copyChatBtn.addEventListener('click', async () => {
-  const lines = currentChatLines();
-  if (chatStep >= lines.length || Date.now() - chatCopiedAt < 700) return;
-  if (await copyText(lines[chatStep].line)) {
-    chatCopiedAt = Date.now();
-    chatStep++;
-    showChatStep();
-  } else {
-    copyChatBtn.textContent = 'Copy failed. Try again';
-  }
-});
-$('copyChatRestart').addEventListener('click', () => {
-  chatStep = 0;
-  showChatStep();
-});
+// Chat lines are copied a city at a time with the copy button on each row of the route's list, because
+// Minecraft's chat sends a single message per paste. Rows already copied this visit are remembered,
+// so the player can see how far down the list they have got.
+const copiedLines = new Set<string>();
+const copiedKey = (c: City) => `${state.mapMod}:${cityId(c)}`;
 
 const modRadios = [...document.querySelectorAll<HTMLInputElement>('input[name="mapMod"]')];
 function showMapMod(): void {
@@ -1618,11 +1696,10 @@ function showMapMod(): void {
   }
   $('xaeroPanel').hidden = state.mapMod !== 'xaero';
   $('journeymapPanel').hidden = state.mapMod !== 'journeymap';
-  $('chatTitle').hidden = state.mapMod !== 'xaero';
   $('chatModNote').textContent =
     state.mapMod === 'xaero'
-      ? "Xaero's Minimap shows each line as a shared waypoint with an Add button."
-      : 'JourneyMap makes each line clickable, and clicking it creates the waypoint.';
+      ? 'Press Add on the waypoint that appears in chat.'
+      : 'Click the coordinates that appear in chat to make the waypoint.';
   showChatHint();
 }
 for (const r of modRadios) {
@@ -1637,29 +1714,50 @@ showMapMod();
 
 const chatNameInput = $<HTMLInputElement>('chatName');
 function showChatHint(): void {
-  const city: City = { x: 12040, z: -11832, source: 'seed' };
-  const example =
-    state.mapMod === 'xaero'
-      ? shareLine(city, 'EC 1-01', '1', batchColor(0), state.chatName)
-      : chatLine(city, 'EC 1-01', state.chatName);
-  $('chatHint').replaceChildren(
-    state.chatName
-      ? 'Lines are whispers to you, so only you see them: '
-      : 'Without a username the lines go to public chat, where everyone sees them: ',
-    Object.assign(document.createElement('code'), { textContent: example }),
-  );
+  $('chatHint').textContent =
+    (state.chatName
+      ? 'The lines are whispers to yourself: only you see them.'
+      : 'Without a username the lines go to public chat, where everyone sees them.') + ' Looted cities are left out.';
 }
 chatNameInput.value = state.chatName;
+// Once a username is in, the box gives way to one line saying who the lines go to.
+function showChatName(editing = false): void {
+  const set = !!state.chatName && !editing;
+  $('chatNameField').hidden = set;
+  $('chatNameLine').hidden = !set;
+  $('chatNameShown').textContent = state.chatName;
+}
 chatNameInput.addEventListener('input', () => {
   state.chatName = cleanUsername(chatNameInput.value);
   if (chatNameInput.value !== state.chatName) chatNameInput.value = state.chatName;
   save();
   showChatHint();
 });
+// Done typing: leaving the box, or Enter.
+chatNameInput.addEventListener('blur', () => showChatName());
+chatNameInput.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  chatNameInput.blur();
+});
+$('chatNameChange').addEventListener('click', () => {
+  showChatName(true);
+  chatNameInput.focus();
+});
+showChatName();
+
+// The whole "get it into your map mod" section folds away, and stays as the player left it.
+const exportBox = $<HTMLDetailsElement>('exportBox');
+exportBox.open = state.exportOpen ?? true;
+exportBox.addEventListener('toggle', () => {
+  state.exportOpen = exportBox.open;
+  save();
+});
 showChatHint();
 
 function markAll(v: boolean): void {
   if (selected === null) return;
+  recordMarks(batches[selected]);
   for (const c of batches[selected]) tracker.set(c, v);
   render();
 }
@@ -1676,6 +1774,27 @@ $('customDelete').addEventListener('click', () => {
 $('markAll').addEventListener('click', () => markAll(true));
 
 // Adds the city nearest the route's last stop that has no route, at the end: a quick way to fly a little further.
+// Marks the city the player is at as looted, which moves "current city" on to the next one.
+// With `already`, as looted by someone else before the player got there.
+function nextCity(already: boolean): void {
+  if (selected === null) return;
+  const batch = batches[selected];
+  const at = batch.findIndex((c) => !tracker.has(c));
+  if (at < 0) return;
+  recordMarks([batch[at]]);
+  if (already) tracker.setAlready(batch[at], true);
+  else tracker.set(batch[at], true);
+  render();
+  // Bring the new current city into view in the list.
+  const next = batch.findIndex((c) => !tracker.has(c));
+  document.querySelectorAll('#cities li')[next < 0 ? at : next]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+$('nextCity').addEventListener('click', () => nextCity(false));
+$('nextCityAlready').addEventListener('click', () => nextCity(true));
+
+// Changes of a kind this version does not know (saved by another version) cannot be taken back: forget them.
+if (state.edits) state.edits = state.edits.filter((e) => ['add', 'order', 'marks'].includes(e.kind));
+if (state.redo) state.redo = state.redo.filter((e) => ['add', 'order', 'marks', 'readd'].includes(e.kind));
 // Additions made before changes were kept track of can still be taken back.
 if (!state.edits && state.appended?.length) state.edits = state.appended.map((id) => ({ kind: 'add', id }));
 const addOneBtn = $('addOne');
@@ -1715,7 +1834,7 @@ addOneBtn.addEventListener('click', () => {
   if (beyond) state.extra = [...(state.extra ?? []), beyond];
   const say = (text: string) => {
     addOneBtn.textContent = text;
-    setTimeout(() => (addOneBtn.textContent = '+1 city'), 2000);
+    setTimeout(() => (addOneBtn.textContent = 'Add +1 city to route'), 2000);
   };
   if (!best) return say(batch.length ? 'No city without a route' : 'Add a first city from the map');
   const id = cityId(best);
@@ -1741,32 +1860,106 @@ addOneBtn.addEventListener('click', () => {
   rebuildKeeping(cityId(anchor));
 });
 
-// Takes back the latest change made by hand to the open route: a city added, or its order changed.
-$('addOneUndo').addEventListener('click', () => {
-  if (selected === null) return;
-  const edit = lastEdit(selected);
-  if (!edit) return;
-  state.edits = state.edits!.filter((e) => e !== edit);
-  if (edit.kind === 'order') return writeOrder(selected, edit.key, edit.before);
-  const id = edit.id;
-  const batch = batches[selected];
-  state.appended = (state.appended ?? []).filter((x) => x !== id);
-  // One brought in from beyond the search goes back out of sight.
-  if (state.extra) state.extra = state.extra.filter((c) => `${c[0]},${c[1]}` !== id);
-  if (isCustom(selected)) {
-    const k = selected - generatedCount;
-    state.custom[k] = state.custom[k].filter((x) => x !== id);
+/**
+ * Carry out a recorded change on the open route: put things back as the record says. Returns the
+ * record of what it just replaced, which is what undoes it again (so undo and redo are the same act).
+ */
+function applyEdit(i: number, edit: RouteEdit): RouteEdit {
+  const reopenCustom = (k: number) => {
     save();
     rebuild(() => {
       selected = generatedCount + k < batches.length ? generatedCount + k : null;
     });
     render();
-    return;
+  };
+  if (edit.kind === 'order') {
+    const now = isCustom(i) ? [...state.custom[i - generatedCount]] : (state.orders?.[edit.key] ?? null);
+    writeOrder(i, edit.key, edit.before);
+    return { kind: 'order', key: edit.key, before: now };
   }
-  const keep = batch.find((x) => !(cityId(x) in state.moved));
-  delete state.moved[id];
+  if (edit.kind === 'marks') {
+    const cities = edit.before.map(([id]) => {
+      const [x, z] = id.split(',').map(Number);
+      return { x, z };
+    });
+    const now: RouteEdit = { kind: 'marks', before: cities.map((c) => [cityId(c), tracker.isAlready(c) ? 2 : tracker.has(c) ? 1 : 0]) };
+    // Each city goes back to the mark it had. Marks on the shared list are not the player's to remove.
+    edit.before.forEach(([, was], n) => {
+      if (was === 2) tracker.setAlready(cities[n], true);
+      else {
+        tracker.set(cities[n], was === 1);
+        if (was === 1) tracker.setAlready(cities[n], false);
+      }
+    });
+    // Possibly-looted cities may be in or out of the routes again.
+    if (state.skipPossible) rebuildKeeping(batches[i].length ? cityId(batches[i][0]) : null);
+    else render();
+    // Say so when a city could not go back to not looted.
+    const stuck = edit.before.filter(([, was], n) => was === 0 && tracker.isShared(cities[n])).length;
+    if (stuck) {
+      const note = $('routeNote');
+      note.textContent = `${stuck === 1 ? '1 city stays' : `${stuck} cities stay`} looted: on the shared looted list, which is the same for everyone.`;
+      note.hidden = false;
+      setTimeout(() => (note.hidden = true), 6000);
+    }
+    return now;
+  }
+  const id = edit.id;
+  if (edit.kind === 'add') {
+    // Take the added city back out, noting how it was held so it can be put back.
+    const batch = batches[i];
+    const extra = state.extra?.find((c) => `${c[0]},${c[1]}` === id);
+    const back: RouteEdit = { kind: 'readd', id, anchor: state.moved[id], custom: isCustom(i) ? i - generatedCount : undefined, extra };
+    state.appended = (state.appended ?? []).filter((x) => x !== id);
+    // One brought in from beyond the search goes back out of sight.
+    if (state.extra) state.extra = state.extra.filter((c) => c !== extra);
+    if (isCustom(i)) {
+      const k = i - generatedCount;
+      state.custom[k] = state.custom[k].filter((x) => x !== id);
+      reopenCustom(k);
+      return back;
+    }
+    const keep = batch.find((x) => !(cityId(x) in state.moved));
+    delete state.moved[id];
+    save();
+    rebuildKeeping(keep ? cityId(keep) : null);
+    return back;
+  }
+  // Put a city that was taken back out into the route again, at the end.
+  undrop(id);
+  state.appended = [...(state.appended ?? []).filter((x) => x !== id), id];
+  if (edit.extra) state.extra = [...(state.extra ?? []), edit.extra];
+  if (edit.custom !== undefined && state.custom[edit.custom]) {
+    state.custom[edit.custom].push(id);
+    delete state.moved[id];
+    reopenCustom(edit.custom);
+  } else if (edit.anchor) {
+    state.moved[id] = edit.anchor;
+    save();
+    rebuildKeeping(edit.anchor);
+  }
+  return { kind: 'add', id };
+}
+
+// Undo takes back the latest change made by hand to the open route; redo makes it again.
+$('addOneUndo').addEventListener('click', () => {
+  if (selected === null) return;
+  const edit = lastEdit(selected);
+  if (!edit) return;
+  state.edits = state.edits!.filter((e) => e !== edit);
+  state.redo = [...(state.redo ?? []), applyEdit(selected, edit)].slice(-100);
   save();
-  rebuildKeeping(keep ? cityId(keep) : null);
+  renderDetail();
+});
+$('routeRedo').addEventListener('click', () => {
+  if (selected === null) return;
+  const edit = lastEdit(selected, state.redo);
+  if (!edit) return;
+  state.redo = state.redo!.filter((e) => e !== edit);
+  // Straight onto the list of changes: a redo must not wipe the redos still waiting behind it.
+  state.edits = [...(state.edits ?? []), applyEdit(selected, edit)].slice(-100);
+  save();
+  renderDetail();
 });
 
 // Back to the order the route was worked out in. Cities added by hand stay, at the end.
@@ -1845,15 +2038,15 @@ const reportForm = $<HTMLFormElement>('reportForm');
 const reportName = $<HTMLInputElement>('reportName');
 let reportCity: City | null = null;
 /** Open the window for a city. `found` asks about a ship being present; otherwise about something missing. */
-function openReport(city: City, found = false): void {
+/** Ask what the player found at a city. `missing` offers "no ship" and "no city"; `found` offers "the ship is here". */
+function openReport(city: City, missing: boolean, found: boolean): void {
   reportCity = city;
-  $('reportTitle').textContent = found ? 'Report a ship' : 'Report missing structure';
   $('reportWhere').textContent = `At ${xzText(city)}`;
   reportForm.reset();
   // Only the choices that fit are offered, with the first of them selected.
-  for (const row of reportForm.querySelectorAll<HTMLElement>('.report-missing')) row.hidden = found;
+  for (const row of reportForm.querySelectorAll<HTMLElement>('.report-missing')) row.hidden = !missing;
   for (const row of reportForm.querySelectorAll<HTMLElement>('.report-found')) row.hidden = !found;
-  reportForm.querySelector<HTMLInputElement>(`input[value="${found ? 'found' : 'missing'}"]`)!.checked = true;
+  reportForm.querySelector<HTMLInputElement>(`input[value="${missing ? 'missing' : 'found'}"]`)!.checked = true;
   reportName.value = state.chatName;
   reportBox.hidden = false;
   reportName.focus();
@@ -1982,25 +2175,48 @@ map.onHover = (c, px, py) => {
   }
   tooltip.hidden = !c;
   if (!c) return;
-  tooltip.textContent =
-    c.batch < 0
-      ? c.missing
-        ? `${xzText(c.city)} · ${c.note}`
-        : `${xzText(c.city)} · not in a route: ${c.note}`
-      : `${waypointName(c.batch, c.order)} · ${xzText(c.city)}${c.visited ? (tracker.isAlready(c.city) ? ' · found already looted' : ' · looted') : ''}` +
-        (c.possible ? ` · ${possibleNote(c.city) ?? POSSIBLE_NOTE}` : '') +
-        (uncertainShips.has(cityId(c.city)) ? ' · ship uncertain' : '');
+  tooltip.textContent = cityLine(c);
   tooltip.style.left = `${px + 14}px`;
   tooltip.style.top = `${py + 14}px`;
 };
+/** One line about a city on the map: its name, where it is and anything known about it. */
+const cityLine = (c: MapCity): string =>
+  c.batch < 0
+    ? c.missing
+      ? `${xzText(c.city)} · ${c.note}`
+      : `${xzText(c.city)} · not in a route: ${c.note}`
+    : `${waypointName(c.batch, c.order)} · ${xzText(c.city)}${c.visited ? (tracker.isAlready(c.city) ? ' · looted by someone else' : ' · looted') : ''}` +
+      (c.possible ? ` · ${possibleNote(c.city) ?? POSSIBLE_NOTE}` : '') +
+      (uncertainShips.has(cityId(c.city)) ? ' · ship uncertain' : '');
+
+// The city last clicked stays described under the map, where a hover tip cannot (there is no hover under a finger).
+let picked: City | null = null;
+function showPicked(c: MapCity): void {
+  picked = c.city;
+  const extra: string[] = [];
+  if (c.batch >= 0) {
+    extra.push(`stop ${c.order + 1} of ${batches[c.batch].length} in ${batchTitle(c.batch)}`);
+    const prev = batches[c.batch][c.order - 1];
+    if (prev) extra.push(`${fmt(Math.round(Math.hypot(c.city.x - prev.x, c.city.z - prev.z)))} blocks from the stop before`);
+  }
+  if (you) extra.push(`${fmt(Math.round(Math.hypot(c.city.x - you.x, c.city.z - you.z)))} blocks from your position`);
+  $('pickedText').textContent = [cityLine(c), ...extra].join(' · ');
+  $('picked').hidden = false;
+}
+$('pickedCopy').addEventListener('click', async () => {
+  if (!picked) return;
+  const btn = $('pickedCopy');
+  btn.textContent = (await copyText(xzText(picked))) ? 'copied' : 'copy failed';
+  setTimeout(() => (btn.textContent = 'copy coordinates'), 1500);
+});
+
 map.onPick = (c) => {
+  showPicked(c);
   if (c.batch < 0) return;
   // A city of the route that is already open leaves the map where it is.
   if (c.batch !== selected) select(c.batch, true);
-  // Bring the city's row into view in the route's list, lit up as it is under the pointer.
-  const row = document.querySelectorAll('#cities li')[c.order];
-  row?.classList.add('hot');
-  row?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  // Light up the city's row in the route's list, without moving the page or the list.
+  document.querySelectorAll('#cities li')[c.order]?.classList.add('hot');
 };
 
 // ---------- right-click menu ----------
@@ -2030,7 +2246,7 @@ function rebuildKeeping(id: string | null): void {
 function addCityItems(c: MapCity, items: [string, () => void][]): void {
   if (c.missing) {
     // Nothing to loot or route here; the one useful thing is to say the report was wrong.
-    if (state.seed === DEFAULT_SEED) items.push(['Report: the ship is here after all', () => openReport(c.city, true)]);
+    if (state.seed === DEFAULT_SEED) items.push(['Report incorrect…', () => openReport(c.city, false, true)]);
     return;
   }
   const id = cityId(c.city);
@@ -2050,12 +2266,14 @@ function addCityItems(c: MapCity, items: [string, () => void][]): void {
       window.open(ISSUES_URL, '_blank', 'noopener');
     }]);
   } else if (c.visited) {
-    if (!tracker.isAlready(c.city)) items.push(['Mark as found already looted', () => {
+    if (!tracker.isAlready(c.city)) items.push(['Mark as looted by someone else', () => {
+      recordMarks([c.city]);
       tracker.setAlready(c.city, true);
       reselect();
     }]);
     items.push(['Mark as not looted', () => {
       if (!confirm(`Mark the city at ${xzText(c.city)} as not looted?`)) return;
+      recordMarks([c.city]);
       tracker.set(c.city, false);
       state.excluded = state.excluded.filter((x) => x !== id);
       save();
@@ -2063,11 +2281,13 @@ function addCityItems(c: MapCity, items: [string, () => void][]): void {
     }]);
   } else {
     items.push(['Mark as looted', () => {
+      recordMarks([c.city]);
       tracker.set(c.city, true);
       render();
     }]);
     // Someone got here first: the cities around it may well be looted too.
-    items.push(['Mark as found already looted', () => {
+    items.push(['Mark as looted by someone else', () => {
+      recordMarks([c.city]);
       tracker.setAlready(c.city, true);
       reselect();
     }]);
@@ -2075,8 +2295,7 @@ function addCityItems(c: MapCity, items: [string, () => void][]): void {
 
   // Reports go to the maintainer for review; nothing changes for anyone until one is accepted.
   if (state.seed === DEFAULT_SEED) {
-    if (uncertainShips.has(id)) items.push(['Report: the ship was there', () => openReport(c.city, true)]);
-    items.push(['Report missing structure', () => openReport(c.city)]);
+    items.push(['Report incorrect…', () => openReport(c.city, true, uncertainShips.has(id))]);
   }
 
   const inCustom = state.custom.findIndex((ids) => ids.includes(id));
@@ -2113,7 +2332,8 @@ function addCityItems(c: MapCity, items: [string, () => void][]): void {
     items.push(['Start a custom route with this city', () => addToCustom(state.custom.length)]);
   }
   // Its place in the open route.
-  if (selected !== null && c.batch === selected) {
+  // With a mouse the rows can be dragged; these are for fingers.
+  if (selected !== null && c.batch === selected && matchMedia('(pointer: coarse)').matches) {
     const open = selected;
     if (c.order > 0) items.push(['Move up', () => moveCity(open, c.order, c.order - 1)]);
     if (c.order < batches[open].length - 1) items.push(['Move down', () => moveCity(open, c.order, c.order + 1)]);
@@ -2180,22 +2400,38 @@ function openMenu(c: MapCity | null, px: number, py: number, pos: { x: number; z
     renderMap();
   }]);
 
-  // Shown in a fixed order: looted mark, coordinates, position, routes, then reports.
-  const group = (label: string) =>
-    /^(Mark as|On the shared)/.test(label) ? 0
-    : label === 'Copy coordinates' ? 1
-    : label === 'Set my position here' ? 2
-    : label.startsWith('Report') ? 4
-    : 3;
-  // Sorting keeps the order within a group, so "Add to route" stays ahead of "Start a custom route".
-  items.sort((p, q) => group(p[0]) - group(q[0]));
+  // Every choice has a fixed place, so the menu reads the same whichever city it is opened on:
+  // looted marks, coordinates, position, the city's place in its route, then reports.
+  const places = [
+    /^Mark as (looted|not looted)$/,
+    /^Mark as looted by someone else$/,
+    /^On the shared/,
+    /^Copy coordinates$/,
+    /^Set my position here$/,
+    /^Move up$/,
+    /^Move down$/,
+    /^Add to /,
+    /^Start a custom route/,
+    /^(Remove from|Return to|Put back in)/,
+    /^Report incorrect/,
+  ];
+  // The places fall into groups, parted by a line: marks, coordinates, the route, reports.
+  const groupOf = (label: string) => {
+    const at = place(label);
+    return at <= 2 ? 0 : at <= 4 ? 1 : at <= 9 ? 2 : 3;
+  };
+  const place = (label: string) => {
+    const at = places.findIndex((p) => p.test(label));
+    return at < 0 ? places.length : at;
+  };
+  items.sort((p, q) => place(p[0]) - place(q[0]));
 
   const title = document.createElement('div');
   title.className = 'menu-title';
   title.textContent = c ? `${c.batch >= 0 ? waypointName(c.batch, c.order) + ' · ' : ''}${xzText(c.city)}` : xzText(pos);
   menu.replaceChildren(
     title,
-    ...items.map(([label, run]) => {
+    ...items.flatMap(([label, run], n) => {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.textContent = label;
@@ -2203,7 +2439,8 @@ function openMenu(c: MapCity | null, px: number, py: number, pos: { x: number; z
         closeMenu();
         run();
       });
-      return btn;
+      const newGroup = n > 0 && groupOf(label) !== groupOf(items[n - 1][0]);
+      return newGroup ? [Object.assign(document.createElement('div'), { className: 'menu-rule' }), btn] : [btn];
     }),
   );
   menu.hidden = false;
@@ -2211,6 +2448,36 @@ function openMenu(c: MapCity | null, px: number, py: number, pos: { x: number; z
   // Kept inside the window, whichever edge it was opened near.
   menu.style.left = `${Math.max(4, Math.min(px + 4, window.innerWidth - menu.offsetWidth - 4))}px`;
   menu.style.top = `${Math.max(4, Math.min(py + 4, window.innerHeight - menu.offsetHeight - 4))}px`;
+}
+
+// On narrow screens the route's list sits below the map: once the map has scrolled out of sight,
+// offer a way back to it. (The button only ever shows at those widths; see the stylesheet.)
+const backToMap = $('backToMap');
+const showBackToMap = () => {
+  backToMap.hidden = $('map').getBoundingClientRect().bottom > 0;
+};
+window.addEventListener('scroll', showBackToMap, { passive: true });
+backToMap.addEventListener('click', () => $('map').scrollIntoView({ block: 'start', behavior: 'smooth' }));
+
+// The line under the map saying how to move it is for newcomers: once the map has been used, it goes for good.
+const MAP_HINT_KEY = 'end-cities:map-hint-seen';
+const hideMapHint = () => {
+  for (const el of document.querySelectorAll<HTMLElement>('#mapbar .controls')) el.hidden = true;
+};
+try {
+  if (localStorage.getItem(MAP_HINT_KEY)) hideMapHint();
+} catch {
+  // No storage: the hint just stays until the map is used.
+}
+for (const type of ['pointerdown', 'wheel'] as const) {
+  $('map').addEventListener(type, () => {
+    hideMapHint();
+    try {
+      localStorage.setItem(MAP_HINT_KEY, '1');
+    } catch {
+      // Hidden for this visit at least.
+    }
+  }, { once: true, passive: true });
 }
 
 const zoomSlider = $<HTMLInputElement>('zoomSlider');
@@ -2242,7 +2509,7 @@ map.onView = (centre) => {
 
 const LAYOUT_STORE = 'end-cities:layout';
 const PANEL_MIN = 220;
-const PANEL_DEFAULT = { left: 300, right: 320 };
+const PANEL_DEFAULT = { left: 300, right: 350 };
 type Side = keyof typeof PANEL_DEFAULT;
 
 const panelWidth: Record<Side, number> = { ...PANEL_DEFAULT };
