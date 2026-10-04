@@ -255,6 +255,7 @@ function lastEdit(i: number): RouteEdit | undefined {
 }
 
 const REMOVED_NOTE = 'removed from its route by hand';
+const MAPPED_NOTE = 'has a ship, but already on the webmap';
 const EXTRA_NOTE = 'outside the search area, added with +1 city';
 /** How far past the search area "+1 city" will look from a route's last stop, in blocks. */
 const BEYOND_BLOCKS = 4000;
@@ -357,7 +358,7 @@ function rebuild(done?: () => void): void {
       skipped++;
       // Ships near mapped terrain may still be unlooted, so keep them visible.
       if (!ship) return;
-      note = 'has a ship, but already on the webmap';
+      note = MAPPED_NOTE;
     } else if (state.skipPossible) note = possibleNote(city) ?? undefined;
     pool.set(cityId(city), { city, note });
   };
@@ -1686,6 +1687,8 @@ addOneBtn.addEventListener('click', () => {
   let beyond: FoundCity | null = null;
   for (const o of outside) {
     if (o.missing || tracker.has(o.city)) continue;
+    // Left out on purpose as probably looted: not what an extra stop should be.
+    if (o.note === MAPPED_NOTE || o.note.startsWith('possibly looted')) continue;
     const last = batch[batch.length - 1];
     if (!last) break;
     const d = Math.hypot(last.x - o.city.x, last.z - o.city.z);
@@ -1701,6 +1704,7 @@ addOneBtn.addEventListener('click', () => {
       const id = cityId(city);
       if (!found[2] || known.has(id) || tracker.has(city)) continue;
       if (aomc && (shipReports.gone.has(id) || (!state.includeMapped && explored?.isMapped(city.x, city.z)))) continue;
+      if (state.skipPossible && possible(city)) continue;
       const d = Math.hypot(last.x - city.x, last.z - city.z);
       if (d < bestDist) {
         [best, bestDist] = [city, d];

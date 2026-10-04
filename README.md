@@ -114,7 +114,8 @@ from route** to take it out; it stays on the map as a faint diamond, and
 is not in any route, as the new last stop. It also looks up to 4,000 blocks
 from that last stop, past the edge of the search area, and takes a city from
 there if that one is closer (2,500 blocks with another seed or beyond 100,000
-blocks out, where cities are generated on the spot). 
+blocks out, where cities are generated on the spot). It never picks a city
+that is being left out as already on the webmap or as possibly looted.
 
 Cities added to a route by hand, with **+1 city** or **Add to route**, go at the
 end of it. To change a route's order, drag a city up or down its list, or
