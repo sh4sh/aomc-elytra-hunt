@@ -29,6 +29,7 @@
             <label>z <input id="aroundZ" type="number" step="1" placeholder="200000" aria-label="Position z" /></label>
           </div>
           <label>Radius, in blocks <input id="aroundRadius" type="number" min="500" step="500" value="10000" /></label>
+          <button id="aroundSearch" type="submit" class="primary">Search</button>
           <div class="row">
             <button id="aroundUseMap" type="button">Use my position from the map</button>
             <button id="aroundRandom" type="button">Random location</button>
@@ -48,6 +49,10 @@
           <label><input type="checkbox" value="SW" /> SW <small>−x +z</small></label>
           <label><input type="checkbox" value="SE" /> SE <small>+x +z</small></label>
         </fieldset>
+        </div>
+        <div class="subhead">
+          <strong>Fine tuning</strong>
+          <span class="hint">Optional. Changes here apply straight away.</span>
         </div>
         <div class="row">
           <label>Cities per batch <input id="batchSize" type="number" min="1" step="1" /></label>

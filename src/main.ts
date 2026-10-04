@@ -740,6 +740,7 @@ function endSearch(): void {
   worker?.terminate();
   worker = null;
   findBtn.textContent = 'Find cities';
+  findBtn.classList.remove('busy');
   progress.hidden = true;
 }
 
@@ -799,6 +800,7 @@ form.addEventListener('submit', (e) => {
     ? new Worker(new URL('./generation/worker.ts', import.meta.url), { type: 'module' })
     : new Worker(new URL('./generation/worker.ts', import.meta.url));
   findBtn.textContent = 'Cancel search';
+  findBtn.classList.add('busy');
   progress.hidden = false;
   progress.value = 0;
   const finish = endSearch;
