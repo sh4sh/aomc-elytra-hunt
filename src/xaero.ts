@@ -42,6 +42,20 @@ export function waypointLines(batch: City[], batchIndex: number, skip: (c: City)
   return lines;
 }
 
+// Xaero's Minimap also reads waypoints out of chat: a message holding a line like this shows up
+// as a shared waypoint with an Add button. This is what the mod's own "Share" button sends:
+// xaero-waypoint:name:initials:x:y:z:color:use_yaw:yaw:Internal-<dimension>-waypoints
+
+/**
+ * The city as a waypoint shared in chat. With a username it becomes a whisper to that player,
+ * so pasting it does not show the coordinates to the whole server.
+ */
+export function shareLine(c: City, name: string, initials: string, color: number, whisperTo = ''): string {
+  // Colons separate the fields, and the mod allows two characters of initials.
+  const share = `xaero-waypoint:${name.replace(/:/g, ' ')}:${initials.replace(/:/g, '').slice(0, 2)}:${c.x}:${WAYPOINT_Y}:${c.z}:${color}:false:0:Internal-the-end-waypoints`;
+  return whisperTo ? `/msg ${whisperTo} ${share}` : share;
+}
+
 /** A complete waypoint file. Its lines can also be appended to an existing one. */
 export function waypointFile(lines: string[]): string {
   return (

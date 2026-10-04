@@ -248,7 +248,8 @@
         <h3>2. Get the waypoints into your map mod</h3>
         <p>
           With a route open, choose <em>Xaero's Minimap</em> to copy waypoints to paste into its waypoint file, or
-          <em>JourneyMap / Other</em> to copy chat lines that become clickable waypoints.
+          <em>JourneyMap / Other</em> to copy chat lines that become clickable waypoints. Xaero's Minimap can take
+          chat lines too.
         </p>
         <h3>3. Tick cities off as you loot them</h3>
         <p>
@@ -312,19 +313,26 @@
           </p>
         </div>
 
-        <div id="journeymapPanel" class="panel" hidden>
+        <div id="chatPanel" class="panel">
+          <p id="chatTitle"><strong>Or add them through chat</strong>, without closing Minecraft:</p>
           <label class="field">
             <strong>Your Minecraft username</strong>
             <input id="chatName" autocomplete="off" spellcheck="false" maxlength="16" placeholder="Type your username here, e.g. Steve_01" />
           </label>
           <div class="row">
-            <button id="copyChat" type="button">Copy all chat lines</button>
+            <button id="copyChat" type="button" class="primary">Copy line 1</button>
+            <button id="copyChatRestart" type="button">Start over</button>
           </div>
           <p class="hint">
-            Looted cities are left out. Paste the lines into chat one at a time while in the End. JourneyMap makes each
-            one clickable, and clicking it creates the waypoint. Each city below also has its own <em>chat</em> button.
+            Minecraft's chat takes one message at a time, so the lines are copied one by one: press the button, paste
+            into chat and send, come back and press it again for the next. Do this while in the End.
+            <span id="chatModNote"></span> Looted cities are left out. Each city below also has its own
+            <em>chat</em> button.
           </p>
           <p id="chatHint" class="hint"></p>
+        </div>
+
+        <div id="journeymapPanel" class="panel" hidden>
           <p class="hint">
             <strong>Other map mods:</strong> these lines are written for JourneyMap. Mods that pick coordinates out of
             chat may read them too, but that hasn't been tested. Failing that, each line still shows the city's

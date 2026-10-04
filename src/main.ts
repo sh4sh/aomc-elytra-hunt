@@ -6,13 +6,13 @@ import { EndTerrain } from './generation/end-terrain';
 import { BATCH_SIZE, DEFAULT_MAX_HOP, makeBatchesOrSmaller, passes, route, type BatchJob, type BatchShape } from './filters';
 import type { FindRequest, FindResponse, FoundCity } from './generation/worker';
 import { parseCoordinates } from './import';
-import { chatLine, chatLines, cleanUsername } from './journeymap';
+import { chatLine, cleanUsername } from './journeymap';
 import { EndMap, type MapCity } from './map';
 import { Precomputed } from './precomputed';
 import { loadSkyFigures } from './sky-cultures';
 import { Tracker } from './tracker';
 import { cityId, searchBounds, type City, type Filters, type Quadrant } from './types';
-import { OUTSIDE_COLOR, XAERO_COLORS, batchColor, setBatchTags, waypointFile, waypointLines, waypointName } from './xaero';
+import { OUTSIDE_COLOR, XAERO_COLORS, batchColor, setBatchTags, shareLine, waypointFile, waypointLines, waypointName } from './xaero';
 
 const DEFAULT_SEED = '856461443495910397';
 const ISSUES_URL = 'https://github.com/sh4sh/aomc-elytra-hunt/issues';
@@ -529,6 +529,7 @@ function renderDetail(): void {
   $('detailTitle').textContent = batchTitle(i);
   $('customDelete').hidden = !isCustom(i);
   renderStars(batch, color(i));
+  showChatStep();
   let longest = 0;
   batch.forEach((c, k) => {
     if (k) longest = Math.max(longest, Math.hypot(c.x - batch[k - 1].x, c.z - batch[k - 1].z));
@@ -574,16 +575,16 @@ function renderDetail(): void {
       chat.type = 'button';
       chat.className = 'chat';
       chat.textContent = 'chat';
-      chat.title = 'Copy this city as a JourneyMap chat location';
+      chat.title = 'Copy this city as a chat line that becomes a waypoint';
       chat.addEventListener('click', async (e) => {
         // Inside the row's label: don't let the click tick the looted box.
         e.preventDefault();
         e.stopPropagation();
-        chat.textContent = (await copyText(chatLine(c, waypointName(i, k), state.chatName))) ? 'copied' : 'failed';
+        chat.textContent = (await copyText(cityChatLine(c, i, k))) ? 'copied' : 'failed';
         setTimeout(() => (chat.textContent = 'chat'), 1500);
       });
       label.append(box, n, xz, hop);
-      if (state.mapMod === 'journeymap') label.append(chat);
+      label.append(chat);
       label.addEventListener('mouseenter', () => setHot(c));
       label.addEventListener('mouseleave', () => setHot(null));
       li.append(label);
@@ -1304,9 +1305,52 @@ function copyButton(id: string, text: () => string): void {
 }
 
 copyButton('copy', () => selectedLines().join('\n') + '\n');
-copyButton('copyChat', () =>
-  selected === null ? '' : chatLines(batches[selected], selected, (c) => tracker.has(c), state.chatName).join('\n') + '\n',
-);
+/** City k of route i as a chat line the chosen map mod turns into a waypoint. */
+function cityChatLine(c: City, i: number, k: number): string {
+  const name = waypointName(i, k);
+  return state.mapMod === 'xaero'
+    ? shareLine(c, name, k < 99 ? String(k + 1) : 'EC', batchColor(i), state.chatName)
+    : chatLine(c, name, state.chatName);
+}
+// Chat lines are copied one at a time, because Minecraft's chat sends a single message per paste:
+// several lines pasted together arrive as one long message. Each press copies the next line.
+const copyChatBtn = $('copyChat');
+let chatStep = 0;
+/** Which route the stepping belongs to, so opening another route starts from its first line. */
+let chatStepRoute = '';
+const currentChatLines = () => {
+  const i = selected;
+  return i === null ? [] : batches[i].flatMap((c, k) => (tracker.has(c) ? [] : [cityChatLine(c, i, k)]));
+};
+function showChatStep(): void {
+  const lines = currentChatLines();
+  const route = selected === null ? '' : state.mapMod + batches[selected].map(cityId).join(';');
+  if (route !== chatStepRoute) {
+    chatStepRoute = route;
+    chatStep = 0;
+  }
+  if (chatStep >= lines.length) chatStep = lines.length ? lines.length : 0;
+  copyChatBtn.textContent = !lines.length
+    ? 'Nothing to copy'
+    : chatStep >= lines.length
+      ? `All ${lines.length} copied`
+      : `Copy line ${chatStep + 1} of ${lines.length}`;
+  (copyChatBtn as HTMLButtonElement).disabled = !lines.length || chatStep >= lines.length;
+}
+copyChatBtn.addEventListener('click', async () => {
+  const lines = currentChatLines();
+  if (chatStep >= lines.length) return;
+  if (await copyText(lines[chatStep])) {
+    chatStep++;
+    showChatStep();
+  } else {
+    copyChatBtn.textContent = 'Copy failed. Try again';
+  }
+});
+$('copyChatRestart').addEventListener('click', () => {
+  chatStep = 0;
+  showChatStep();
+});
 
 const modRadios = [...document.querySelectorAll<HTMLInputElement>('input[name="mapMod"]')];
 function showMapMod(): void {
@@ -1317,6 +1361,12 @@ function showMapMod(): void {
   }
   $('xaeroPanel').hidden = state.mapMod !== 'xaero';
   $('journeymapPanel').hidden = state.mapMod !== 'journeymap';
+  $('chatTitle').hidden = state.mapMod !== 'xaero';
+  $('chatModNote').textContent =
+    state.mapMod === 'xaero'
+      ? "Xaero's Minimap shows each line as a shared waypoint with an Add button. This way is new and not yet tested in game: if nothing appears, use the waypoint file above."
+      : 'JourneyMap makes each line clickable, and clicking it creates the waypoint.';
+  showChatHint();
 }
 for (const r of modRadios) {
   r.addEventListener('change', () => {
@@ -1330,7 +1380,11 @@ showMapMod();
 
 const chatNameInput = $<HTMLInputElement>('chatName');
 function showChatHint(): void {
-  const example = chatLine({ x: 12040, z: -11832, source: 'seed' }, 'EC 1-01', state.chatName);
+  const city: City = { x: 12040, z: -11832, source: 'seed' };
+  const example =
+    state.mapMod === 'xaero'
+      ? shareLine(city, 'EC 1-01', '1', batchColor(0), state.chatName)
+      : chatLine(city, 'EC 1-01', state.chatName);
   $('chatHint').replaceChildren(
     state.chatName
       ? 'Lines are whispers to you, so only you see them: '

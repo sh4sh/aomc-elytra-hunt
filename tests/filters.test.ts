@@ -415,3 +415,21 @@ describe('ship reports through the relay', async () => {
     expect([...noCity.body.matchAll(line)].map((m) => [m[1], m[2]])).toEqual([['no-city', '30000,-4000']]);
   });
 });
+
+describe("Xaero's Minimap chat lines", async () => {
+  const { shareLine } = await import('../src/xaero');
+  const a: City = { x: 12040, z: -11832, source: 'seed' };
+
+  it('writes a waypoint the mod can pick out of chat', () => {
+    expect(shareLine(a, 'EC 3-07', '7', 11)).toBe('xaero-waypoint:EC 3-07:7:12040:70:-11832:11:false:0:Internal-the-end-waypoints');
+  });
+
+  it('whispers to the player when given a username', () => {
+    expect(shareLine(a, 'EC 3-07', '7', 11, 'Steve_01')).toMatch(/^\/msg Steve_01 xaero-waypoint:EC 3-07:7:/);
+  });
+
+  it('keeps the fields intact', () => {
+    expect(shareLine(a, 'a:b', '123', 11).split(':')).toHaveLength(10);
+    expect(shareLine(a, 'a:b', '123', 11)).toContain(':a b:12:');
+  });
+});

@@ -21,8 +21,13 @@ The same steps are in the app under **How to use**.
      at the end of the waypoint file in
      `.minecraft/xaero/minimap/<your server>/dim%1/`. Back that file up first.
      If the folder has no waypoint file yet, use **Download one** instead.
-   - **JourneyMap / Other:** enter your username, press **Copy all chat lines**,
-     and paste them into chat one at a time while in the End. They are whispers
+     Or, without closing Minecraft, add them through chat: enter your username
+     and press the copy button once per line, pasting each into chat while in
+     the End. Xaero's Minimap shows each as a shared waypoint with an Add
+     button. The chat way is not yet tested in game.
+   - **JourneyMap / Other:** enter your username, then press the copy button
+     once per line, pasting each into chat while in the End (Minecraft's chat
+     takes one message at a time). They are whispers
      to yourself, and JourneyMap makes each one clickable. If you also have
      Xaero's waypoints for the server, JourneyMap's Waypoint Manager can import
      them with **Import External**. Other map mods that read coordinates from
