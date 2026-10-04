@@ -90,6 +90,8 @@ let worker: Worker | null = null;
 let explored: Explored | null = null;
 let precomputed: Precomputed | null = null;
 let you: { x: number; z: number } | null = null;
+/** A spot the map was jumped to with "Go to coordinates". It is only a marker: it does not count as the player's position. */
+let pin: { x: number; z: number } | null = null;
 let showStars = false;
 /** Hidden extra, toggled by the goose: show every looted city on the map. */
 let showTrophies = false;
@@ -402,6 +404,7 @@ function renderMap(): void {
     searchArea: previewFilters(),
     explored: state.seed === DEFAULT_SEED ? explored : null,
     you,
+    pin,
   });
 }
 
@@ -1097,8 +1100,22 @@ locateForm.addEventListener('submit', (e) => {
   }
 });
 
+// Jump the map to typed coordinates, leaving the open route and the player's position as they are.
+$('locateGo').addEventListener('click', () => {
+  const pos = parseCoordinates(locateInput.value)[0];
+  if (!pos) {
+    locateNote.textContent = 'Enter coordinates, like x: 100000, z: 200000.';
+    return;
+  }
+  pin = { x: pos.x, z: pos.z };
+  locateNote.textContent = '';
+  renderMap();
+  map.goTo(pos.x, pos.z);
+});
+
 $('locateClear').addEventListener('click', () => {
   you = null;
+  pin = null;
   locateInput.value = '';
   locateNote.textContent = '';
   renderMap();

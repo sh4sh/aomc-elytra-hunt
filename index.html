@@ -190,9 +190,10 @@
     <main>
       <canvas id="map"></canvas>
       <form id="locate">
-        <input id="locateInput" placeholder="Your position, e.g. x: 100, z: -200" autocomplete="off" aria-label="Your position" />
+        <input id="locateInput" placeholder="Coordinates, e.g. x: 100, z: -200" autocomplete="off" aria-label="Coordinates" />
         <button type="submit">Nearest route</button>
-        <button id="locateClear" type="button" aria-label="Clear position">×</button>
+        <button id="locateGo" type="button" title="Move the map to these coordinates without opening a route">Go to coordinates</button>
+        <button id="locateClear" type="button" aria-label="Clear the coordinates and markers">×</button>
         <span id="locateNote"></span>
       </form>
       <div id="zoom">

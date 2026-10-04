@@ -26,6 +26,8 @@ export interface MapScene {
   explored: Explored | null;
   /** The player's position, if they entered one. */
   you: { x: number; z: number } | null;
+  /** A spot the player jumped the map to, marked so it can be found again. */
+  pin: { x: number; z: number } | null;
 }
 
 const HIT_RADIUS = 9;
@@ -77,6 +79,16 @@ export class EndMap {
     this.cz = (z0 + z1) / 2;
     const span = Math.max(x1 - x0, z1 - z0, 500);
     this.scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, (Math.min(this.w, this.h) * 0.8) / span));
+    this.draw();
+    this.onZoom(this.zoom);
+  }
+
+  /** Centre the view on a spot, zooming in if the view is too wide for it to be easy to see. */
+  goTo(x: number, z: number): void {
+    this.cx = x;
+    this.cz = z;
+    // At least close enough that about 6,000 blocks fit across the smaller side.
+    this.scale = Math.min(MAX_SCALE, Math.max(this.scale, Math.min(this.w, this.h) / 6000));
     this.draw();
     this.onZoom(this.zoom);
   }
@@ -355,7 +367,7 @@ export class EndMap {
     ctx.fillStyle = '#0f0c17';
     ctx.fillRect(0, 0, w, h);
     if (!this.scene) return;
-    const { cities, selectedBatch, hot, explored, you, searchArea } = this.scene;
+    const { cities, selectedBatch, hot, explored, you, pin, searchArea } = this.scene;
     // Distances and angle are drawn for the search being set up, so they follow the controls live.
     const filters = searchArea;
     const ox = this.sx(0);
@@ -473,6 +485,21 @@ export class EndMap {
       }
     }
     ctx.globalAlpha = 1;
+
+    if (pin) {
+      const x = this.sx(pin.x), y = this.sy(pin.z);
+      ctx.strokeStyle = '#c58bff';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(x, y, 9, 0, Math.PI * 2);
+      ctx.moveTo(x - 14, y); ctx.lineTo(x - 4, y);
+      ctx.moveTo(x + 4, y); ctx.lineTo(x + 14, y);
+      ctx.moveTo(x, y - 14); ctx.lineTo(x, y - 4);
+      ctx.moveTo(x, y + 4); ctx.lineTo(x, y + 14);
+      ctx.stroke();
+      ctx.fillStyle = '#c58bff';
+      ctx.fillText(`x: ${pin.x}, z: ${pin.z}`, x + 16, y + 16);
+    }
 
     if (you) {
       const x = this.sx(you.x), y = this.sy(you.z);
