@@ -16,7 +16,8 @@
 // Tiles are 512px PNGs named by level of detail and the block coordinates of
 // their corner: at level n one pixel is 2^n blocks. The coarsest level (9) is
 // checked first to find where anything changed, then only those areas are read
-// at level 5 (32 blocks per pixel).
+// at level 4, where one pixel is 16 blocks: exactly one chunk, which is the unit
+// the map is drawn in.
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { PNG } from 'pngjs';
@@ -24,19 +25,22 @@ import { PNG } from 'pngjs';
 const FILE = 'public/explored.json';
 const TILE_PX = 512;
 const COARSE = 9;
-const FINE = 5;
+const FINE = 4;
 /** How far out to look, in coarse tiles each way (4 x 262,144 blocks). */
 const COARSE_REACH = 4;
 // Unmapped pixels are pure black; mapped void is a dark purple (10, 0, 23).
 const MAPPED_MIN = 4;
 /** Pause between requests, in milliseconds. */
-const PAUSE = 1000;
+const PAUSE = 500;
 const USER_AGENT = 'aomc-elytra-hunt explored-area updater (+https://github.com/sh4sh/aomc-elytra-hunt)';
 
 const full = process.argv.includes('--full');
 /** Hour of the day (UTC) at which a routine run also looks at regions that were empty last time. */
 const WIDE_HOUR = 3;
-const previous = !full && existsSync(FILE) ? JSON.parse(readFileSync(FILE, 'utf8')) : null;
+const saved = !full && existsSync(FILE) ? JSON.parse(readFileSync(FILE, 'utf8')) : null;
+// Data saved at a different level of detail cannot be updated in place: start again.
+const previous = saved && saved.blocksPerPixel === 2 ** FINE ? saved : null;
+if (saved && !previous) console.log('The saved data is at a different level of detail. Re-reading everything.');
 // Ask only for tiles modified since the last update. A minute of slack covers clock differences.
 const since = previous?.fetchedAt ? new Date(Date.parse(previous.fetchedAt) - 60_000).toUTCString() : null;
 const startedAt = new Date().toISOString();

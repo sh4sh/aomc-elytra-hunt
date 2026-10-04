@@ -10,7 +10,7 @@ interface ExploredFile {
 
 /**
  * A city counts as mapped only if its own spot and everything within this many pixels of it
- * (one pixel is 32 blocks) is mapped. Terrain a player merely flew past, with the city just beyond
+ * (one pixel is one chunk, 16 blocks) is mapped. Terrain a player merely flew past, with the city just beyond
  * what their game had loaded, does not count: nobody has been to that city.
  */
 const SURROUND_PX = 1;

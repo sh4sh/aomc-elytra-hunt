@@ -333,9 +333,9 @@ describe('webmap coverage', async () => {
       }
     }
     expect(inside && edge).toBeTruthy();
-    expect(mask.isMapped(inside![0] * bpp + 16, inside![1] * bpp + 16)).toBe(true);
-    expect(mask.isMapped(edge![0] * bpp + 16, edge![1] * bpp + 16)).toBe(false);
-    // The city a player reported: about 96 blocks outside the mapped corridor.
+    expect(mask.isMapped(inside![0] * bpp + bpp / 2, inside![1] * bpp + bpp / 2)).toBe(true);
+    expect(mask.isMapped(edge![0] * bpp + bpp / 2, edge![1] * bpp + bpp / 2)).toBe(false);
+    // The city a player reported: just outside the mapped corridor.
     expect(mask.isMapped(-591320, -2808)).toBe(false);
   });
 });
