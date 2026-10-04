@@ -14,7 +14,7 @@ export interface MapCity {
   note?: string;
   /** A player reported the ship, or the whole city, missing here: crossed off like a looted city. */
   missing?: boolean;
-  /** Found already looted by someone else on arrival: its cross is amber, not grey. */
+  /** Found already looted by someone else on arrival: its cross is tan, not grey. */
   already?: boolean;
   /** Near a city someone found already looted, so possibly looted too: drawn hollow. */
   possible?: boolean;
@@ -39,8 +39,13 @@ export interface MapScene {
 }
 
 const HIT_RADIUS = 9;
-/** Cities found already looted stand out from ordinary looted ones: they are why their neighbours are in doubt. */
-const ALREADY_COLOR = '#e0954a';
+/**
+ * Everything to do with earlier hunters (cities they looted, cities they may have, where they flew) is a
+ * muted tan: not for the taking, so it recedes like the faint diamonds, in a tone no route is drawn in.
+ */
+const ALREADY_COLOR = '#b3876a';
+/** The guesswork about earlier hunters is drawn when no more than this many blocks fit across the map. */
+const PATHS_WITHIN_BLOCKS = 30000;
 /** Cities looted in the ordinary way: done, and plain to see. */
 const LOOTED_COLOR = '#6fdc8c';
 // Pixels per block at the two ends of the zoom range.
@@ -107,6 +112,11 @@ export class EndMap {
     this.onZoom(this.zoom);
   }
 
+  /** Zoomed in far enough for the guesswork about earlier hunters (their paths, the possibly-looted rings) to be shown. */
+  get detailed(): boolean {
+    return this.w / this.scale <= PATHS_WITHIN_BLOCKS;
+  }
+
   /** Zoom level from 0 (furthest out) to 1 (closest in). Each step along it multiplies the scale by the same amount. */
   get zoom(): number {
     return Math.log(this.scale / MIN_SCALE) / Math.log(MAX_SCALE / MIN_SCALE);
@@ -128,6 +138,12 @@ export class EndMap {
     this.canvas.height = Math.round(this.h * dpr);
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.draw();
+  }
+
+  /** Whether a block position is within the part of the world the map is showing. */
+  inView(x: number, z: number): boolean {
+    const px = this.sx(x), py = this.sy(z);
+    return px >= 0 && px <= this.w && py >= 0 && py <= this.h;
   }
 
   private sx = (x: number) => (x - this.cx) * this.scale + this.w / 2;
@@ -423,7 +439,8 @@ export class EndMap {
     ctx.fillText('N (−z)', ox + 4, oy - reach - 18);
 
     // Where an earlier hunter may have flown: dashed, since it is a guess, and fainter past the ends.
-    for (const t of this.scene.paths) {
+    // Only once zoomed in: from far out they would be a scatter of lines over the whole search.
+    for (const t of this.detailed ? this.scene.paths : []) {
       ctx.strokeStyle = ALREADY_COLOR;
       ctx.lineWidth = t.confidence === 'high' ? 2 : 1.5;
       ctx.setLineDash(t.confidence === 'high' ? [8, 4] : [3, 5]);
@@ -490,10 +507,13 @@ export class EndMap {
         ctx.moveTo(x + d, y - d);
         ctx.lineTo(x - d, y + d);
         if (outside) ctx.globalAlpha = 0.6;
-        // Green for a city the player looted, amber for one someone else got to first, grey for a missing one.
+        // Green for a city the player looted, tan for one someone else got to first, grey for a missing one.
         ctx.strokeStyle = c.already ? ALREADY_COLOR : c.visited ? LOOTED_COLOR : '#8a8299';
-        ctx.lineWidth = c.visited ? 2 : 1.5;
-        if (c.visited) ctx.globalAlpha = dimmed ? 0.5 : 1;
+        // Only the player's own looted cities are drawn boldly; the rest recede like the faint diamonds.
+        const own = c.visited && !c.already;
+        ctx.lineWidth = own ? 2 : 1.5;
+        if (own) ctx.globalAlpha = dimmed ? 0.5 : 1;
+        else if (c.already) ctx.globalAlpha = dimmed ? 0.4 : 0.85;
         if (c.trophy) {
           ctx.globalAlpha = 1;
           ctx.strokeStyle = c.trophy === 'looted' ? '#ffd24a' : '#7fe0b0';
@@ -505,10 +525,18 @@ export class EndMap {
         ctx.strokeStyle = c.color;
         ctx.lineWidth = 1;
         ctx.stroke();
-      } else if (c.possible) {
-        ctx.strokeStyle = c.color;
+      } else if (c.possible && this.detailed) {
+        // Possibly looted: a tan ring, the colour of everything to do with earlier hunters, around a
+        // small dot in the route's own colour.
+        ctx.beginPath();
+        ctx.arc(x, y, r + 1.5, 0, Math.PI * 2);
+        ctx.strokeStyle = ALREADY_COLOR;
         ctx.lineWidth = 1.5;
         ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(x, y, 1.5, 0, Math.PI * 2);
+        ctx.fillStyle = c.color;
+        ctx.fill();
       } else {
         ctx.fillStyle = c.color;
         ctx.fill();

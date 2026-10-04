@@ -500,3 +500,34 @@ describe('earlier flight paths', async () => {
     expect(onTrajectory(t, { x: 24000, z: 5400 })).toBe(false);
   });
 });
+
+describe('earlier flight paths with webmap cities', async () => {
+  const { studyTrajectories, describeTrajectory } = await import('../src/trajectory');
+  const line = [0, 1, 2, 3, 4, 5].map((i) => ({ x: 10000 + i * 2500, z: 5000 }));
+
+  it('lets a webmap city support a path that players\' reports began', () => {
+    const { paths } = studyTrajectories(line.slice(0, 2), [], [line[2]]);
+    expect(paths).toHaveLength(1);
+    expect(paths[0]).toMatchObject({ confidence: 'medium', mapped: 1 });
+    expect(describeTrajectory(paths[0])).toContain('3 cities in a line (2 looted by someone else, 1 on the webmap)');
+  });
+
+  it('never makes a path out of the webmap alone, or mostly', () => {
+    // A webmap trail is that player's own flight, which is already known.
+    expect(studyTrajectories([], [], line)).toEqual({ paths: [], near: [] });
+    expect(studyTrajectories([line[0]], [], line.slice(1)).paths).toEqual([]);
+    // Two reports with four webmap cities close by and in line: only two of those are counted.
+    const close = [13500, 14500, 15500, 16000].map((x) => ({ x, z: 5000 }));
+    const [t] = studyTrajectories(line.slice(0, 2), [], close).paths;
+    expect(t.points).toHaveLength(4);
+    expect(t).toMatchObject({ confidence: 'medium', mapped: 2 });
+    // Webmap cities further than a flight's reach from any report are left out altogether.
+    expect(studyTrajectories(line.slice(0, 2), [], line.slice(3)).paths).toEqual([]);
+  });
+
+  it('ignores webmap cities off the line the reports make', () => {
+    const { paths, near } = studyTrajectories(line.slice(0, 2), [], [{ x: 11000, z: 8000 }]);
+    expect(paths).toEqual([]);
+    expect(near[0]).toContain('a third in line with them would make a path');
+  });
+});

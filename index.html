@@ -231,10 +231,10 @@
           <button id="pickedCopy" type="button" class="textlink">copy coordinates</button>
           <button id="pickedMore" type="button" class="textlink">options</button>
         </div>
-        <span class="key"><i class="dot"></i> in a route</span>
+        <span class="key" data-key="route"><i class="dot"></i> in a route</span>
         <span class="key" data-key="looted"><i class="cross green">×</i> looted</span>
         <span class="key" data-key="missing"><i class="cross">×</i> reported missing</span>
-        <span class="key" data-key="already"><i class="cross amber">×</i> looted by someone else</span>
+        <span class="key" data-key="already"><i class="cross tan">×</i> looted by someone else</span>
         <span class="key" data-key="possible"><i class="dot hollow"></i> possibly looted</span>
         <span class="key" data-key="path"><i class="dash"></i> earlier flight path?</span>
         <span class="key" data-key="outside"><i class="dot diamond"></i> not in a route</span>
@@ -290,9 +290,9 @@
         <details class="more">
           <summary>Possibly looted cities</summary>
           <ul>
-            <li>A city marked <em>looted by someone else</em> turns amber. Someone hunted there before you.</li>
-            <li>Cities within 2,000 blocks of it show as possibly looted: a hollow dot, and a <code>?</code> in the list. It is a guess.</li>
-            <li>When three or more amber cities line up, a dashed line guesses where that hunter flew, and says how confident it is.</li>
+            <li>A city marked <em>looted by someone else</em> turns tan. Someone hunted there before you.</li>
+            <li>Cities within 2,000 blocks of it show as possibly looted: a tan ring, and a <code>?</code> in the list. It is a guess.</li>
+            <li>When three or more such cities line up, a dashed line guesses where that hunter flew, and says how confident it is. <span class="aomc-only">One or two cities on the webmap can help to complete a line.</span></li>
             <li><button type="button" class="jump" data-target="skipPossible">Leave out cities that are possibly looted</button> keeps them out of the routes.</li>
           </ul>
         </details>
@@ -330,7 +330,7 @@
         </div>
         <p id="detailMeta" class="hint"></p>
         <p id="routeDone" class="route-done" hidden>Route complete: every city in it is looted.</p>
-        <details id="exportBox" class="fold" open>
+        <details id="exportBox" class="fold">
         <summary><strong>Add this route to your map mod</strong></summary>
         <div class="segmented" role="radiogroup" aria-label="Map mod">
           <label><input type="radio" name="mapMod" value="xaero" /> Xaero's Minimap</label>

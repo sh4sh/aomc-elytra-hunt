@@ -79,21 +79,29 @@ near them) to the route's first city, plus the route itself.
 Mark a city **looted by someone else** when its elytra was gone before you got
 there. These marks are sent with **Share progress**.
 
-A city is **possibly looted** when it is within 2,000 blocks of one of those.
-The flag is lifted if a city between the two (within 500 blocks of the line
+A city is **possibly looted** (a tan ring on the map) when it is within
+2,000 blocks of one of those. The flag is lifted if a city between the two (within 500 blocks of the line
 joining them) was looted the ordinary way: the earlier hunter did not come that
 way.
 
 **Earlier flight path.** When three or more cities looted by someone else lie
-in a line, a dashed amber line is drawn through them and 2,000 blocks past each
+in a line, a dashed tan line is drawn through them and 2,000 blocks past each
 end. Cities within 1,000 blocks of it count as possibly looted.
 
 - The cities must each be within 4,000 blocks of another, and stray from the
   line by no more than a fifth of its length.
+- At least two must be cities a player marked as looted by someone else. Up to
+  two cities on the community webmap can then count as well, if they sit on
+  the same line within 4,000 blocks of a marked city. The webmap alone never
+  makes a path: its players' flights are already known, and the guess is about
+  hunters who did not share a map.
 - Confidence is **medium** for three or four cities, **high** for five or more.
 - One city found intact along the line is ignored. Two or more lower the
   confidence a step, and the line is dropped below medium, or when intact
   cities number half the already-looted ones.
+- The line, the rings and the note about them only show once you zoom in
+  (about 30,000 blocks across or closer). The `?` in a route's list always
+  shows.
 - These are rules of thumb, not measured probabilities.
 
 ## Sharing

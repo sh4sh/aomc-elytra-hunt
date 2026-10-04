@@ -17,6 +17,8 @@ export interface Trajectory {
   confidence: Confidence;
   /** Cities found with their elytra still there along the path: evidence against it. */
   intact: number;
+  /** How many of the points are cities on the webmap, as opposed to ones a player found already looted. */
+  mapped: number;
 }
 
 /** Already-looted cities this close together are taken to be the same hunter's work. */
@@ -28,6 +30,8 @@ export const EXTEND_BLOCKS = 2000;
 /** Fewer reports than this is not a path, just a place. */
 const MIN_POINTS = 3;
 const HIGH_POINTS = 5;
+/** The most cities on the webmap that may be counted towards one path. */
+const MAX_WEBMAP_SUPPORT = 2;
 
 export function distanceToSegment(p: Pt, a: Pt, b: Pt): number {
   const dx = b.x - a.x;
@@ -51,35 +55,34 @@ export const onTrajectory = (t: Trajectory, p: Pt): boolean =>
  * Paths worth showing. `already` are cities found already looted; `intact` are cities found
  * with their elytra, which an earlier hunter passing that way would have taken.
  */
-export const findTrajectories = (already: Pt[], intact: Pt[]): Trajectory[] => studyTrajectories(already, intact).paths;
+export const findTrajectories = (already: Pt[], intact: Pt[], mapped: Pt[] = []): Trajectory[] =>
+  studyTrajectories(already, intact, mapped).paths;
 
 /**
  * The same, along with a sentence for each group of reports that came close to being a path
  * but was not drawn, saying why.
  */
-export function studyTrajectories(already: Pt[], intact: Pt[]): { paths: Trajectory[]; near: string[] } {
+export function studyTrajectories(reported: Pt[], intact: Pt[], mapped: Pt[] = []): { paths: Trajectory[]; near: string[] } {
   const near: string[] = [];
   const where = (pts: Pt[]) => `near x: ${pts[0].x}, z: ${pts[0].z}`;
-  // Group reports that are within reach of each other.
-  const group = already.map((_, i) => i);
+  // Group the players' reports that are within reach of each other. Only reports start a path: the
+  // players behind the webmap have shown where they flew, and it is the others we are trying to trace.
+  const group = reported.map((_, i) => i);
   const root = (i: number): number => (group[i] === i ? i : (group[i] = root(group[i])));
-  for (let i = 0; i < already.length; i++) {
-    for (let j = i + 1; j < already.length; j++) {
-      if (Math.hypot(already[i].x - already[j].x, already[i].z - already[j].z) <= LINK_BLOCKS) group[root(i)] = root(j);
+  for (let i = 0; i < reported.length; i++) {
+    for (let j = i + 1; j < reported.length; j++) {
+      if (Math.hypot(reported[i].x - reported[j].x, reported[i].z - reported[j].z) <= LINK_BLOCKS) group[root(i)] = root(j);
     }
   }
   const groups = new Map<number, Pt[]>();
-  already.forEach((p, i) => {
+  reported.forEach((p, i) => {
     const g = groups.get(root(i));
     if (g) g.push(p);
     else groups.set(root(i), [p]);
   });
 
-  const out: Trajectory[] = [];
-  for (const pts of groups.values()) {
-    if (pts.length === 2) near.push(`2 cities found already looted ${where(pts)}: a third in line with them would make a path`);
-    if (pts.length < MIN_POINTS) continue;
-    // The direction the group is stretched along.
+  /** The line a set of points is stretched along, and each point's place along and across it. */
+  const fit = (pts: Pt[]) => {
     const mx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
     const mz = pts.reduce((s, p) => s + p.z, 0) / pts.length;
     let sxx = 0, szz = 0, sxz = 0;
@@ -92,12 +95,29 @@ export function studyTrajectories(already: Pt[], intact: Pt[]): { paths: Traject
     const ux = Math.cos(angle), uz = Math.sin(angle);
     const along = (p: Pt) => (p.x - mx) * ux + (p.z - mz) * uz;
     const across = (p: Pt) => Math.abs(-(p.x - mx) * uz + (p.z - mz) * ux);
-    const points = [...pts].sort((a, b) => along(a) - along(b));
-    const length = along(points[points.length - 1]) - along(points[0]);
+    const ordered = [...pts].sort((a, b) => along(a) - along(b));
+    const length = along(ordered[ordered.length - 1]) - along(ordered[0]);
+    return { ux, uz, across, ordered, length, slack: Math.max(500, 0.2 * length) };
+  };
+
+  const out: Trajectory[] = [];
+  for (const told of groups.values()) {
+    if (told.length < 2) continue;
+    // A city on the webmap may have been this hunter's too (whoever mapped it can have flown past
+    // without looting it), so the nearest couple that sit on the reports' own line lend support.
+    // No more than that: a path must not turn into a tracing of the webmap.
+    const own = fit(told);
+    const support = mapped
+      .filter((m) => !told.includes(m) && own.across(m) <= own.slack && told.some((p) => Math.hypot(p.x - m.x, p.z - m.z) <= LINK_BLOCKS))
+      .sort((a, b) => own.across(a) - own.across(b))
+      .slice(0, MAX_WEBMAP_SUPPORT);
+    const pts = [...told, ...support];
+    if (pts.length === 2) near.push(`2 cities found already looted ${where(told)}: a third in line with them would make a path`);
+    if (pts.length < MIN_POINTS) continue;
+    const { ux, uz, across, ordered: points, slack } = fit(pts);
     // A blob of reports says someone was around, not which way they went.
-    const stray = Math.max(...pts.map(across));
-    if (stray > Math.max(500, 0.2 * length)) {
-      near.push(`${pts.length} cities found already looted ${where(pts)} do not line up, so no path is drawn`);
+    if (Math.max(...pts.map(across)) > slack) {
+      near.push(`${told.length} cities found already looted ${where(told)} do not line up, so no path is drawn`);
       continue;
     }
 
@@ -109,7 +129,7 @@ export function studyTrajectories(already: Pt[], intact: Pt[]): { paths: Traject
     else if (spoilers > 1) confidence = confidence === 'high' ? 'medium' : null;
     if (!confidence) {
       near.push(
-        `${pts.length} cities found already looted ${where(pts)} line up, but ${spoilers} cities along the line were looted the ordinary way, so no path is drawn`,
+        `${told.length} cities found already looted ${where(told)} line up, but ${spoilers} cities along the line were looted the ordinary way, so no path is drawn`,
       );
       continue;
     }
@@ -121,15 +141,23 @@ export function studyTrajectories(already: Pt[], intact: Pt[]): { paths: Traject
       after: { x: Math.round(last.x + ux * EXTEND_BLOCKS), z: Math.round(last.z + uz * EXTEND_BLOCKS) },
       confidence,
       intact: spoilers,
+      mapped: support.length,
     });
   }
-  if (already.length >= MIN_POINTS && groups.size === already.length) {
-    near.push(`${already.length} cities found already looted, but none within ${LINK_BLOCKS.toLocaleString()} blocks of another`);
+  if (reported.length >= MIN_POINTS && groups.size === reported.length) {
+    near.push(`${reported.length} cities found already looted, but none within ${LINK_BLOCKS.toLocaleString()} blocks of another`);
   }
   return { paths: out, near };
 }
 
 /** Why the path is believed, in words. */
 export const describeTrajectory = (t: Trajectory): string =>
-  `${t.confidence} confidence: ${t.points.length} cities found already looted in a line, ` +
+  `${t.confidence} confidence: ${t.points.length} cities in a line (` +
+  [
+    t.points.length - t.mapped ? `${t.points.length - t.mapped} looted by someone else` : '',
+    t.mapped ? `${t.mapped} on the webmap` : '',
+  ]
+    .filter(Boolean)
+    .join(', ') +
+  '), ' +
   (t.intact ? `${t.intact} found intact along it` : 'none found intact along it');

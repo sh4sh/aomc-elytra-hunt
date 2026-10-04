@@ -178,9 +178,11 @@ const POSSIBLE_RADIUS = 2000;
 const POSSIBLE_NOTE = 'possibly looted: near a city found already looted';
 
 /** Guessed flight paths of earlier hunters, worked out again whenever a looted mark changes. */
-let pathsFor: { tracker: Tracker; version: number; paths: Trajectory[]; near: string[] } | null = null;
+let pathsFor: { tracker: Tracker; version: number; mapped: City[]; paths: Trajectory[]; near: string[] } | null = null;
+/** Ship cities of the current search that are on the webmap: another player has been there. Set by each rebuild. */
+let webmapShips: City[] = [];
 function earlierStudy(): { paths: Trajectory[]; near: string[] } {
-  if (pathsFor?.tracker !== tracker || pathsFor.version !== tracker.version) {
+  if (pathsFor?.tracker !== tracker || pathsFor.version !== tracker.version || pathsFor.mapped !== webmapShips) {
     const point = (id: string) => {
       const [x, z] = id.split(',').map(Number);
       return { x, z };
@@ -188,7 +190,9 @@ function earlierStudy(): { paths: Trajectory[]; near: string[] } {
     const already = tracker.alreadyAll().map(point);
     // Cities looted the ordinary way had their elytra, so no earlier hunter took it.
     const intact = tracker.all().map(point).filter((p) => !tracker.isAlready(p));
-    pathsFor = { tracker, version: tracker.version, ...studyTrajectories(already, intact) };
+    // A webmap city the player has marked themselves is counted by that mark, not twice.
+    const mapped = webmapShips.filter((c) => !tracker.has(c));
+    pathsFor = { tracker, version: tracker.version, mapped: webmapShips, ...studyTrajectories(already, intact, mapped) };
   }
   return pathsFor;
 }
@@ -351,6 +355,11 @@ function rebuild(done?: () => void): void {
   const reports =
     state.seed === DEFAULT_SEED ? shipReports : { gone: new Map<string, 'missing' | 'no-city'>(), found: new Set<string>() };
   const withShip = state.found.filter((c) => c[2]);
+  // Whatever the routes do with them, cities on the webmap help to guess where earlier hunters flew.
+  webmapShips =
+    explored && state.seed === DEFAULT_SEED
+      ? withShip.filter((c) => explored!.isMapped(c[0], c[1])).map((c): City => ({ x: c[0], z: c[1], source: 'seed' }))
+      : [];
   const extra = state.extra ?? [];
   uncertainShips = new Set(
     [...withShip, ...extra]
@@ -543,6 +552,25 @@ function previewFilters(): Filters {
   return usable ? f : state.filters;
 }
 
+/** The cities last handed to the map, for the legend to look through. */
+let shownCities: MapCity[] = [];
+/** The legend only explains marks that are in view on the map just now. */
+function renderLegend(): void {
+  const seen = shownCities.filter((c) => map.inView(c.city.x, c.city.z));
+  const legend = {
+    route: seen.some((c) => c.batch >= 0 && !c.visited && !(c.possible && map.detailed)),
+    looted: seen.some((c) => c.visited && !c.already),
+    missing: seen.some((c) => c.missing && !c.visited),
+    already: seen.some((c) => c.already),
+    possible: map.detailed && seen.some((c) => c.possible && !c.visited && c.batch >= 0),
+    path: map.detailed && earlierPaths().some((t) => [t.before, ...t.points, t.after].some((p) => map.inView(p.x, p.z))),
+    outside: seen.some((c) => c.batch < 0 && !c.visited && !c.missing),
+  };
+  for (const key of document.querySelectorAll<HTMLElement>('#mapbar [data-key]')) {
+    key.hidden = !legend[key.dataset.key as keyof typeof legend];
+  }
+}
+
 function renderMap(): void {
   const cities: MapCity[] = [];
   batches.forEach((batch, b) =>
@@ -588,18 +616,7 @@ function renderMap(): void {
     if (state.seed === DEFAULT_SEED) for (const city of webmapCities ?? []) mark(city, 'mapped', 'in an area on the webmap');
     for (const city of lootedCities()) mark(city, 'looted', 'looted');
   }
-  // The legend only explains marks that are on the map just now.
-  const legend = {
-    looted: cities.some((c) => c.visited && !c.already),
-    missing: cities.some((c) => c.missing && !c.visited),
-    already: cities.some((c) => c.already),
-    possible: cities.some((c) => c.possible),
-    path: earlierPaths().length > 0,
-    outside: cities.some((c) => c.batch < 0 && !c.visited && !c.missing),
-  };
-  for (const key of document.querySelectorAll<HTMLElement>('#mapbar [data-key]')) {
-    key.hidden = !legend[key.dataset.key as keyof typeof legend];
-  }
+  shownCities = cities;
   map.setScene({
     cities,
     selectedBatch: selected,
@@ -644,7 +661,8 @@ function renderBatches(): void {
   // drawn, then the reports that nearly made one and what stopped them.
   const study = earlierStudy();
   const pathNote = $('pathNote');
-  pathNote.hidden = !study.paths.length && !study.near.length;
+  // Like the lines themselves, only once zoomed in.
+  pathNote.hidden = !map.detailed || (!study.paths.length && !study.near.length);
   pathNote.replaceChildren(
     ...[...study.paths.map((t) => `Possible earlier flight path (${describeTrajectory(t)}).`), ...study.near.map((why) => `${why[0].toUpperCase()}${why.slice(1)}.`)].map(
       (text) => Object.assign(document.createElement('span'), { textContent: text }),
@@ -1766,7 +1784,7 @@ showChatName();
 
 // The whole "get it into your map mod" section folds away, and stays as the player left it.
 const exportBox = $<HTMLDetailsElement>('exportBox');
-exportBox.open = state.exportOpen ?? true;
+exportBox.open = state.exportOpen ?? false;
 exportBox.addEventListener('toggle', () => {
   state.exportOpen = exportBox.open;
   save();
@@ -2194,8 +2212,15 @@ map.onHover = (c, px, py) => {
   tooltip.hidden = !c;
   if (!c) return;
   tooltip.textContent = cityLine(c);
-  tooltip.style.left = `${px + 14}px`;
-  tooltip.style.top = `${py + 14}px`;
+  // Kept inside the map: a tip hanging over its edge makes a scroll bar flicker in and out.
+  const room = $('map').getBoundingClientRect();
+  // Measured from the corner, where nothing squeezes it.
+  tooltip.style.left = '0px';
+  tooltip.style.top = '0px';
+  const left = px + 14 + tooltip.offsetWidth > room.width ? px - 14 - tooltip.offsetWidth : px + 14;
+  const top = py + 14 + tooltip.offsetHeight > room.height ? py - 14 - tooltip.offsetHeight : py + 14;
+  tooltip.style.left = `${Math.max(4, left)}px`;
+  tooltip.style.top = `${Math.max(4, top)}px`;
 };
 /** One line about a city on the map: its name, where it is and anything known about it. */
 const cityLine = (c: MapCity): string =>
@@ -2519,8 +2544,14 @@ for (const type of ['pointerdown', 'wheel'] as const) {
 }
 
 const zoomSlider = $<HTMLInputElement>('zoomSlider');
+let wasDetailed = map.detailed;
 map.onZoom = (level) => {
   zoomSlider.value = String(Math.round(level * 1000));
+  // Crossing the zoom at which the guesswork about earlier hunters appears: bring the legend and the note along.
+  if (map.detailed !== wasDetailed) {
+    wasDetailed = map.detailed;
+    render();
+  }
 };
 zoomSlider.addEventListener('input', () => map.setZoom(Number(zoomSlider.value) / 1000));
 $('zoomOut').addEventListener('click', () => map.setZoom(map.zoom - 0.05));
@@ -2541,6 +2572,7 @@ map.onCursor = (pos) => {
 map.onView = (centre) => {
   viewCentre = centre;
   showCoords();
+  renderLegend();
 };
 
 // ---------- resizable panels ----------
