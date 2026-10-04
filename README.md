@@ -33,7 +33,7 @@ The same steps are in the app under **How to use**.
      them with **Import External**. Other map mods that read coordinates from
      chat may pick the lines up too; that is untested.
 3. **Tick cities off as you loot them**, with the checkboxes in the route or by
-   right-clicking a city on the map. Looted cities are left out of exports.
+   right-clicking a city on the map or in the route's list. Looted cities are left out of exports.
 4. **Share where you have been.** The best way is to upload your map of the End
    to the [community webmap](https://map.diorite.xyz/?dim=the_end) with its
    upload button: by default, areas on the webmap are left out of the routes
@@ -72,6 +72,8 @@ Only cities with a ship are ever shown, since only ships hold elytra.
 - Filled dots are cities in a route, coloured by route.
 - An × is a looted city, or one where a player reported the ship or the whole
   city missing; hover over it to see which.
+- An amber ×, and a `!` after a city's coordinates in a route, is a city a
+  player found already looted by someone else.
 - A hollow dot, and a `?` after a city's coordinates in a route, means the city
   is possibly looted: it is within 2,000 blocks of a city a player found
   already looted, so an earlier hunt probably passed through. It is a guess.

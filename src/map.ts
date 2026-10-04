@@ -12,6 +12,8 @@ export interface MapCity {
   note?: string;
   /** A player reported the ship, or the whole city, missing here: crossed off like a looted city. */
   missing?: boolean;
+  /** Found already looted by someone else on arrival: its cross is amber, not grey. */
+  already?: boolean;
   /** Near a city someone found already looted, so possibly looted too: drawn hollow. */
   possible?: boolean;
   /** Drawn as a bright cross in the "everything explored so far" view: gold for looted, green for on the webmap. */
@@ -33,6 +35,8 @@ export interface MapScene {
 }
 
 const HIT_RADIUS = 9;
+/** Cities found already looted stand out from ordinary looted ones: they are why their neighbours are in doubt. */
+const ALREADY_COLOR = '#e0954a';
 // Pixels per block at the two ends of the zoom range.
 const MIN_SCALE = 0.0005;
 const MAX_SCALE = 2;
@@ -463,8 +467,9 @@ export class EndMap {
         ctx.moveTo(x + d, y - d);
         ctx.lineTo(x - d, y + d);
         if (outside) ctx.globalAlpha = 0.6;
-        ctx.strokeStyle = '#8a8299';
-        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = c.already ? ALREADY_COLOR : '#8a8299';
+        ctx.lineWidth = c.already ? 2 : 1.5;
+        if (c.already) ctx.globalAlpha = dimmed ? 0.5 : 1;
         if (c.trophy) {
           ctx.globalAlpha = 1;
           ctx.strokeStyle = c.trophy === 'looted' ? '#ffd24a' : '#7fe0b0';

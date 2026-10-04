@@ -373,7 +373,15 @@ function renderMap(): void {
   const cities: MapCity[] = [];
   batches.forEach((batch, b) =>
     batch.forEach((city, order) =>
-      cities.push({ city, batch: b, order, color: color(b), visited: tracker.has(city), possible: possible(city) }),
+      cities.push({
+        city,
+        batch: b,
+        order,
+        color: color(b),
+        visited: tracker.has(city),
+        already: tracker.isAlready(city),
+        possible: possible(city),
+      }),
     ),
   );
   for (const o of outside) {
@@ -383,6 +391,7 @@ function renderMap(): void {
       order: 0,
       color: OUTSIDE_COLOR,
       visited: tracker.has(o.city),
+      already: tracker.isAlready(o.city),
       note: o.note,
       missing: o.missing,
     });
@@ -565,7 +574,9 @@ function renderDetail(): void {
       box.checked = tracker.has(c);
       const maybe = possible(c);
       if (maybe) label.title += ` · ${POSSIBLE_NOTE}`;
-      if (tracker.isAlready(c)) label.title += ' · found already looted';
+      const already = tracker.isAlready(c);
+      li.classList.toggle('already', already);
+      if (already) label.title += ' · found already looted';
       if (tracker.isShared(c)) {
         // On the shared list: looted for everyone, so it can't be unticked here.
         box.disabled = true;
@@ -580,7 +591,7 @@ function renderDetail(): void {
       n.textContent = String(k + 1);
       const xz = document.createElement('span');
       xz.className = 'xz';
-      xz.textContent = xzText(c) + (unsure || maybe ? ' ?' : '');
+      xz.textContent = xzText(c) + (unsure || maybe ? ' ?' : '') + (already ? ' !' : '');
       const hop = document.createElement('span');
       hop.className = 'hop';
       hop.textContent = k ? `+${fmt(Math.round(Math.hypot(c.x - batch[k - 1].x, c.z - batch[k - 1].z)))}` : 'start here';
@@ -599,6 +610,12 @@ function renderDetail(): void {
       });
       label.append(box, n, xz, hop);
       label.append(chat);
+      // The same menu as right-clicking the city's dot on the map.
+      label.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        const city: MapCity = { city: c, batch: i, order: k, color: color(i), visited: tracker.has(c), possible: possible(c) };
+        openMenu(city, e.clientX, e.clientY, c);
+      });
       label.addEventListener('mouseenter', () => setHot(c));
       label.addEventListener('mouseleave', () => setHot(null));
       li.append(label);
@@ -1697,6 +1714,8 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') closeMenu();
 });
 $('map').addEventListener('wheel', closeMenu);
+// It does not follow the page, so it closes when something scrolls under it.
+document.addEventListener('scroll', closeMenu, true);
 
 /** Rebuild after a change, keeping the batch that holds this city selected. */
 function rebuildKeeping(id: string | null): void {
@@ -1806,6 +1825,12 @@ function addCityItems(c: MapCity, items: [string, () => void][]): void {
 }
 
 map.onMenu = (c, px, py, pos) => {
+  const at = $('map').getBoundingClientRect();
+  openMenu(c, at.left + px, at.top + py, pos);
+};
+
+/** The menu for a city, or for a bare spot on the map, opened at a place in the window. */
+function openMenu(c: MapCity | null, px: number, py: number, pos: { x: number; z: number }): void {
   const items: [string, () => void][] = [];
   if (c) addCityItems(c, items);
   // On a city, "here" is the city itself rather than the exact pixel that was clicked.
@@ -1856,9 +1881,10 @@ map.onMenu = (c, px, py, pos) => {
   );
   menu.hidden = false;
   tooltip.hidden = true;
-  menu.style.left = `${px + 4}px`;
-  menu.style.top = `${py + 4}px`;
-};
+  // Kept inside the window, whichever edge it was opened near.
+  menu.style.left = `${Math.max(4, Math.min(px + 4, window.innerWidth - menu.offsetWidth - 4))}px`;
+  menu.style.top = `${Math.max(4, Math.min(py + 4, window.innerHeight - menu.offsetHeight - 4))}px`;
+}
 
 const zoomSlider = $<HTMLInputElement>('zoomSlider');
 map.onZoom = (level) => {

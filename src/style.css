@@ -143,6 +143,8 @@ ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: col
 }
 #cities li label:hover, #cities li.hot label { background: var(--panel-2); }
 #cities li.looted label { color: var(--muted); text-decoration: line-through; }
+/* Found already looted by someone else: amber, so it stands out from the player's own looted cities. */
+#cities li.already label { color: #e0954a; }
 #cities .n { width: 1.6em; text-align: right; color: var(--muted); }
 #cities .xz { flex: 1; }
 #cities .hop { color: var(--muted); font-size: 12px; }
@@ -198,8 +200,9 @@ main { position: relative; min-width: 0; min-height: 0; display: flex; flex-dire
 #locateNote { white-space: nowrap; background: var(--panel); border-radius: 6px; padding: 3px 8px; }
 #locateNote:empty { display: none; }
 #menu {
-  position: absolute;
-  z-index: 2;
+  /* Fixed, so it can open over the route list as well as the map. */
+  position: fixed;
+  z-index: 60;
   display: flex;
   flex-direction: column;
   min-width: 170px;
@@ -264,6 +267,7 @@ body:not(.other-seed) .other-only { display: none; }
 #mapbar .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-sizing: border-box; }
 #mapbar .dot.ring { background: none; border: 2px solid; }
 #mapbar .dot.hollow { background: none; border: 1.5px solid var(--accent); }
+#mapbar .cross.amber { color: #e0954a; }
 #mapbar .cross { font-style: normal; font-weight: 700; font-size: 14px; line-height: 1; color: #8a8299; }
 #mapbar .dot.diamond { background: none; border: 1px solid var(--muted); border-radius: 0; transform: rotate(45deg) scale(0.8); }
 #mapbar .dot.square { border-radius: 2px; }
