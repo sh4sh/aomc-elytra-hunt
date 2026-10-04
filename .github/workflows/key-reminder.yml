@@ -1,0 +1,46 @@
+name: Remind about expiring keys
+
+# The two keys the relay depends on expire on 31 December 2026. This opens an
+# issue ahead of time, mentioning the owner so GitHub notifies them. When the
+# keys are renewed with a new expiry date, update the dates and text below.
+
+on:
+  schedule:
+    - cron: '0 15 1 12 *'
+    - cron: '0 15 15 12 *'
+    - cron: '0 15 27 12 *'
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      OWNER: ${{ github.repository_owner }}
+      TITLE: Renew the relay's keys before 31 December
+    steps:
+      - name: Open or bump the reminder
+        run: |
+          body="@$OWNER the keys the relay depends on expire on **31 December 2026**. When they lapse, looted-city submissions, ship reports, the hourly webmap update and relay deploys all stop working.
+
+          **1. GitHub token used by the relay** (files issues, starts the webmap update)
+          - GitHub: Settings → Developer settings → Fine-grained tokens → regenerate the relay's token with a new expiry. Keep *Issues: Read and write* and *Actions: Read and write* on this repository only.
+          - Then from \`relay/\`: \`npx wrangler secret put GITHUB_TOKEN\` and paste the new token.
+
+          **2. Cloudflare API token used by GitHub** (deploys the relay)
+          - Cloudflare: My Profile → API Tokens → roll or recreate the *Edit Cloudflare Workers* token.
+          - Then in this repository: Settings → Secrets and variables → Actions → update \`CLOUDFLARE_API_TOKEN\`.
+
+          **To check it worked:** run *Deploy the relay* from the Actions tab, and send a test submission from the app.
+
+          Afterwards, update the dates in \`.github/workflows/key-reminder.yml\` and close this issue."
+          existing=$(gh issue list --state open --search "in:title \"$TITLE\"" --json number -q '.[0].number')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "@$OWNER reminder: these keys still need renewing before 31 December."
+          else
+            gh issue create --title "$TITLE" --body "$body"
+          fi
