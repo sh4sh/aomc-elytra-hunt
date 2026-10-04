@@ -13,10 +13,13 @@ or another map mod as waypoints.
 
 The same steps are in the app under **How to use**.
 
-1. **Pick a route.** Routes are in the route list, numbered outward from 0,0.
+1. **Find cities near you.** In **Search settings**, enter your position and
+   press **Search**, or press **Random location** for somewhere new.
+2. **Pick a route.** Routes are in the route list, numbered outward from your
+   position (or from the centre of the End for an **Out from End Spawn** search).
    Pick one there, select any city on the map, or type your position into the
    box on the map and press **Nearest route**. **Go to route #** jumps to a route by number.
-2. **Get the waypoints into your map mod.** With a route open, choose one:
+3. **Get the waypoints into your map mod.** With a route open, choose one:
    - **Xaero's Minimap:** press **Copy waypoints**, close Minecraft, and paste
      at the end of the waypoint file in
      `.minecraft/xaero/minimap/<your server>/dim%1/`. Back that file up first.
@@ -27,9 +30,9 @@ The same steps are in the app under **How to use**.
      Xaero's waypoints for the server, JourneyMap's Waypoint Manager can import
      them with **Import External**. Other map mods that read coordinates from
      chat may pick the lines up too; that is untested.
-3. **Tick cities off as you loot them**, with the checkboxes in the route or by
+4. **Tick cities off as you loot them**, with the checkboxes in the route or by
    right-clicking a city on the map. Looted cities are left out of exports.
-4. **Share where you have been.** The best way is to upload your map of the End
+5. **Share where you have been.** The best way is to upload your map of the End
    to the [community webmap](https://map.diorite.xyz/?dim=the_end) with its
    upload button: by default, areas on the webmap are left out of the routes
    once the app's webmap data is refreshed. Your looted ticks are saved in your
@@ -42,8 +45,9 @@ The same steps are in the app under **How to use**.
 **Search settings** (fold it open) controls which cities are
 considered and how they are grouped:
 
-- **Out from 0,0 / Around a position:** search a band around the centre of the
-  End, or a circle of a chosen radius around coordinates you enter.
+- **Around a position / Out from End Spawn:** search a circle of a chosen radius
+  around coordinates you enter (the default; **Random location** picks some for
+  you), or a band around the centre of the End.
 - **From / To:** how far from 0,0 to look, measured along the longer axis. A search
   covering more than 25,000 cities is refused with a prompt to narrow it.
 - **Quadrants:** which quarters of the map to search.
