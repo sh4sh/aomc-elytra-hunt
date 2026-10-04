@@ -51,7 +51,15 @@ export const onTrajectory = (t: Trajectory, p: Pt): boolean =>
  * Paths worth showing. `already` are cities found already looted; `intact` are cities found
  * with their elytra, which an earlier hunter passing that way would have taken.
  */
-export function findTrajectories(already: Pt[], intact: Pt[]): Trajectory[] {
+export const findTrajectories = (already: Pt[], intact: Pt[]): Trajectory[] => studyTrajectories(already, intact).paths;
+
+/**
+ * The same, along with a sentence for each group of reports that came close to being a path
+ * but was not drawn, saying why.
+ */
+export function studyTrajectories(already: Pt[], intact: Pt[]): { paths: Trajectory[]; near: string[] } {
+  const near: string[] = [];
+  const where = (pts: Pt[]) => `near x: ${pts[0].x}, z: ${pts[0].z}`;
   // Group reports that are within reach of each other.
   const group = already.map((_, i) => i);
   const root = (i: number): number => (group[i] === i ? i : (group[i] = root(group[i])));
@@ -69,6 +77,7 @@ export function findTrajectories(already: Pt[], intact: Pt[]): Trajectory[] {
 
   const out: Trajectory[] = [];
   for (const pts of groups.values()) {
+    if (pts.length === 2) near.push(`2 cities found already looted ${where(pts)}: a third in line with them would make a path`);
     if (pts.length < MIN_POINTS) continue;
     // The direction the group is stretched along.
     const mx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
@@ -87,7 +96,10 @@ export function findTrajectories(already: Pt[], intact: Pt[]): Trajectory[] {
     const length = along(points[points.length - 1]) - along(points[0]);
     // A blob of reports says someone was around, not which way they went.
     const stray = Math.max(...pts.map(across));
-    if (stray > Math.max(500, 0.2 * length)) continue;
+    if (stray > Math.max(500, 0.2 * length)) {
+      near.push(`${pts.length} cities found already looted ${where(pts)} do not line up, so no path is drawn`);
+      continue;
+    }
 
     const spoilers = intact.filter((p) => distanceToLine(p, points) <= CORRIDOR_BLOCKS).length;
     let confidence: Confidence | null = pts.length >= HIGH_POINTS ? 'high' : 'medium';
@@ -95,7 +107,12 @@ export function findTrajectories(already: Pt[], intact: Pt[]): Trajectory[] {
     // city is let pass, since any hunter can miss one.
     if (spoilers > 1 && spoilers * 2 >= pts.length) confidence = null;
     else if (spoilers > 1) confidence = confidence === 'high' ? 'medium' : null;
-    if (!confidence) continue;
+    if (!confidence) {
+      near.push(
+        `${pts.length} cities found already looted ${where(pts)} line up, but ${spoilers} cities along the line were looted the ordinary way, so no path is drawn`,
+      );
+      continue;
+    }
 
     const first = points[0], last = points[points.length - 1];
     out.push({
@@ -106,7 +123,10 @@ export function findTrajectories(already: Pt[], intact: Pt[]): Trajectory[] {
       intact: spoilers,
     });
   }
-  return out;
+  if (already.length >= MIN_POINTS && groups.size === already.length) {
+    near.push(`${already.length} cities found already looted, but none within ${LINK_BLOCKS.toLocaleString()} blocks of another`);
+  }
+  return { paths: out, near };
 }
 
 /** Why the path is believed, in words. */

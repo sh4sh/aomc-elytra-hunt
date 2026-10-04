@@ -11,7 +11,7 @@ import { EndMap, type MapCity } from './map';
 import { Precomputed } from './precomputed';
 import { loadSkyFigures } from './sky-cultures';
 import { Tracker } from './tracker';
-import { describeTrajectory, findTrajectories, onTrajectory, type Trajectory } from './trajectory';
+import { describeTrajectory, onTrajectory, studyTrajectories, type Trajectory } from './trajectory';
 import { cityId, searchBounds, type City, type Filters, type Quadrant } from './types';
 import { OUTSIDE_COLOR, XAERO_COLORS, batchColor, setBatchTags, shareLine, waypointFile, waypointLines, waypointName } from './xaero';
 
@@ -161,8 +161,8 @@ const POSSIBLE_RADIUS = 2000;
 const POSSIBLE_NOTE = 'possibly looted: near a city found already looted';
 
 /** Guessed flight paths of earlier hunters, worked out again whenever a looted mark changes. */
-let pathsFor: { tracker: Tracker; version: number; paths: Trajectory[] } | null = null;
-function earlierPaths(): Trajectory[] {
+let pathsFor: { tracker: Tracker; version: number; paths: Trajectory[]; near: string[] } | null = null;
+function earlierStudy(): { paths: Trajectory[]; near: string[] } {
   if (pathsFor?.tracker !== tracker || pathsFor.version !== tracker.version) {
     const point = (id: string) => {
       const [x, z] = id.split(',').map(Number);
@@ -171,10 +171,11 @@ function earlierPaths(): Trajectory[] {
     const already = tracker.alreadyAll().map(point);
     // Cities looted the ordinary way had their elytra, so no earlier hunter took it.
     const intact = tracker.all().map(point).filter((p) => !tracker.isAlready(p));
-    pathsFor = { tracker, version: tracker.version, paths: findTrajectories(already, intact) };
+    pathsFor = { tracker, version: tracker.version, ...studyTrajectories(already, intact) };
   }
-  return pathsFor.paths;
+  return pathsFor;
 }
+const earlierPaths = (): Trajectory[] => earlierStudy().paths;
 
 /** Why a city that nobody has marked looted may be looted all the same, or null if there is no sign of it. */
 function possibleNote(c: City): string | null {
@@ -490,6 +491,10 @@ function renderBatches(): void {
       (maybeCount ? ` · ${fmt(maybeCount)} possibly looted (marked ?)` : '') +
       earlierPaths()
         .map((t) => ` · possible earlier flight path (${describeTrajectory(t)})`)
+        .join('') +
+      // Reports that nearly made a path, and what stopped them.
+      earlierStudy()
+        .near.map((why) => ` · ${why}`)
         .join('') +
       (state.excluded.length ? ` · ${fmt(state.excluded.length)} looted removed from routes` : '')
     : unbatched
@@ -1513,6 +1518,45 @@ $('customDelete').addEventListener('click', () => {
 });
 
 $('markAll').addEventListener('click', () => markAll(true));
+
+// Adds the nearest city that has no route to the open one: a quick way to make a route a little longer.
+const addOneBtn = $('addOne');
+addOneBtn.addEventListener('click', () => {
+  if (selected === null) return;
+  const batch = batches[selected];
+  let best: City | null = null;
+  let bestDist = Infinity;
+  for (const o of outside) {
+    if (o.missing || tracker.has(o.city)) continue;
+    for (const c of batch) {
+      const d = Math.hypot(c.x - o.city.x, c.z - o.city.z);
+      if (d < bestDist) [best, bestDist] = [o.city, d];
+    }
+  }
+  const say = (text: string) => {
+    addOneBtn.textContent = text;
+    setTimeout(() => (addOneBtn.textContent = '+1 city'), 2000);
+  };
+  if (!best) return say(batch.length ? 'No city without a route' : 'Add a first city from the map');
+  const id = cityId(best);
+  if (isCustom(selected)) {
+    const k = selected - generatedCount;
+    state.custom[k].push(id);
+    delete state.moved[id];
+    save();
+    rebuild(() => {
+      selected = generatedCount + k < batches.length ? generatedCount + k : null;
+    });
+    render();
+    return;
+  }
+  // Anchored to a city that belongs to the route of its own accord, so the move survives regrouping.
+  const anchor = batch.find((x) => !(cityId(x) in state.moved));
+  if (!anchor) return say('No city without a route');
+  state.moved[id] = cityId(anchor);
+  save();
+  rebuildKeeping(cityId(anchor));
+});
 $('markNone').addEventListener('click', () => markAll(false));
 
 $('citiesExport').addEventListener('click', () => {
