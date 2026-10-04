@@ -208,6 +208,21 @@ main { position: relative; min-width: 0; min-height: 0; display: flex; flex-dire
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
 }
 #menu[hidden] { display: none; }
+.popup {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(320px, calc(100% - 32px));
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+}
+.popup[hidden] { display: none; }
+.popup form { gap: 10px; }
 #menu .menu-title { padding: 4px 8px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 #menu button { border: 0; background: none; text-align: left; padding: 6px 8px; }
 #menu button:hover { background: var(--panel-2); }

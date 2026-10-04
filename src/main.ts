@@ -1329,7 +1329,8 @@ async function reportShip(city: City, result: 'found' | 'missing' | 'no-city'): 
     missing: `there is an End City at ${where} but no ship`,
     'no-city': `there is no End City at ${where} at all`,
   }[result];
-  if (!confirm(`Report that ${what}? It is sent for review, and nothing changes until it is accepted.`)) return;
+  // "Missing" reports are confirmed in the little window they are chosen from; a "found" report asks here.
+  if (result === 'found' && !confirm(`Report that ${what}? It is sent for review, and nothing changes until it is accepted.`)) return;
   if (!SUBMIT_URL) {
     // Without the relay, the report is filed by hand as a GitHub issue.
     const headline = { found: 'ship found', missing: 'no ship', 'no-city': 'no End City' }[result];
@@ -1349,6 +1350,33 @@ async function reportShip(city: City, result: 'found' | 'missing' | 'no-city'): 
     locateNote.textContent = 'Could not reach the report service. Please try again later.';
   }
 }
+
+// The little window for reporting something missing: pick which, then send.
+const reportBox = $('reportBox');
+const reportForm = $<HTMLFormElement>('reportForm');
+let reportCity: City | null = null;
+function openReport(city: City): void {
+  reportCity = city;
+  $('reportWhere').textContent = `At ${xzText(city)}`;
+  reportForm.reset();
+  reportBox.hidden = false;
+  reportForm.querySelector<HTMLInputElement>('input[name="reportKind"]:checked')?.focus();
+}
+const closeReport = () => {
+  reportBox.hidden = true;
+  reportCity = null;
+};
+$('reportCancel').addEventListener('click', closeReport);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !reportBox.hidden) closeReport();
+});
+reportForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const city = reportCity;
+  const kind = new FormData(reportForm).get('reportKind');
+  closeReport();
+  if (city && (kind === 'missing' || kind === 'no-city')) void reportShip(city, kind);
+});
 
 async function loadShipReports(): Promise<{ missing?: string[]; found?: string[]; noCity?: string[] }> {
   try {
@@ -1520,8 +1548,7 @@ function addCityItems(c: MapCity, items: [string, () => void][]): void {
   // Reports go to the maintainer for review; nothing changes for anyone until one is accepted.
   if (state.seed === DEFAULT_SEED) {
     if (uncertainShips.has(id)) items.push(['Report: the ship was there', () => reportShip(c.city, 'found')]);
-    items.push(['Report: city is here, but no ship', () => reportShip(c.city, 'missing')]);
-    items.push(['Report: no End City here at all', () => reportShip(c.city, 'no-city')]);
+    items.push(['Report missing structure', () => openReport(c.city)]);
   }
 
   const inCustom = state.custom.findIndex((ids) => ids.includes(id));
