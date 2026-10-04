@@ -55,6 +55,8 @@ interface Saved {
   excluded: string[];
   /** Cities moved by hand: city id -> id of a city in the batch it was added to. */
   moved: Record<string, string>;
+  /** Cities taken out of their route by hand. They stay on the map without a route. */
+  dropped?: string[];
   /** Cities added with "+1 city", oldest first: they go at the end of their route, in this order. */
   appended?: string[];
   /** Keep cities near one found already looted out of the routes. */
@@ -195,6 +197,11 @@ const isCustom = (i: number) => i >= generatedCount;
 const batchTitle = (i: number) => (isCustom(i) ? `Custom ${i - generatedCount + 1}` : `Route ${i + 1}`);
 /** Cities that could not be fitted into a full batch within the longest-flight limit. */
 let unbatched = 0;
+const REMOVED_NOTE = 'removed from its route by hand';
+/** Take a city off the removed-by-hand list, as when it is added to a route again. */
+const undrop = (id: string) => {
+  if (state.dropped) state.dropped = state.dropped.filter((x) => x !== id);
+};
 /** Cities kept out of the batches but still drawn on the map, with the reason. */
 let outside: { city: City; note: string; missing?: boolean }[] = [];
 
@@ -331,7 +338,9 @@ function finishRebuild(
   pool: Map<string, { city: City; note?: string }>,
   cities: City[],
 ): void {
-  batches = made.batches;
+  // Cities taken out by hand leave after batching, so removing one never reshuffles the other routes.
+  const dropped = new Set(state.dropped ?? []);
+  batches = dropped.size ? made.batches.map((b) => b.filter((c) => !dropped.has(cityId(c)))) : made.batches;
   usedBatchSize = made.size;
   // Hand-made moves are applied after batching, so adding a city to a batch never reshuffles the others.
   // A move holds while both cities still exist and its target is in a batch of its own accord.
@@ -382,6 +391,10 @@ function finishRebuild(
   unbatched = 0;
   for (const c of cities) {
     if (inBatch.has(cityId(c))) continue;
+    if (dropped.has(cityId(c))) {
+      outside.push({ city: c, note: REMOVED_NOTE });
+      continue;
+    }
     unbatched++;
     outside.push({ city: c, note: `no route to it with flights under ${fmt(state.maxHop)} blocks` });
   }
@@ -842,6 +855,7 @@ function applyResult(seed: string, filters: Filters, cities: FoundCity[]): void 
     state.excluded = [];
     state.moved = {};
     state.appended = [];
+    state.dropped = [];
     state.custom = [];
     tracker = new Tracker(seed);
     tracker.setShared(seed === DEFAULT_SEED ? sharedLooted : [], seed === DEFAULT_SEED ? sharedAlready : []);
@@ -1554,6 +1568,7 @@ addOneBtn.addEventListener('click', () => {
   };
   if (!best) return say(batch.length ? 'No city without a route' : 'Add a first city from the map');
   const id = cityId(best);
+  undrop(id);
   state.appended = [...(state.appended ?? []).filter((x) => x !== id), id];
   if (isCustom(selected)) {
     const k = selected - generatedCount;
@@ -1899,6 +1914,7 @@ function addCityItems(c: MapCity, items: [string, () => void][]): void {
     if (k >= state.custom.length) state.custom.push([]);
     state.custom[k].push(id);
     delete state.moved[id];
+    undrop(id);
     save();
     reselect(k);
   };
@@ -1913,6 +1929,7 @@ function addCityItems(c: MapCity, items: [string, () => void][]): void {
       const anchor = batches[target].find((x) => !(cityId(x) in state.moved));
       if (anchor) {
         items.push([`Add to route ${target + 1}`, () => {
+          undrop(id);
           state.moved[id] = cityId(anchor);
           save();
           rebuildKeeping(cityId(anchor));
@@ -1920,6 +1937,23 @@ function addCityItems(c: MapCity, items: [string, () => void][]): void {
       }
     }
     items.push(['Start a custom route with this city', () => addToCustom(state.custom.length)]);
+  }
+  // Cities moved in by hand, or in a custom route, have their own way out below.
+  if (c.batch >= 0 && inCustom < 0 && !(id in state.moved)) {
+    items.push([`Remove from route ${c.batch + 1}`, () => {
+      state.dropped = [...(state.dropped ?? []), id];
+      save();
+      // Stay on the route it was taken from, unless that was its last city.
+      const stay = batches[c.batch].find((x) => cityId(x) !== id && !(cityId(x) in state.moved));
+      rebuildKeeping(selected === c.batch ? (stay ? cityId(stay) : null) : keep);
+    }]);
+  }
+  if (state.dropped?.includes(id) && c.batch < 0) {
+    items.push(['Put back in its route', () => {
+      undrop(id);
+      save();
+      reselect();
+    }]);
   }
   if (inCustom >= 0) {
     items.push([`Remove from custom ${inCustom + 1}`, () => {

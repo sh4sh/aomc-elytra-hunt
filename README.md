@@ -101,8 +101,12 @@ Only cities with a ship are ever shown, since only ships hold elytra.
   dividers either side of the map to resize the panels.
 - Right-click a city for options; on a touch screen, press and hold.
 
+Right-click a city (on the map or in the route's list) and choose **Remove
+from route** to take it out; it stays on the map as a faint diamond, and
+**Put back in its route** on the same menu returns it.
+
 **+1 city**, in an open route, adds the city nearest the route's last stop that
-is not in any route, as the new last stop. **Undo +1** takes the latest one out.
+is not in any route, as the new last stop. The **↶** button beside it takes the latest one out.
 
 **Rebuild routes without looted** regroups the remaining cities into fresh routes
 once some have been looted.
