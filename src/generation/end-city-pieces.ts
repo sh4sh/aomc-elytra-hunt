@@ -1,6 +1,7 @@
 // End City layout: which pieces a city is built from, and so whether it has a
 // ship (the only place elytra generate). Ported from cubiomes (finders.c, MIT licence),
-// with one correction, marked below, where cubiomes and the game part ways.
+// with corrections, marked below, where cubiomes and the game part ways. The same ones were
+// reported to cubiomes by someone else: https://github.com/Cubitect/cubiomes/issues/155
 
 import { JavaRandom } from './java-random';
 
@@ -135,7 +136,10 @@ const genBridge: Gen = (env, current, depth) => {
   if (!env.ship.tried && rng.nextInt(10 - depth) === 0) {
     const x = -8 + rng.nextInt(8);
     const z = -70 + rng.nextInt(10);
-    base = add(env, base, rot, x, y, z, T.SHIP);
+    // The ship hangs off the bridge's last piece, and so does the end piece added below: the ship
+    // does not become the piece things are measured from. (cubiomes e61f905 makes it so, which
+    // moves the bridge's end piece out to the ship.)
+    add(env, base, rot, x, y, z, T.SHIP);
     // Stays set even if this bridge is later rejected for overlapping, so a city can end up with no ship.
     env.ship.tried = true;
   } else {

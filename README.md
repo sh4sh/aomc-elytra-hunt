@@ -59,6 +59,8 @@ details under the map.
   "possibly looted" and the flight-path guess.
 - [How do we know the positions are right?](docs/accuracy.md): what the
   results were checked against, and what has not been proven.
+- [Notes on the cubiomes differences](docs/cubiomes-notes.md): where the
+  ship predictions depart from cubiomes, and what is already reported there.
 - [Development](docs/development.md): running it locally, the data files and
   the submission relay.
 

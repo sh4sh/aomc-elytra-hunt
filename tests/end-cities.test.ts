@@ -77,6 +77,13 @@ describe('End City positions and ships match cubiomes', () => {
     for (const [x, z] of [[-12712, 2952], [-17592, 3560]]) expect(endCityHasShip(seed, (x - 8) / 16, (z - 8) / 16)).toBe(true);
   });
 
+  // Both checked in game. They turn on what a bridge's end piece hangs from when the bridge ends in a ship.
+  it('hangs the end of a ship bridge from the bridge, not the ship', () => {
+    const seed = 856461443495910397n;
+    expect(endCityHasShip(seed, (26008 - 8) / 16, (-53384 - 8) / 16)).toBe(false);
+    expect(endCityHasShip(seed, (-37752 - 8) / 16, (-26824 - 8) / 16)).toBe(true);
+  });
+
   it('no longer marks any ship as uncertain', () => {
     expect(endCityShip(856461443495910397n, -497, 123)).toEqual({ ship: true, tight: false });
     expect(shipCode(856461443495910397n, -497, 123)).toBe(1);

@@ -10,7 +10,7 @@
      Piece *next;
  };
 --- a/finders.c	2026-10-03 11:25:12
-+++ b/finders.c	2026-10-04 16:19:40
++++ b/finders.c	2026-10-04 16:34:30
 @@ -2461,7 +2461,7 @@
              if (!next(env->rng, 1))
                  continue;
@@ -20,3 +20,12 @@
                  binfo[i][1], binfo[i][2], binfo[i][3], BRIDGE_END);
              genPiecesRecusively(genBridge, env, bridge, depth+1);
          }
+@@ -2501,7 +2501,7 @@
+     {
+         int x = -8 + nextInt(env->rng, 8);
+         int z = -70 + nextInt(env->rng, 10);
+-        base = addEndCityPiece(env, base, rot, x, y, z, END_SHIP);
++        addEndCityPiece(env, base, rot, x, y, z, END_SHIP);
+         *env->ship = 1;
+     }
+     else

@@ -44,8 +44,10 @@ corrections below applied. So are the cities that were checked in game.
 
 ## Where the app differs from cubiomes, and why
 
-Three differences, all about ships. The first two are in
-[`cubiomes-fixes.patch`](../scripts/reference/cubiomes-fixes.patch).
+Four differences, all about ships. The first three are in
+[`cubiomes-fixes.patch`](../scripts/reference/cubiomes-fixes.patch), and were
+reported to cubiomes by someone else before we found them (cubiomes issue 155);
+[cubiomes-notes.md](cubiomes-notes.md) has the details.
 
 - **Where bridges leave a tower.** A thin tower picks one of its floors for its
   bridges to leave from. cubiomes hangs the bridges on the tower's top floor
@@ -53,6 +55,12 @@ Three differences, all about ships. The first two are in
   and a ship at its end, 4 or 8 blocks too high, clear of parts of the city
   that it collides with in the game. The game discards a ship that collides,
   so cubiomes reports ships that do not exist (and misses a few that do).
+- **What a bridge's end piece hangs from.** When a bridge ends in a ship,
+  cubiomes hangs the bridge's final end piece from the ship, where the game
+  hangs it from the last piece of the bridge. That moves the end piece, which
+  now and then changes whether something collides. This one came from the
+  upstream report, and was then checked in game at two cities where it
+  changes the answer.
 - **A tag stored too small.** cubiomes keeps one internal value (a tag used to
   decide whether overlapping parts of a city are allowed) in 8 bits, where the
   game uses a full 32-bit number. Rarely, that lets a ship through that the
@@ -63,9 +71,9 @@ Three differences, all about ships. The first two are in
   a ship only if its elytra (which hangs at a known spot inside the ship) is
   within reach. cubiomes does not consider this.
 
-Within 100,000 blocks on the server's seed, the first and third change the
-answer for 260 of 34,409 cities: 196 ships that were predicted are not there,
-and 64 that were not predicted are.
+Within 100,000 blocks on the server's seed, the bridge corrections and the
+reach rule change the answer for 289 of 34,409 cities: 225 ships that were
+predicted are not there, and 64 that were not predicted are.
 
 One more thing differs in how cubiomes is built, not in its logic: far from
 0,0 a few results depend on doing arithmetic in 32-bit floats exactly as Java
@@ -96,6 +104,8 @@ Cities were then checked one by one in that world
 | x: 62152, z: 360 (ship wholly out of reach) | ship | no ship | no ship |
 | x: -70328, z: -4088 (ship wholly out of reach) | ship | no ship | no ship |
 | x: -546776, z: 5576 (ship partly out of reach, elytra one chunk too far) | ship | no ship | half a ship, no elytra |
+| x: 26008, z: -53384 (bridge end piece) | ship | no ship | no ship |
+| x: -37752, z: -26824 (bridge end piece) | no ship | ship | ship |
 
 The bridge correction was worked out from the first six results that came in.
 It then gave the right answer for the other five bridge cities before their
