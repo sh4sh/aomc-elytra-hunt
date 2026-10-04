@@ -6,17 +6,17 @@ Find Elytra on the About Oliver Minecraft Server.
 
 A web app for hunting elytra on a Minecraft Java server. It works out where
 every End City is from the world seed, keeps the ones that have a ship, and
-groups them into batches that you can load into Xaero's Minimap, JourneyMap,
+groups them into routes that you can load into Xaero's Minimap, JourneyMap,
 or another map mod as waypoints.
 
 ## Using it
 
 The same steps are in the app under **How to use**.
 
-1. **Pick a batch.** Batches are in the batch list, numbered outward from 0,0.
+1. **Pick a route.** Routes are in the route list, numbered outward from 0,0.
    Pick one there, select any city on the map, or type your position into the
-   box on the map and press **Nearest batch**. **Go to batch #** jumps to a batch by number.
-2. **Get the waypoints into your map mod.** With a batch open, choose one:
+   box on the map and press **Nearest route**. **Go to route #** jumps to a route by number.
+2. **Get the waypoints into your map mod.** With a route open, choose one:
    - **Xaero's Minimap:** press **Copy waypoints**, close Minecraft, and paste
      at the end of the waypoint file in
      `.minecraft/xaero/minimap/<your server>/dim%1/`. Back that file up first.
@@ -27,11 +27,11 @@ The same steps are in the app under **How to use**.
      Xaero's waypoints for the server, JourneyMap's Waypoint Manager can import
      them with **Import External**. Other map mods that read coordinates from
      chat may pick the lines up too; that is untested.
-3. **Tick cities off as you loot them**, with the checkboxes in the batch or by
+3. **Tick cities off as you loot them**, with the checkboxes in the route or by
    right-clicking a city on the map. Looted cities are left out of exports.
 4. **Share where you have been.** The best way is to upload your map of the End
    to the [community webmap](https://map.diorite.xyz/?dim=the_end) with its
-   upload button: by default, areas on the webmap are left out of the batches
+   upload button: by default, areas on the webmap are left out of the routes
    once the app's webmap data is refreshed. Your looted ticks are saved in your
    browser only; you can also send them in from **Share progress**, and once
    accepted those cities show as looted for all players. Or send the exported
@@ -47,12 +47,12 @@ considered and how they are grouped:
 - **From / To:** how far from 0,0 to look, measured along the longer axis. A search
   covering more than 25,000 cities is refused with a prompt to narrow it.
 - **Quadrants:** which quarters of the map to search.
-- **Cities per batch:** 27 fills one shulker box; anything from 1 to 500 works.
-- **Batch shape:** compact clusters, or lines heading outward. For lines you can also set
+- **Cities per route:** 27 fills one shulker box; anything from 1 to 500 works.
+- **Route shape:** compact clusters, or lines heading outward. For lines you can also set
   how far a line may stray to either side of straight.
-- **Longest flight between cities:** no hop inside a batch is longer than this.
-  Cities that can't be reached in a full batch are left unbatched. If no batch of the
-  chosen size fits at all, smaller batches are made, down to 2 cities.
+- **Longest flight between cities:** no hop inside a route is longer than this.
+  Cities that can't be reached in a full route are left without a route. If no route of the
+  chosen size fits at all, smaller routes are made, down to 2 cities.
 - **Leave out cities already on the webmap.**
 - **Advanced → Angle:** stay near the diagonals or near the axes, or search
   every direction (the default).
@@ -64,21 +64,21 @@ Only cities with a ship are ever shown, since only ships hold elytra.
 
 ### On the map
 
-- Filled dots are cities in a batch, coloured by batch.
+- Filled dots are cities in a route, coloured by route.
 - An × is a looted city.
-- A small faint diamond is a city with a ship that is not in any batch.
-  Right-click it to add it to the batch you have open.
+- A small faint diamond is a city with a ship that is not in any route.
+  Right-click it to add it to the route you have open.
 - Green shading is terrain already on the community webmap.
 - Drag to pan; scroll or use the slider to zoom. On a touch screen, use two
   fingers to move the map and pinch to zoom; one finger scrolls the page. On a wide screen, drag the
   dividers either side of the map to resize the panels.
 - Right-click a city for options; on a touch screen, press and hold.
 
-**Re-batch without looted** regroups the remaining cities into fresh batches
+**Rebuild routes without looted** regroups the remaining cities into fresh routes
 once some have been looted.
 
-**Custom batches:** right-click any city and choose **Start a custom batch with
-this city**, then right-click others to add them to it. Custom batches are listed
+**Custom routes:** right-click any city and choose **Start a custom route with
+this city**, then right-click others to add them to it. Custom routes are listed
 above the generated ones and export the same way.
 
 ## Things to know
@@ -91,8 +91,8 @@ above the generated ones and export the same way.
   may be off; spot-check a city before a long trip.
 - "On the webmap" means someone's client loaded those chunks, not that the ship
   was looted.
-- With a longest flight set, only full batches are made, and cities that can't
-  be reached that way stay unbatched.
+- With a longest flight set, only full routes are made, and cities that can't
+  be reached that way stay without a route.
 
 <details>
 <summary><strong>How do we know the positions are right?</strong></summary>
@@ -101,7 +101,7 @@ The app does not look End Cities up anywhere. It works them out from the world
 seed, using the same steps the game does, in code ported from
 [cubiomes](https://github.com/Cubitect/cubiomes), an open-source C library that
 reimplements Minecraft's world generation. Three things have to be right for a
-city to show up in a batch.
+city to show up in a route.
 
 **1. Where a city can be.** The End is divided into regions of 20 by 20 chunks.
 Each region has one candidate chunk, chosen from the seed. (cubiomes:

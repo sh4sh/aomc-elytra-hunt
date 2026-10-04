@@ -484,6 +484,25 @@ export class EndMap {
       ctx.fillText('you', x + 10, y - 6);
     }
 
+    // Where the open route begins.
+    if (route.length) {
+      const x = this.sx(route[0].city.x), y = this.sy(route[0].city.z);
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(x, y, 8, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.font = 'bold 11px system-ui, sans-serif';
+      const label = 'Start here';
+      const width = ctx.measureText(label).width;
+      // A dark plate behind the words keeps them readable over other cities.
+      ctx.fillStyle = 'rgba(15, 12, 23, 0.85)';
+      ctx.fillRect(x + 11, y - 22, width + 8, 16);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(label, x + 15, y - 10);
+      ctx.font = '11px system-ui, sans-serif';
+    }
+
     // Route numbers once there is room for them.
     if (route.length && this.scale > 0.04) {
       ctx.fillStyle = '#ece7f5';

@@ -280,3 +280,32 @@ export function makeBatches(
     .sort((p, q) => p.d - q.d || p.key - q.key)
     .map((e) => e.b);
 }
+
+/** Everything needed to work out the batches for a set of cities. */
+export interface BatchJob {
+  cities: City[];
+  size: number;
+  shape: BatchShape;
+  maxHop: number;
+  lineDeviation: number;
+}
+
+/**
+ * Batches of the wanted size, or, if not even one of those can be made, of the
+ * largest size that gives at least one (down to pairs). Returns the size used.
+ */
+export function makeBatchesOrSmaller(job: BatchJob): { batches: City[][]; size: number } {
+  const attempt = (size: number) => makeBatches(job.cities, size, job.shape, job.maxHop, job.lineDeviation);
+  const batches = attempt(job.size);
+  if (batches.length || job.cities.length < 2 || job.size <= 2) return { batches, size: job.size };
+  // Halve the range each time rather than stepping down one by one, which matters for large sizes.
+  let [fits, tooBig] = [1, job.size];
+  let best: City[][] = [];
+  while (tooBig - fits > 1) {
+    const size = Math.floor((fits + tooBig) / 2);
+    const made = attempt(size);
+    if (made.length) [fits, best] = [size, made];
+    else tooBig = size;
+  }
+  return fits >= 2 ? { batches: best, size: fits } : { batches: [], size: job.size };
+}

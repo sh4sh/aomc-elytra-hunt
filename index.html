@@ -34,7 +34,7 @@
             <button id="aroundUseMap" type="button">Use my position from the map</button>
             <button id="aroundRandom" type="button">Random location</button>
           </div>
-          <p class="hint">Finds cities within that distance of the position, in any direction. If a small radius holds too few cities for a full batch, smaller batches are made instead.</p>
+          <p class="hint">Finds cities within that distance of the position, in any direction. If a small radius holds too few cities for a full route, smaller routes are made instead.</p>
         </div>
         <div id="bandBox" class="panel band-only">
         <div class="row" id="distanceBox">
@@ -55,9 +55,9 @@
           <span class="hint">Optional. Changes here apply straight away.</span>
         </div>
         <div class="row">
-          <label>Cities per batch <input id="batchSize" type="number" min="1" step="1" /></label>
+          <label>Cities per route <input id="batchSize" type="number" min="1" step="1" /></label>
           <label>
-            Batch shape
+            Route shape
             <select id="batchShape">
               <option value="cluster">Clusters</option>
               <option value="line">Lines outward</option>
@@ -68,13 +68,13 @@
         <div id="lineDeviationBox" class="panel" hidden>
           <label>Stray from a straight line, up to <input id="lineDeviation" type="number" min="0" step="250" /></label>
           <p class="hint">
-            In blocks, to either side of the line from 0,0 through the batch's first city. The default is 1,000; 0
-            means no limit. Tight values leave most cities unbatched: ships are sparse, so if you get few batches, try
-            2,000 or more, or smaller batches. Needs a longest flight to be set.
+            In blocks, to either side of the line from 0,0 through the route's first city. The default is 1,000; 0
+            means no limit. Tight values leave most cities without a route: ships are sparse, so if you get few routes, try
+            2,000 or more, or smaller routes. Needs a longest flight to be set.
           </p>
         </div>
         <label>Longest flight between cities <input id="maxHop" type="number" min="0" step="250" /></label>
-        <p class="hint">In blocks. Cities that can't be reached in a full batch within this are left unbatched (small faint diamonds on the map); right-click one to add it to a batch. 0 means no limit. If no batch of the chosen size fits at all, smaller batches are made, down to 2 cities.</p>
+        <p class="hint">In blocks. Cities that can't be reached in a full route within this are left without a route (small faint diamonds on the map); right-click one to add it to a route. 0 means no limit. If no route of the chosen size fits at all, smaller routes are made, down to 2 cities.</p>
         <label class="check aomc-only"><input id="skipMapped" type="checkbox" /> Leave out cities already on the webmap</label>
         <p id="exploredNote" class="hint aomc-only"></p>
         <details id="advanced">
@@ -119,15 +119,19 @@
       </p>
       <p id="stats" class="stats"></p>
       <div class="row">
-        <button id="regroup" type="button" title="Rebuild the batches from cities that are not looted yet">Re-batch without looted</button>
+        <button id="regroup" type="button" title="Rebuild the routes from cities that are not looted yet">Rebuild routes without looted</button>
         <button id="regroupUndo" type="button" hidden>Put looted back</button>
+      </div>
+      <div id="batchBusy" class="busy" role="status" hidden>
+        <progress></progress>
+        <span class="hint">Working out the routes…</span>
       </div>
       <ol id="batches"></ol>
       <div id="pager" class="row" hidden>
         <button id="pagePrev" type="button" aria-label="Previous page">‹</button>
-        <select id="pageSelect" aria-label="Jump to a page of batches"></select>
+        <select id="pageSelect" aria-label="Jump to a page of routes"></select>
         <button id="pageNext" type="button" aria-label="Next page">›</button>
-        <input id="gotoBatch" type="number" min="1" step="1" placeholder="Go to batch #" title="Type a batch number and press Enter" aria-label="Go to batch number" />
+        <input id="gotoBatch" type="number" min="1" step="1" placeholder="Go to route #" title="Type a route number and press Enter" aria-label="Go to route number" />
       </div>
 
       <details id="share">
@@ -138,7 +142,7 @@
             After a trip, upload your map of the End to the
             <a href="https://map.diorite.xyz/?dim=the_end" target="_blank" rel="noopener">community webmap</a> using
             its upload button. Everything you explored then shows there for everyone, and by default this app leaves
-            cities in mapped areas out of the batches the next time its webmap data is refreshed.
+            cities in mapped areas out of the routes the next time its webmap data is refreshed.
           </p>
         </div>
         <p class="hint aomc-only">
@@ -187,7 +191,7 @@
       <canvas id="map"></canvas>
       <form id="locate">
         <input id="locateInput" placeholder="Your position, e.g. x: 100, z: -200" autocomplete="off" aria-label="Your position" />
-        <button type="submit">Nearest batch</button>
+        <button type="submit">Nearest route</button>
         <button id="locateClear" type="button" aria-label="Clear position">×</button>
         <span id="locateNote"></span>
       </form>
@@ -199,13 +203,13 @@
       <div id="tooltip" hidden></div>
       <div id="menu" hidden></div>
       <footer id="mapbar">
-        <span class="key"><i class="dot"></i> in a batch</span>
+        <span class="key"><i class="dot"></i> in a route</span>
         <span class="key"><i class="cross">×</i> looted</span>
-        <span class="key"><i class="dot diamond"></i> not in a batch</span>
+        <span class="key"><i class="dot diamond"></i> not in a route</span>
         <span class="key"><i class="dot square area"></i> search area</span>
         <span class="key aomc-only"><i class="dot square green"></i> already on the webmap</span>
-        <span class="controls mouse-only">Drag to pan · scroll or use the slider to zoom · click a city to open its batch · right-click for options</span>
-        <span class="controls touch-only">Two fingers to move the map · pinch or use the slider to zoom · tap a city to open its batch · press and hold for options</span>
+        <span class="controls mouse-only">Drag to pan · scroll or use the slider to zoom · click a city to open its route · right-click for options</span>
+        <span class="controls touch-only">Two fingers to move the map · pinch or use the slider to zoom · tap a city to open its route · press and hold for options</span>
         <span id="cursor"></span>
       </footer>
     </main>
@@ -215,20 +219,20 @@
       <div id="detailEmpty" class="empty">
         <button id="helpBack" type="button" hidden></button>
         <h2>How to use</h2>
-        <h3>1. Pick a batch</h3>
+        <h3>1. Pick a route</h3>
         <p>
-          Batches are in the <button type="button" class="jump" data-target="batches">batch list</button>, numbered
+          Routes are in the <button type="button" class="jump" data-target="batches">route list</button>, numbered
           outward from 0,0. Pick one there, select any city on the map, or type your position into the box on the map
-          (or right-click the map and choose <em>Set my position here</em>) and press <em>Nearest batch</em>.
+          (or right-click the map and choose <em>Set my position here</em>) and press <em>Nearest route</em>.
         </p>
         <h3>2. Get the waypoints into your map mod</h3>
         <p>
-          With a batch open, choose <em>Xaero's Minimap</em> to copy waypoints to paste into its waypoint file, or
+          With a route open, choose <em>Xaero's Minimap</em> to copy waypoints to paste into its waypoint file, or
           <em>JourneyMap / Other</em> to copy chat lines that become clickable waypoints.
         </p>
         <h3>3. Tick cities off as you loot them</h3>
         <p>
-          Use the checkboxes in the batch, or right-click a city on the map (press and hold on a touch screen). Looted cities turn into an × and are left
+          Use the checkboxes in the route, or right-click a city on the map (press and hold on a touch screen). Looted cities turn into an × and are left
           out of exports.
         </p>
         <div class="aomc-only help-step">
@@ -236,7 +240,7 @@
         <p>
           The best way is to upload your map of the End to the
           <a href="https://map.diorite.xyz/?dim=the_end" target="_blank" rel="noopener">community webmap</a>. By
-          default, areas on the webmap are left out of the batches once this app's webmap data is refreshed.
+          default, areas on the webmap are left out of the routes once this app's webmap data is refreshed.
         </p>
         <p>
           Your looted ticks stay in this browser. You can also send them in from
@@ -247,16 +251,16 @@
         <h3>Good to know</h3>
         <ul>
           <li>For Minecraft Java Edition, not Bedrock. It follows the 1.19–1.21 world generation rules and is in use on a 26.2 server; a future version that changes End generation could put cities elsewhere.</li>
-          <li>Small faint diamonds are cities with a ship that didn't fit a batch. Right-click one to add it to the batch you have open.</li>
+          <li>Small faint diamonds are cities with a ship that didn't fit a route. Right-click one to add it to the route you have open.</li>
           <li>Far from 0,0? In <button type="button" class="jump" data-target="settings">Search settings</button>, choose <em>Around a position</em> to search a circle around your coordinates.</li>
-          <li>Want your own route? Right-click any city and choose <em>Start a custom batch with this city</em>, then right-click others to add them. Custom batches sit at the top of the batch list.</li>
-          <li class="aomc-only">Green shading is terrain already on the community webmap; by default, cities there are left out of batches.</li>
-          <li><button type="button" class="jump" data-target="settings">Search settings</button> changes the distance, angle, batch size and longest flight.</li>
+          <li>Want to plan your own? Right-click any city and choose <em>Start a custom route with this city</em>, then right-click others to add them. Custom routes sit at the top of the route list.</li>
+          <li class="aomc-only">Green shading is terrain already on the community webmap; by default, cities there are left out of routes.</li>
+          <li><button type="button" class="jump" data-target="settings">Search settings</button> changes the distance, angle, route size and longest flight.</li>
           <li class="wide-only">Drag the dividers either side of the map to resize the panels.</li>
         </ul>
       </div>
       <div id="detailBody" hidden>
-        <h2><span id="detailTitle"></span> <button id="starBtn" type="button" title="Which constellation does this batch look like?">seen in the stars?</button></h2>
+        <h2><span id="detailTitle"></span> <button id="starBtn" type="button" title="Which constellation does this route look like?">seen in the stars?</button></h2>
         <div id="stars" hidden>
           <canvas id="starCanvas" width="288" height="150"></canvas>
           <p id="starText" class="hint"></p>
@@ -305,7 +309,7 @@
             x, y and z to enter by hand.
           </p>
           <p class="hint">
-            Already have Xaero's Minimap waypoints for this server? JourneyMap can read them: add the batch the Xaero
+            Already have Xaero's Minimap waypoints for this server? JourneyMap can read them: add the route the Xaero
             way, then press <em>Import External</em> in JourneyMap's Waypoint Manager.
           </p>
         </div>
@@ -313,7 +317,7 @@
         <div class="row">
           <button id="markAll" type="button">Mark all looted</button>
           <button id="markNone" type="button">Clear</button>
-          <button id="customDelete" type="button" hidden>Delete this custom batch</button>
+          <button id="customDelete" type="button" hidden>Delete this custom route</button>
         </div>
         <ol id="cities"></ol>
       </div>

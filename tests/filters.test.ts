@@ -339,3 +339,26 @@ describe('webmap coverage', async () => {
     expect(mask.isMapped(-591320, -2808)).toBe(false);
   });
 });
+
+describe('falling back to smaller batches', async () => {
+  const { makeBatchesOrSmaller } = await import('../src/filters');
+  // A string of 12 cities 1,000 blocks apart: with flights capped at 2,000 the longest possible batch is 12.
+  const line: City[] = Array.from({ length: 12 }, (_, i) => ({ x: 10000 + i * 1000, z: 0, source: 'seed' as const }));
+
+  it('keeps the wanted size when it fits', () => {
+    const made = makeBatchesOrSmaller({ cities: line, size: 6, shape: 'cluster', maxHop: 2000, lineDeviation: 0 });
+    expect(made.size).toBe(6);
+    expect(made.batches.map((b) => b.length)).toEqual([6, 6]);
+  });
+
+  it('settles for the largest size that gives a batch', () => {
+    const made = makeBatchesOrSmaller({ cities: line, size: 500, shape: 'cluster', maxHop: 2000, lineDeviation: 0 });
+    expect(made.size).toBe(12);
+    expect(made.batches.map((b) => b.length)).toEqual([12]);
+  });
+
+  it('gives nothing when no two cities are within reach', () => {
+    const far = line.map((c, i) => ({ ...c, x: 10000 + i * 5000 }));
+    expect(makeBatchesOrSmaller({ cities: far, size: 27, shape: 'cluster', maxHop: 2000, lineDeviation: 0 }).batches).toEqual([]);
+  });
+});

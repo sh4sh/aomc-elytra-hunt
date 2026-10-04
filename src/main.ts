@@ -3,7 +3,7 @@ import { Explored } from './explored';
 import { endCityHasShip } from './generation/end-city-pieces';
 import { END_CITY, candidateChunk, chunkToBlock } from './generation/end-cities';
 import { EndTerrain } from './generation/end-terrain';
-import { BATCH_SIZE, DEFAULT_MAX_HOP, makeBatches, passes, route, type BatchShape } from './filters';
+import { BATCH_SIZE, DEFAULT_MAX_HOP, makeBatchesOrSmaller, passes, route, type BatchJob, type BatchShape } from './filters';
 import type { FindRequest, FindResponse, FoundCity } from './generation/worker';
 import { parseCoordinates } from './import';
 import { chatLine, chatLines, cleanUsername } from './journeymap';
@@ -143,8 +143,8 @@ let usedBatchSize = BATCH_SIZE;
 let generatedCount = 0;
 
 const isCustom = (i: number) => i >= generatedCount;
-/** Display name of a batch: "Batch 12", or "Custom 1" for one the player made. */
-const batchTitle = (i: number) => (isCustom(i) ? `Custom ${i - generatedCount + 1}` : `Batch ${i + 1}`);
+/** Display name of a batch, which players see as a route: "Route 12", or "Custom 1" for one they made. */
+const batchTitle = (i: number) => (isCustom(i) ? `Custom ${i - generatedCount + 1}` : `Route ${i + 1}`);
 /** Cities that could not be fitted into a full batch within the longest-flight limit. */
 let unbatched = 0;
 /** Cities kept out of the batches but still drawn on the map, with the reason. */
@@ -163,7 +163,26 @@ const tooltip = $('tooltip');
 
 // ---------- derived data ----------
 
-function rebuild(): void {
+/**
+ * Batching cost grows with cities times batch size. Above this it is handed to a worker, so the page
+ * stays responsive; below it the answer is instant and worked out on the spot.
+ */
+const BATCH_IN_PLACE_LIMIT = 150_000;
+let batchWorker: Worker | null = null;
+/** Counts rebuilds, so an answer from a superseded one is ignored. */
+let rebuildRun = 0;
+
+function showBatching(busy: boolean): void {
+  $('batchBusy').hidden = !busy;
+  $('batches').classList.toggle('stale', busy);
+}
+
+/**
+ * Work out the batches from the current search and settings. `done` runs once they are ready:
+ * straight away for small jobs, or when the worker reports back for large ones, in which case
+ * the page is redrawn then too.
+ */
+function rebuild(done?: () => void): void {
   // The webmap only describes the default server's world.
   const mapped = state.skipMapped && explored && state.seed === DEFAULT_SEED ? explored : null;
   // Only ships hold elytra, so cities without one are never offered.
@@ -183,7 +202,7 @@ function rebuild(): void {
     const city: City = { x, z, source };
     let note: string | undefined;
     // Only while still looted: unticking a city puts it back.
-    if (excluded.has(cityId(city)) && tracker.has(city)) note = 'looted, removed from batches';
+    if (excluded.has(cityId(city)) && tracker.has(city)) note = 'looted, removed from routes';
     else if (source === 'seed' && mapped?.isMapped(x, z)) {
       skipped++;
       // Ships near mapped terrain may still be unlooted, so keep them visible.
@@ -200,25 +219,54 @@ function rebuild(): void {
     if (entry.note) outside.push({ city: entry.city, note: entry.note });
     else cities.push(entry.city);
   }
-  batches = makeBatches(cities, state.batchSize, state.batchShape, state.maxHop, state.lineDeviation);
-  // If not even one batch of the wanted size fits, settle for the largest size that gives one, down to pairs.
-  usedBatchSize = state.batchSize;
-  if (!batches.length && cities.length >= 2 && usedBatchSize > 2) {
-    // Halve the range each time rather than stepping down one by one, which matters for large sizes.
-    const attempt = (size: number) => makeBatches(cities, size, state.batchShape, state.maxHop, state.lineDeviation);
-    let [fits, tooBig] = [1, usedBatchSize];
-    let best: City[][] = [];
-    while (tooBig - fits > 1) {
-      const size = Math.floor((fits + tooBig) / 2);
-      const made = attempt(size);
-      if (made.length) [fits, best] = [size, made];
-      else tooBig = size;
-    }
-    if (fits >= 2) {
-      usedBatchSize = fits;
-      batches = best;
-    }
+  const job: BatchJob = {
+    cities,
+    size: state.batchSize,
+    shape: state.batchShape,
+    maxHop: state.maxHop,
+    lineDeviation: state.lineDeviation,
+  };
+  const run = ++rebuildRun;
+  batchWorker?.terminate();
+  batchWorker = null;
+  const finish = (made: { batches: City[][]; size: number }) => {
+    finishRebuild(made, pool, cities);
+    done?.();
+  };
+  if (job.maxHop <= 0 || cities.length * job.size <= BATCH_IN_PLACE_LIMIT) {
+    showBatching(false);
+    finish(makeBatchesOrSmaller(job));
+    return;
   }
+  // Until the worker answers, the previous batches stay on screen, marked as being updated.
+  showBatching(true);
+  batchWorker = import.meta.env.DEV
+    ? new Worker(new URL('./batch-worker.ts', import.meta.url), { type: 'module' })
+    : new Worker(new URL('./batch-worker.ts', import.meta.url));
+  batchWorker.addEventListener('message', (e: MessageEvent<{ batches: City[][]; size: number }>) => {
+    if (run !== rebuildRun) return;
+    batchWorker?.terminate();
+    batchWorker = null;
+    showBatching(false);
+    finish(e.data);
+    render();
+  });
+  batchWorker.addEventListener('error', () => {
+    if (run !== rebuildRun) return;
+    showBatching(false);
+    $('stats').textContent = 'Working out the routes failed. Try a smaller route size.';
+  });
+  batchWorker.postMessage(job);
+}
+
+/** Second half of a rebuild: take the generated batches and apply hand-made moves and custom batches. */
+function finishRebuild(
+  made: { batches: City[][]; size: number },
+  pool: Map<string, { city: City; note?: string }>,
+  cities: City[],
+): void {
+  batches = made.batches;
+  usedBatchSize = made.size;
   const centre = state.filters.around;
   if (centre) {
     // Searching around a position: number the batches outward from there rather than from 0,0.
@@ -342,7 +390,7 @@ function renderSettingsSummary(): void {
       ];
   $('settingsSummary').textContent = [
     ...where,
-    `${state.batchSize} per batch`,
+    `${state.batchSize} per route`,
     state.batchShape !== 'line'
       ? 'clusters'
       : state.lineDeviation && state.maxHop
@@ -357,16 +405,16 @@ function renderBatches(): void {
   const total = batches.reduce((n, b) => n + b.length, 0);
   const done = batches.reduce((n, b) => n + looted(b), 0);
   $('stats').textContent = total
-    ? `${fmt(total)} cities · ${fmt(batches.length)} batches · ${fmt(done)} looted` +
+    ? `${fmt(total)} cities · ${fmt(batches.length)} routes · ${fmt(done)} looted` +
       (shipless ? ` · ${fmt(shipless)} without a ship left out` : '') +
       (skipped ? ` · ${fmt(skipped)} left out as already mapped` : '') +
       (usedBatchSize < state.batchSize && generatedCount
-        ? ` · no batch of ${state.batchSize} fits here, so batches of ${usedBatchSize} were made`
+        ? ` · no route of ${state.batchSize} fits here, so routes of ${usedBatchSize} were made`
         : '') +
-      (unbatched ? ` · ${fmt(unbatched)} unbatched` : '') +
-      (state.excluded.length ? ` · ${fmt(state.excluded.length)} looted removed from batches` : '')
+      (unbatched ? ` · ${fmt(unbatched)} without a route` : '') +
+      (state.excluded.length ? ` · ${fmt(state.excluded.length)} looted removed from routes` : '')
     : unbatched
-      ? `No batches: ${fmt(unbatched)} cities, but no two are within the longest flight of each other. Raise the longest flight.`
+      ? `No routes: ${fmt(unbatched)} cities, but no two are within the longest flight of each other. Raise the longest flight.`
       : 'No cities yet. Set a range and press Find cities.';
 
   $<HTMLButtonElement>('regroup').disabled = done === 0;
@@ -389,7 +437,7 @@ function renderBatches(): void {
     pageSelect.replaceChildren(
       ...Array.from({ length: pages }, (_, p) => {
         const from = p * PAGE_SIZE + 1;
-        return new Option(`Batches ${from}–${Math.min(from + PAGE_SIZE - 1, generatedCount)} of ${generatedCount}`, String(p));
+        return new Option(`Routes ${from}–${Math.min(from + PAGE_SIZE - 1, generatedCount)} of ${generatedCount}`, String(p));
       }),
     );
   }
@@ -457,7 +505,7 @@ function renderDetail(): void {
   $('detailMeta').textContent =
     `${batch.length} cities · ${looted(batch)} looted · about ${fmt(Math.round(length / 100) * 100)} blocks of flying` +
     ` · longest flight ${fmt(Math.round(longest))}` +
-    (!isCustom(i) && batch.length < usedBatchSize ? ' · short batch' : '') +
+    (!isCustom(i) && batch.length < usedBatchSize ? ' · short route' : '') +
     (isCustom(i) && !batch.length ? ' · right-click a city on the map to add it' : '');
 
   $('cities').replaceChildren(
@@ -487,7 +535,8 @@ function renderDetail(): void {
       xz.textContent = xzText(c);
       const hop = document.createElement('span');
       hop.className = 'hop';
-      hop.textContent = k ? `+${fmt(Math.round(Math.hypot(c.x - batch[k - 1].x, c.z - batch[k - 1].z)))}` : '';
+      hop.textContent = k ? `+${fmt(Math.round(Math.hypot(c.x - batch[k - 1].x, c.z - batch[k - 1].z)))}` : 'start here';
+      if (!k) hop.classList.add('start');
       const chat = document.createElement('button');
       chat.type = 'button';
       chat.className = 'chat';
@@ -523,7 +572,7 @@ function renderStars(batch: City[], batchColor: string): void {
   source.target = '_blank';
   source.rel = 'noopener';
   source.textContent = 'source';
-  $('starText').replaceChildren(`If you squint, this batch looks like ${match.name} (${match.from}). `, source);
+  $('starText').replaceChildren(`If you squint, this route looks like ${match.name} (${match.from}). `, source);
   // Some cultures add a permission that applies to Stellarium's own apps only; it says nothing about this one.
   const licence = match.license
     ?.split(' · ')
@@ -689,21 +738,21 @@ function applyResult(seed: string, filters: Filters, cities: FoundCity[]): void 
   state.found = cities;
   save();
   selected = null;
-  rebuild();
   fillForm();
   showExploredNote();
-  render();
   if (refit) fitSearch(filters);
   if (foldWhenDone && cities.length) settings.open = false;
   foldWhenDone = false;
-  if (locateAfterSearch) {
+  rebuild(() => {
+    if (!locateAfterSearch) return;
     const pos = locateAfterSearch;
     locateAfterSearch = null;
     if (!openNearest(pos, 'Searched around your position. ')) {
-      locateNote.textContent = 'No batch near your position. Try a larger radius or a longer flight limit.';
+      locateNote.textContent = 'No route near your position. Try a larger radius or a longer flight limit.';
       renderMap();
     }
-  }
+  });
+  render();
 }
 
 /** Roughly how many ship cities a search covers, from its area alone. */
@@ -729,7 +778,7 @@ function tooBig(ships: number): boolean {
   $('narrowAround').hidden = !aroundMode();
   $('searchWarningText').textContent =
     `That search covers about ${fmt(Math.round(ships / 1000) * 1000)} cities, more than the ` +
-    `${fmt(MAX_SEARCH_CITIES)} that can be batched at once.`;
+    `${fmt(MAX_SEARCH_CITIES)} that can be routed at once.`;
   warning.hidden = false;
   foldWhenDone = false;
   settings.open = true;
@@ -1095,7 +1144,7 @@ $('searchReset').addEventListener('click', () => {
   if (worker) return;
   if (
     !confirm(
-      'Reset all search settings to their defaults? Your looted marks are kept. Custom batches are kept too, unless the world seed had been changed.',
+      'Reset all search settings to their defaults? Your looted marks are kept. Custom routes are kept too, unless the world seed had been changed.',
     )
   ) {
     return;
@@ -1151,7 +1200,7 @@ const selectedLines = (): string[] =>
   selected === null ? [] : waypointLines(batches[selected], selected, (c) => tracker.has(c));
 
 $('download').addEventListener('click', () => {
-  if (selected !== null) download(`end-cities-batch-${selected + 1}.txt`, waypointFile(selectedLines()));
+  if (selected !== null) download(`end-cities-route-${selected + 1}.txt`, waypointFile(selectedLines()));
 });
 
 async function copyText(text: string): Promise<boolean> {
@@ -1239,7 +1288,7 @@ $('citiesExport').addEventListener('click', () => {
   const rows = batches.flatMap((batch, b) =>
     batch.map((c, k) => `${c.x},${c.z},${b + 1},${k + 1},${tracker.has(c) ? 'yes' : 'no'}`),
   );
-  download('end-cities.csv', ['x,z,batch,stop,looted', ...rows].join('\n') + '\n');
+  download('end-cities.csv', ['x,z,route,stop,looted', ...rows].join('\n') + '\n');
 });
 
 $('visitedReset').addEventListener('click', () => {
@@ -1353,7 +1402,7 @@ map.onHover = (c, px, py) => {
   if (!c) return;
   tooltip.textContent =
     c.batch < 0
-      ? `${xzText(c.city)} · not in a batch: ${c.note}`
+      ? `${xzText(c.city)} · not in a route: ${c.note}`
       : `${waypointName(c.batch, c.order)} · ${xzText(c.city)}${c.visited ? ' · looted' : ''}`;
   tooltip.style.left = `${px + 14}px`;
   tooltip.style.top = `${py + 14}px`;
@@ -1376,9 +1425,10 @@ $('map').addEventListener('wheel', closeMenu);
 
 /** Rebuild after a change, keeping the batch that holds this city selected. */
 function rebuildKeeping(id: string | null): void {
-  rebuild();
-  selected = id === null ? null : batches.findIndex((b) => b.some((c) => cityId(c) === id));
-  if (selected !== null && selected < 0) selected = null;
+  rebuild(() => {
+    selected = id === null ? null : batches.findIndex((b) => b.some((c) => cityId(c) === id));
+    if (selected !== null && selected < 0) selected = null;
+  });
   render();
 }
 
@@ -1390,8 +1440,9 @@ function addCityItems(c: MapCity, items: [string, () => void][]): void {
   const keep = selected !== null && openCustom < 0 && batches[selected].length ? cityId(batches[selected][0]) : null;
   const reselect = (custom = openCustom) => {
     if (custom < 0) return rebuildKeeping(keep);
-    rebuild();
-    selected = generatedCount + custom < batches.length ? generatedCount + custom : null;
+    rebuild(() => {
+      selected = generatedCount + custom < batches.length ? generatedCount + custom : null;
+    });
     render();
   };
 
@@ -1434,14 +1485,14 @@ function addCityItems(c: MapCity, items: [string, () => void][]): void {
       // Anchor the move to a city that belongs to the batch of its own accord, so it survives regrouping.
       const anchor = batches[target].find((x) => !(cityId(x) in state.moved));
       if (anchor) {
-        items.push([`Add to batch ${target + 1}`, () => {
+        items.push([`Add to route ${target + 1}`, () => {
           state.moved[id] = cityId(anchor);
           save();
           rebuildKeeping(cityId(anchor));
         }]);
       }
     }
-    items.push(['Start a custom batch with this city', () => addToCustom(state.custom.length)]);
+    items.push(['Start a custom route with this city', () => addToCustom(state.custom.length)]);
   }
   if (inCustom >= 0) {
     items.push([`Remove from custom ${inCustom + 1}`, () => {
@@ -1451,7 +1502,7 @@ function addCityItems(c: MapCity, items: [string, () => void][]): void {
     }]);
   }
   if (id in state.moved && inCustom < 0) {
-    items.push(['Return to its own batch', () => {
+    items.push(['Return to its own route', () => {
       delete state.moved[id];
       save();
       rebuildKeeping(keep === id ? null : keep);
