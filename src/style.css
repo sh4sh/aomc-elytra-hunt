@@ -49,6 +49,7 @@ code { font-size: 12px; background: var(--panel-2); padding: 1px 4px; border-rad
 .empty h3 { margin: 6px 0 0; font-size: 13px; }
 .empty p, .empty li { color: var(--muted); font-size: 13px; }
 .empty em { font-style: normal; color: var(--text); }
+.empty details.more > summary { font-size: 13px; font-weight: 600; color: var(--text); }
 .empty ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
 #helpBack { align-self: flex-start; }
 .warning { border: 1px solid #e0a84a; border-radius: 6px; padding: 8px 10px; font-size: 13px; background: rgba(224, 168, 74, 0.08); }

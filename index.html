@@ -122,10 +122,6 @@
       </p>
       <p id="stats" class="stats"></p>
       <p id="pathNote" class="hint path-note" hidden></p>
-      <div class="row">
-        <button id="regroup" type="button" title="Make fresh routes from the cities that are not looted yet">Regroup remaining cities</button>
-        <button id="regroupUndo" type="button" title="Undo the regrouping: put the looted cities back in the routes" aria-label="Undo the regrouping" class="iconbtn" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5 4 10l5 5"/><path d="M4 10h10a5 5 0 0 1 0 10h-3"/></svg></button>
-      </div>
       <div id="batchBusy" class="busy" role="status" hidden>
         <progress></progress>
         <span class="hint">Working out the routes…</span>
@@ -257,64 +253,73 @@
         <h2>How to use</h2>
         <h3>1. Pick a route</h3>
         <p>
-          Routes are in the <button type="button" class="jump" data-target="batches">route list</button>, ordered
-          by total flying: Route 1 takes the least, counting the flight from 0,0 (or from your coordinates, in a
-          search near them) to its first city plus the route itself. Pick one there, select any city on the map, or type your position into the x and z boxes on the map
-          (or right-click the map and choose <em>Set my position here</em>) and press <em>Nearest route</em>.
+          Route 1 takes the least flying. Pick one from the
+          <button type="button" class="jump" data-target="batches">route list</button>, click a city on the map, or
+          enter your position on the map and press <em>Nearest route</em>.
         </p>
         <h3>2. Get the waypoints into your map mod</h3>
         <p>
-          With a route open, choose your map mod, enter your username, then go down the route's list pressing
-          <em>copy</em> beside each city and pasting it into chat: each one becomes a waypoint. For Xaero's Minimap, a whole route can also be pasted
-          into its waypoint file.
+          Choose your map mod and enter your username. Then, in the End, go down the route's list: press
+          <em>copy</em> beside a city, paste into chat, send, and add the waypoint that appears.
         </p>
-        <h3>3. Tick cities off as you loot them</h3>
+        <h3>3. Loot</h3>
         <p>
-          If you like, delete each city's waypoint in your map mod as you go, so you can keep track in game of where you still need to go. Use the checkboxes in the route, or right-click a city on the map or in the route's list (on a touch screen, tap <em>⋯</em> on its row). Looted cities turn into a green × and are left
-          out of exports.
+          Press <em>Next city</em> as you go. If the elytra was already gone, press
+          <em>Looted by someone else</em> instead.
         </p>
         <div class="aomc-only help-step">
         <h3>4. Share where you have been</h3>
         <p>
-          The best way is to upload your map of the End to the
-          <a href="https://map.diorite.xyz/?dim=the_end" target="_blank" rel="noopener">community webmap</a>. Areas
-          on the webmap are left out of the routes once this app's webmap data is refreshed.
-        </p>
-        <p>
-          Your looted ticks stay in this browser. You can also send them in from
-          <button type="button" class="jump" data-target="share">Share progress</button>; once accepted, those cities
-          show as looted for all players.
-        </p>
-        <p>
-          Got there and the elytra was already gone? Right-click the city and choose
-          <em>Mark as looted by someone else</em>. It turns amber, with a <code>!</code> in the route. Someone hunted there before, so cities within 2,000 blocks of it
-          are shown as possibly looted: a hollow dot on the map and a <code>?</code> in the route (hover over it to see why). A city stops being possibly looted once a city
-          between it and the already-looted one is looted the ordinary way, since the earlier hunter did not come
-          that way. Send these in too, and everyone gets the warning.
-        </p>
-        <p>
-          When three or more cities found already looted line up, the map draws a dashed amber line through them: a
-          guess at where the earlier hunter flew, carried on a little past each end. Cities within 1,000 blocks of it
-          count as possibly looted. It says how sure it is: <em>medium confidence</em> for three or four cities in a
-          line, <em>high</em> for five or more. Two or more cities found with their elytra along the line lower that, or
-          remove the line; a single one is put down to the earlier hunter missing it. It is only ever a guess.
+          Upload your map of the End to the
+          <a href="https://map.diorite.xyz/?dim=the_end" target="_blank" rel="noopener">community webmap</a>, or send
+          your looted list from <button type="button" class="jump" data-target="share">Share progress</button>.
         </p>
         </div>
-        <h3>Good to know</h3>
-        <ul>
-          <li class="mouse-only">Moving the map: drag to pan, scroll or use the slider to zoom, click a city to open its route, right-click for options.</li>
-          <li class="touch-only">Moving the map: two fingers to pan, pinch or use the slider to zoom, tap a city to open its route; its details appear under the map, with an <em>options</em> link for everything a right-click offers.</li>
-          <li>For Minecraft Java Edition, not Bedrock. It follows the 1.19–1.21 world generation rules and is in use on a 26.2 server; a future version that changes End generation could put cities elsewhere.</li>
-          <li>A <em>?</em> after a city in a route means its ship is uncertain: it is an unusually tight fit in that city, and one ship like that turned out not to exist. Most may be fine. If you visit one, right-click it and report whether the ship was there.</li>
-          <li>Found a city with no ship, or no city where the app shows one? Right-click it, choose <em>Report incorrect…</em> and pick which. Once accepted, it shows as a grey × for everyone and is left out of routes; hover over it to see what was reported.</li>
-          <li>Small faint diamonds are cities with a ship that didn't fit a route. Right-click one to add it to the route you have open.</li>
-          <li>Far from 0,0? In <button type="button" class="jump" data-target="settings">Search settings</button>, choose <em>Near my coordinates</em> to search a circle around your coordinates.</li>
-          <li>To change the order of a route, drag a city up or down its list, or on a touch screen tap <em>⋯</em> on its row and choose <em>Move up</em> or <em>Move down</em>. Cities you add to a route go at the end. The undo arrow takes back your last change, and <em>Original order</em> undoes the reordering but keeps the cities you added.</li>
-          <li>Want to plan your own? Right-click any city and choose <em>Start a custom route with this city</em>, then right-click others to add them. Custom routes sit at the top of the route list.</li>
-          <li class="aomc-only">Green shading is terrain already on the community webmap; cities there are left out of routes, unless you tick <em>Include cities already on the webmap</em> under Advanced.</li>
-          <li><button type="button" class="jump" data-target="settings">Search settings</button> changes the distance, angle, route size and longest flight.</li>
-          <li class="wide-only">Drag the dividers either side of the map to resize the panels.</li>
-        </ul>
+
+        <details class="more">
+          <summary>Changing a route</summary>
+          <ul>
+            <li><em>Add +1 city to route</em>, under the list, adds the nearest city that has no route.</li>
+            <li>Right-click a city to add it to the open route, or remove it. <span class="touch-only">On a touch screen, tap <em>⋯</em> on its row, or <em>options</em> under the map.</span></li>
+            <li class="mouse-only">Drag a city up or down the list to change the order.</li>
+            <li class="touch-only">Tap <em>⋯</em> on a row and choose <em>Move up</em> or <em>Move down</em> to change the order.</li>
+            <li>The arrows under <em>Next city</em> undo and redo your changes.</li>
+            <li>For a route of your own, right-click a city and choose <em>Start a custom route with this city</em>.</li>
+          </ul>
+        </details>
+        <details class="more">
+          <summary>Possibly looted cities</summary>
+          <ul>
+            <li>A city marked <em>looted by someone else</em> turns amber. Someone hunted there before you.</li>
+            <li>Cities within 2,000 blocks of it show as possibly looted: a hollow dot, and a <code>?</code> in the list. It is a guess.</li>
+            <li>When three or more amber cities line up, a dashed line guesses where that hunter flew, and says how confident it is.</li>
+            <li><button type="button" class="jump" data-target="skipPossible">Leave out cities that are possibly looted</button> keeps them out of the routes.</li>
+          </ul>
+        </details>
+        <details class="more">
+          <summary>Something not as shown?</summary>
+          <ul>
+            <li>No ship, or no city, where the app shows one? Right-click it and choose <em>Report incorrect…</em>.</li>
+            <li>A <code>?</code> can also mean the ship is uncertain: one ship like it turned out not to exist. Most may be fine.</li>
+            <li>The app knows where ships generate, not whether the elytra has been taken.</li>
+          </ul>
+        </details>
+        <details class="more">
+          <summary>Good to know</summary>
+          <ul>
+            <li>For Minecraft Java Edition, not Bedrock.</li>
+            <li class="mouse-only">Map: drag to pan, scroll or use the slider to zoom.</li>
+            <li class="touch-only">Map: two fingers to pan, pinch or use the slider to zoom.</li>
+            <li>Faint diamonds are cities with a ship that are not in any route.</li>
+            <li class="aomc-only">Green shading is terrain already on the community webmap; cities there are left out.</li>
+            <li>Far from 0,0? In <button type="button" class="jump" data-target="settings">Search settings</button>, choose <em>Near my coordinates</em>.</li>
+            <li class="wide-only">Drag the dividers either side of the map to resize the panels.</li>
+          </ul>
+        </details>
+        <p class="hint">
+          More detail is in the
+          <a href="https://github.com/sh4sh/aomc-elytra-hunt/blob/main/docs/guide.md" target="_blank" rel="noopener">guide</a>.
+        </p>
       </div>
       <div id="detailBody" hidden>
         <h2><span id="detailTitle"></span> <button id="starBtn" type="button" title="Which constellation does this route look like?">seen in the stars?</button></h2>

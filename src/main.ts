@@ -672,8 +672,6 @@ function renderBatches(): void {
       ? `No routes: ${fmt(unbatched)} cities, but no two are within the longest flight of each other. Raise the longest flight.`
       : 'No cities yet. Set a range and press Find cities.';
 
-  $<HTMLButtonElement>('regroup').disabled = done === 0;
-  $<HTMLButtonElement>('regroupUndo').disabled = state.excluded.length === 0;
 
   // Finished routes drop out of the list, so what is left is what there is still to fly. The open
   // route stays while it is open, finished or not. Route numbers do not change: waypoints already in
@@ -1013,9 +1011,21 @@ function setHot(c: City | null): void {
 }
 
 function select(i: number | null, zoom = false): void {
-  selected = i;
   // Opening a batch, from the list or the map, puts the help away.
   if (i !== null) helpOpen = false;
+  // Leaving a finished route is the moment to regroup what is left. The routes are numbered afresh,
+  // so the one being opened is found again by one of its cities.
+  if (i !== selected && retireFinished(i)) {
+    const target = i !== null && batches[i].length ? cityId(batches[i][0]) : null;
+    rebuild(() => {
+      const at = target === null ? -1 : batches.findIndex((b) => b.some((c) => cityId(c) === target));
+      selected = at < 0 ? null : at;
+      if (zoom && selected !== null) map.fit(batches[selected], state.filters.maxDist);
+    });
+    render();
+    return;
+  }
+  selected = i;
   render();
   if (zoom && i !== null) map.fit(batches[i], state.filters.maxDist);
 }
@@ -1390,23 +1400,22 @@ $('starBtn').addEventListener('click', async () => {
 
 // ---------- regroup ----------
 
-$('regroup').addEventListener('click', () => {
-  const ids = new Set(state.excluded);
-  for (const c of batches.flat()) if (tracker.has(c)) ids.add(cityId(c));
-  state.excluded = [...ids];
+/**
+ * Finished routes are regrouped away without being asked: their looted cities leave the routes and the
+ * cities that remain are grouped afresh. It waits while any other route is part-way through, since
+ * regrouping would break that route up under the player. `keep` is a route being opened on purpose.
+ * Returns whether there is anything to rebuild.
+ */
+function retireFinished(keep: number | null): boolean {
+  const routes = batches.slice(0, generatedCount);
+  const done = (b: City[]) => b.length > 0 && b.every((c) => tracker.has(c));
+  const finished = routes.filter((b, i) => i !== keep && done(b));
+  if (!finished.length) return false;
+  if (routes.some((b) => !done(b) && b.some((c) => tracker.has(c)))) return false;
+  state.excluded = [...new Set([...state.excluded, ...finished.flat().map(cityId)])];
   save();
-  selected = null;
-  rebuild();
-  render();
-});
-
-$('regroupUndo').addEventListener('click', () => {
-  state.excluded = [];
-  save();
-  selected = null;
-  rebuild();
-  render();
-});
+  return true;
+}
 
 // ---------- locate ----------
 
@@ -2697,7 +2706,10 @@ Promise.all([Explored.load(), Precomputed.load(), loadSharedLooted(), loadShipRe
   if (state.seed === DEFAULT_SEED) tracker.setShared(sharedLooted, sharedAlready);
   showSharedNote();
   showExploredNote();
-  rebuild();
+  // Routes finished on an earlier visit are regrouped away once the routes are first worked out.
+  rebuild(() => {
+    if (retireFinished(null)) rebuild();
+  });
   render();
   if (!state.found.length) form.requestSubmit();
 });
