@@ -83,6 +83,9 @@ above the generated ones and export the same way.
 
 ## Things to know
 
+- For Minecraft **Java Edition**, not Bedrock. The generator follows the
+  1.19–1.21 world generation rules and is in use on a 26.2 server. Worlds from
+  before 1.19 place some cities differently.
 - Positions and ships are checked against [cubiomes](https://github.com/Cubitect/cubiomes)
   using Minecraft 1.21 rules. If a later version changes End generation, results
   may be off; spot-check a city before a long trip.
