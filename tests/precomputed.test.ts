@@ -13,7 +13,8 @@ describe.skipIf(!existsSync('public/cities.json'))('precomputed cities', () => {
     const have = new Set<string>();
     for (let i = 0; i < file.cities.length; i += 3) {
       const [x, z, ship] = file.cities.slice(i, i + 3);
-      if (inBox(x, z)) have.add(`${x} ${z} ${ship}`);
+      // 2 marks a ship that is a tight fit; the reference only says ship or no ship.
+      if (inBox(x, z)) have.add(`${x} ${z} ${ship ? 1 : 0}`);
     }
     const want = new Set(ref.cities.filter(([x, z]) => inBox(x, z)).map(([x, z, s]) => `${x} ${z} ${s}`));
     expect(want.size).toBeGreaterThan(1000);

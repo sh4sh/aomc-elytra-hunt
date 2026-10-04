@@ -1,4 +1,4 @@
-name: Notify about looted-city submissions
+name: Notify about submissions from the app
 
 # Submissions from the app are filed by the relay using the repository owner's
 # token, and GitHub does not notify people about their own issues. A comment
@@ -13,7 +13,9 @@ permissions:
 
 jobs:
   notify:
-    if: contains(github.event.issue.labels.*.name, 'map-submission')
+    if: >-
+      contains(github.event.issue.labels.*.name, 'map-submission') ||
+      contains(github.event.issue.labels.*.name, 'ship-report')
     runs-on: ubuntu-latest
     steps:
       - name: Mention the owner
@@ -23,4 +25,4 @@ jobs:
           NUMBER: ${{ github.event.issue.number }}
           OWNER: ${{ github.repository_owner }}
         run: |
-          gh issue comment "$NUMBER" --body "@$OWNER a player submitted looted cities. To accept them, reply to this issue with \`/merge\`. That adds them to the shared list, updates the site and closes the issue."
+          gh issue comment "$NUMBER" --body "@$OWNER a player sent this from the app. To accept it, reply to this issue with \`/merge\`: that applies it, updates the site and closes the issue. To reject it, just close the issue."

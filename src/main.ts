@@ -139,6 +139,16 @@ let shipless = 0;
 const MAX_BATCH_SIZE = 500;
 /** Cities per batch actually used: the setting, or fewer when no batch that large could be made. */
 let usedBatchSize = BATCH_SIZE;
+/**
+ * Players' reports, published with the site. `gone` holds cities to leave out: ones found with no ship,
+ * and places where there turned out to be no End City at all. `found` holds ships confirmed present.
+ */
+let shipReports = { gone: new Set<string>(), found: new Set<string>() };
+/**
+ * Cities whose ship is a tight fit against another part of the city, and so may not have generated.
+ * A confirmed report clears the doubt.
+ */
+let uncertainShips = new Set<string>();
 /** How many of `batches` were generated; the player's custom batches follow them. */
 let generatedCount = 0;
 
@@ -186,7 +196,12 @@ function rebuild(done?: () => void): void {
   // The webmap only describes the default server's world.
   const mapped = state.skipMapped && explored && state.seed === DEFAULT_SEED ? explored : null;
   // Only ships hold elytra, so cities without one are never offered.
-  const withShip = state.found.filter((c) => c[2]);
+  // A city reported in game as having no ship is treated like any other shipless city.
+  const reports = state.seed === DEFAULT_SEED ? shipReports : { gone: new Set<string>(), found: new Set<string>() };
+  const withShip = state.found.filter((c) => c[2] && !reports.gone.has(`${c[0]},${c[1]}`));
+  uncertainShips = new Set(
+    withShip.filter((c) => c[2] === 2 && !reports.found.has(`${c[0]},${c[1]}`)).map((c) => `${c[0]},${c[1]}`),
+  );
   shipless = state.found.length - withShip.length;
   skipped = 0;
 
@@ -405,6 +420,7 @@ function renderBatches(): void {
         ? ` · no route of ${state.batchSize} fits here, so routes of ${usedBatchSize} were made`
         : '') +
       (unbatched ? ` · ${fmt(unbatched)} without a route` : '') +
+      (uncertainShips.size ? ` · ${fmt(uncertainShips.size)} with an uncertain ship (marked ?)` : '') +
       (state.excluded.length ? ` · ${fmt(state.excluded.length)} looted removed from routes` : '')
     : unbatched
       ? `No routes: ${fmt(unbatched)} cities, but no two are within the longest flight of each other. Raise the longest flight.`
@@ -508,6 +524,8 @@ function renderDetail(): void {
       li.classList.toggle('hot', c === hot);
       const label = document.createElement('label');
       label.title = waypointName(i, k);
+      const unsure = uncertainShips.has(cityId(c));
+      if (unsure) label.title += ' · ship uncertain: it is a tight fit in this city and may not have generated';
       const box = document.createElement('input');
       box.type = 'checkbox';
       box.checked = tracker.has(c);
@@ -525,7 +543,7 @@ function renderDetail(): void {
       n.textContent = String(k + 1);
       const xz = document.createElement('span');
       xz.className = 'xz';
-      xz.textContent = xzText(c);
+      xz.textContent = xzText(c) + (unsure ? ' ?' : '');
       const hop = document.createElement('span');
       hop.className = 'hop';
       hop.textContent = k ? `+${fmt(Math.round(Math.hypot(c.x - batch[k - 1].x, c.z - batch[k - 1].z)))}` : 'start here';
@@ -1301,6 +1319,46 @@ function showSharedNote(): void {
 }
 showSharedNote();
 
+// ---------- ship reports ----------
+
+/** Send a player's report on whether a city's ship was there, for the maintainer to review. */
+async function reportShip(city: City, result: 'found' | 'missing' | 'no-city'): Promise<void> {
+  const where = xzText(city);
+  const what = {
+    found: `the ship at ${where} was there`,
+    missing: `there is an End City at ${where} but no ship`,
+    'no-city': `there is no End City at ${where} at all`,
+  }[result];
+  if (!confirm(`Report that ${what}? It is sent for review, and nothing changes until it is accepted.`)) return;
+  if (!SUBMIT_URL) {
+    // Without the relay, the report is filed by hand as a GitHub issue.
+    const headline = { found: 'ship found', missing: 'no ship', 'no-city': 'no End City' }[result];
+    window.open(`${ISSUES_URL}/new?title=${encodeURIComponent(`Ship report: ${headline} at ${where}`)}`, '_blank', 'noopener');
+    return;
+  }
+  locateNote.textContent = 'Sending your report…';
+  try {
+    const res = await fetch(SUBMIT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: 'ship', city: cityId(city), result, name: state.chatName }),
+    });
+    const body = await res.json().catch(() => ({}));
+    locateNote.textContent = res.ok ? 'Report sent for review. Thank you!' : (body.error ?? 'That did not go through. Please try again later.');
+  } catch {
+    locateNote.textContent = 'Could not reach the report service. Please try again later.';
+  }
+}
+
+async function loadShipReports(): Promise<{ missing?: string[]; found?: string[]; noCity?: string[] }> {
+  try {
+    const res = await fetch('./ship-reports.json');
+    return res.ok ? await res.json() : {};
+  } catch {
+    return {};
+  }
+}
+
 // ---------- submit looted ----------
 
 const submitName = $<HTMLInputElement>('submitName');
@@ -1396,7 +1454,8 @@ map.onHover = (c, px, py) => {
   tooltip.textContent =
     c.batch < 0
       ? `${xzText(c.city)} · not in a route: ${c.note}`
-      : `${waypointName(c.batch, c.order)} · ${xzText(c.city)}${c.visited ? ' · looted' : ''}`;
+      : `${waypointName(c.batch, c.order)} · ${xzText(c.city)}${c.visited ? ' · looted' : ''}` +
+        (uncertainShips.has(cityId(c.city)) ? ' · ship uncertain' : '');
   tooltip.style.left = `${px + 14}px`;
   tooltip.style.top = `${py + 14}px`;
 };
@@ -1456,6 +1515,13 @@ function addCityItems(c: MapCity, items: [string, () => void][]): void {
       tracker.set(c.city, true);
       render();
     }]);
+  }
+
+  // Reports go to the maintainer for review; nothing changes for anyone until one is accepted.
+  if (state.seed === DEFAULT_SEED) {
+    if (uncertainShips.has(id)) items.push(['Report: the ship was there', () => reportShip(c.city, 'found')]);
+    items.push(['Report: city is here, but no ship', () => reportShip(c.city, 'missing')]);
+    items.push(['Report: no End City here at all', () => reportShip(c.city, 'no-city')]);
   }
 
   const inCustom = state.custom.findIndex((ids) => ids.includes(id));
@@ -1700,7 +1766,14 @@ async function loadSharedLooted(): Promise<string[]> {
   }
 }
 
-Promise.all([Explored.load(), Precomputed.load(), loadSharedLooted()]).then(([e, p, looted]) => {
+Promise.all([Explored.load(), Precomputed.load(), loadSharedLooted(), loadShipReports()]).then(([e, p, looted, ships]) => {
+  shipReports = { gone: new Set([...(ships.missing ?? []), ...(ships.noCity ?? [])]), found: new Set(ships.found ?? []) };
+  // Results saved by an older version lack newer details (such as uncertain ships). Where the search is
+  // one the pre-generated file answers instantly, refresh them from it.
+  if (p?.covers(state.seed, state.filters) && state.found.length) {
+    state.found = p.search(state.filters);
+    save();
+  }
   explored = e;
   precomputed = p;
   sharedLooted = looted;

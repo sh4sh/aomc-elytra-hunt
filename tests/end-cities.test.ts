@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { END_CITY, candidateChunk, chunkToBlock, findEndCities } from '../src/generation/end-cities';
-import { endCityHasShip } from '../src/generation/end-city-pieces';
+import { endCityHasShip, endCityShip, shipCode } from '../src/generation/end-city-pieces';
 import { EndTerrain } from '../src/generation/end-terrain';
 import cases from './fixtures/cubiomes-end-cities.json';
 import far from './fixtures/cubiomes-far-strip.json';
@@ -47,6 +47,21 @@ describe('End City positions and ships match cubiomes', () => {
     for (const [cx, cz] of [[-15396, -1317], [-32937, 562], [-13233, 1403], [-19116, 1720]]) {
       expect(endCityHasShip(856461443495910397n, cx, cz)).toBe(false);
     }
+  });
+
+  // Found in game with a city but no ship (x: -554792, z: 8712), although this code and cubiomes both
+  // lay it out with one. The ship sits 3 blocks above a tower top, so it is flagged as a tight fit.
+  it('flags a ship that is a tight fit as uncertain', () => {
+    expect(endCityShip(856461443495910397n, -34675, 544)).toEqual({ ship: true, tight: true });
+    expect(shipCode(856461443495910397n, -34675, 544)).toBe(2);
+    // A city with no ship is never flagged.
+    expect(endCityShip(856461443495910397n, -76, 644)).toEqual({ ship: false, tight: false });
+  });
+
+  it('flags only a small share of ships', () => {
+    const ships = cases[0].cities.filter(([, , ship]) => ship);
+    const tight = ships.filter(([cx, cz]) => endCityShip(BigInt(cases[0].seed), cx, cz).tight).length;
+    expect(tight / ships.length).toBeLessThan(0.02);
   });
 
   it('finds the same cities when asked for just one square of the map', () => {

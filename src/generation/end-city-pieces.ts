@@ -31,6 +31,8 @@ interface Env {
   rng: JavaRandom;
   /** Set once a ship has been attempted; at most one per city. */
   ship: { tried: boolean };
+  /** Smallest clearance, in blocks, seen between the ship and a part of the city from another group. */
+  shipGap: { blocks: number };
   y: number;
 }
 
@@ -74,9 +76,20 @@ function recurse(gen: Gen, env: Env, current: Piece, depth: number): boolean {
     const hit = env.list.find(
       (q) => q.x1 >= p.x0 && q.x0 <= p.x1 && q.z1 >= p.z0 && q.z0 <= p.z1 && q.y1 >= p.y0 && q.y0 <= p.y1,
     );
-    if (hit) {
-      if (current.depth !== hit.depth) return false;
-      break;
+    // Overlapping a piece from the same group as the parent is allowed; go on to check the next piece.
+    if (hit && current.depth !== hit.depth) return false;
+  }
+  // Note how close the ship comes to parts it is not allowed to overlap. See SHIP_TIGHT_BLOCKS.
+  for (const p of local.list) {
+    if (p.type !== T.SHIP) continue;
+    for (const q of env.list) {
+      if (q.depth === current.depth) continue;
+      const gap = Math.max(
+        Math.max(p.x0 - q.x1, q.x0 - p.x1),
+        Math.max(p.y0 - q.y1, q.y0 - p.y1),
+        Math.max(p.z0 - q.z1, q.z0 - p.z1),
+      );
+      if (gap < env.shipGap.blocks) env.shipGap.blocks = gap;
     }
   }
   env.list.push(...local.list);
@@ -189,15 +202,35 @@ export function chunkRandom(worldSeed: bigint, chunkX: number, chunkZ: number): 
   return new JavaRandom(BigInt.asIntN(64, (a * BigInt(chunkX)) ^ (b * BigInt(chunkZ)) ^ worldSeed));
 }
 
-/** Whether the End City starting in this chunk includes a ship. */
-export function endCityHasShip(worldSeed: bigint, chunkX: number, chunkZ: number): boolean {
+/**
+ * A ship this close to another part of its city is treated as uncertain. The game throws a ship away
+ * if it overlaps another part, and the piece sizes used here are approximations: with clearance this
+ * small the game may see an overlap that this code does not. One such city (3 blocks of clearance)
+ * has been found in game with no ship. About 0.3% of ship cities are this tight.
+ */
+export const SHIP_TIGHT_BLOCKS = 4;
+
+/** Whether the End City starting in this chunk has a ship, and whether that ship is a tight fit. */
+export function endCityShip(worldSeed: bigint, chunkX: number, chunkZ: number): { ship: boolean; tight: boolean } {
   const rng = chunkRandom(worldSeed, chunkX, chunkZ);
   const rot = rng.nextInt(4);
-  const env: Env = { list: [], rng, ship: { tried: false }, y: 0 };
+  const env: Env = { list: [], rng, ship: { tried: false }, shipGap: { blocks: Infinity }, y: 0 };
   let base = add(env, null, rot, chunkX * 16 + 8, 0, chunkZ * 16 + 8, T.BASE_FLOOR);
   base = add(env, base, rot, -1, 0, -1, T.SECOND_FLOOR_1);
   base = add(env, base, rot, -1, 4, -1, T.THIRD_FLOOR_1);
   base = add(env, base, rot, -1, 8, -1, T.THIRD_ROOF);
   recurse(genTower, env, base, 1);
-  return env.list.some((p) => p.type === T.SHIP);
+  const ship = env.list.some((p) => p.type === T.SHIP);
+  return { ship, tight: ship && env.shipGap.blocks <= SHIP_TIGHT_BLOCKS };
+}
+
+/** Whether the End City starting in this chunk includes a ship. */
+export function endCityHasShip(worldSeed: bigint, chunkX: number, chunkZ: number): boolean {
+  return endCityShip(worldSeed, chunkX, chunkZ).ship;
+}
+
+/** The ship as one number, as stored with each city: 0 for none, 1 for a ship, 2 for a tight-fitting (uncertain) ship. */
+export function shipCode(worldSeed: bigint, chunkX: number, chunkZ: number): 0 | 1 | 2 {
+  const { ship, tight } = endCityShip(worldSeed, chunkX, chunkZ);
+  return !ship ? 0 : tight ? 2 : 1;
 }

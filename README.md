@@ -66,6 +66,9 @@ Only cities with a ship are ever shown, since only ships hold elytra.
 
 - Filled dots are cities in a route, coloured by route.
 - An × is a looted city.
+- A `?` after a city's coordinates in a route means its ship is uncertain (see
+  "How do we know the positions are right?" below). Right-click a city to report
+  whether its ship was there.
 - A small faint diamond is a city with a ship that is not in any route.
   Right-click it to add it to the route you have open.
 - Green shading is terrain already on the community webmap.
@@ -147,6 +150,35 @@ automated tests (`npm test`), so a change that breaks the maths is caught.
   32-bit floats exactly as Java does. cubiomes has to be built with
   `-ffp-contract=off` to match; the app rounds explicitly.
 
+### A ship that wasn't there
+
+One city so far has been found in game with no ship where the app, and cubiomes,
+both say there is one: x: -554792, z: 8712. The city itself was there.
+
+**We do not know why.** What we can say:
+
+- In the layout the app computes for that city, the ship sits directly above
+  another part of the city (a tower top) with 3 blocks of clearance. That is
+  unusual: about 0.3% of ships are within 4 blocks of another part.
+- The game discards a ship if it overlaps another part of the city. The piece
+  sizes used by cubiomes, and so by the app, are simplified. One possible
+  explanation is that the game saw an overlap there that this code does not.
+- That is a guess from a single case. It has not been tested against the
+  game's own code, and the real cause could be something else entirely.
+
+What the app does about it, as a precaution and not as a fix:
+
+- That city is recorded as having no ship and no longer appears in routes.
+- Every ship within 4 blocks of another part of its city is marked **ship
+  uncertain** (a `?` in the route, and a note when you hover over it). These
+  cities stay in the routes. The mark means "we have one reason to doubt this
+  kind of ship", not "this ship is probably missing". Most of them may be fine.
+- Right-click a city to report that its ship was there, that the city had no
+  ship, or that there was no End City there at all.
+  Reports are reviewed before they change anything; enough of them would show
+  whether the doubt is justified, and the mark would be removed or widened to
+  match.
+
 ### What has not been proven
 
 - **Minecraft 26.x.** The comparison is against cubiomes' 1.21 rules. Nothing
@@ -156,6 +188,8 @@ automated tests (`npm test`), so a change that breaks the maths is caught.
 - **Beyond the webmap's area.** The same code runs further out, and it accounts
   for the rings of empty void the End has beyond about 370,000 blocks, but
   nothing past roughly 600,000 blocks has been compared.
+- **Every ship.** See "A ship that wasn't there" above: at least one predicted
+  ship did not exist in game, for a reason that is not understood.
 - **Looted or not.** The app knows where ships generate, not whether someone
   has already taken the elytra.
 
@@ -203,9 +237,10 @@ from the app arrive as GitHub issues; replying `/merge` on one adds it to the
 list and republishes the site. For a file a player sends you directly, run
 `npm run looted` on it, then commit and push.
 
-`relay/` is a small Cloudflare Worker that lets players submit their looted
-cities from the app without a GitHub account; it files each submission as an
-issue. Setup and handling are in [relay/README.md](relay/README.md).
+`relay/` is a small Cloudflare Worker that lets players send things from the
+app without a GitHub account (their looted cities, and reports on whether a
+ship was there); it files each one as an issue, which `/merge` accepts.
+`public/ship-reports.json` holds the accepted ship reports. Setup and handling are in [relay/README.md](relay/README.md).
 
 It is a static site: TypeScript, no framework, no backend. Pushing to `main`
 builds and publishes it to GitHub Pages.

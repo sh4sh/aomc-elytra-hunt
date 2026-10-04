@@ -1,8 +1,10 @@
-name: Accept a looted-city submission
+name: Accept a submission
 
-# When the repository owner (or a collaborator) comments "/merge" on a
-# submission issue, add its cities to the shared looted list, publish the site
-# and close the issue. Anyone else's comment, and any other wording, is ignored.
+# When the repository owner (or a collaborator) comments "/merge" on an issue
+# filed by the app, apply it: a looted-city list is added to the shared looted
+# list, and a ship report is recorded in the ship reports. Then the site is
+# republished and the issue closed. Anyone else's comment, and any other
+# wording, is ignored.
 
 on:
   issue_comment:
@@ -21,7 +23,8 @@ jobs:
   accept:
     if: >-
       !github.event.issue.pull_request &&
-      contains(github.event.issue.labels.*.name, 'map-submission') &&
+      (contains(github.event.issue.labels.*.name, 'map-submission') ||
+       contains(github.event.issue.labels.*.name, 'ship-report')) &&
       startsWith(github.event.comment.body, '/merge') &&
       contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
     runs-on: ubuntu-latest
@@ -29,6 +32,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       NUMBER: ${{ github.event.issue.number }}
+      IS_SHIP_REPORT: ${{ contains(github.event.issue.labels.*.name, 'ship-report') }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -36,27 +40,37 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      # Reads the issue's text itself and takes only lines that are coordinates.
-      - name: Merge the submission
+      # Each script reads the issue's text itself and takes only the lines it recognises.
+      - name: Apply the submission
         id: merge
         run: |
-          node scripts/merge-looted.mjs --issue "$NUMBER" | tee merge.log
+          if [ "$IS_SHIP_REPORT" = "true" ]; then
+            node scripts/merge-ship-report.mjs --issue "$NUMBER" | tee merge.log
+            echo "file=public/ship-reports.json" >> "$GITHUB_OUTPUT"
+            echo "message=add ship report from #$NUMBER" >> "$GITHUB_OUTPUT"
+          else
+            node scripts/merge-looted.mjs --issue "$NUMBER" | tee merge.log
+            echo "file=public/looted.json" >> "$GITHUB_OUTPUT"
+            echo "message=add looted from #$NUMBER" >> "$GITHUB_OUTPUT"
+          fi
           echo "summary=$(tail -n 1 merge.log)" >> "$GITHUB_OUTPUT"
       - name: Publish
         env:
+          FILE: ${{ steps.merge.outputs.file }}
+          MESSAGE: ${{ steps.merge.outputs.message }}
           SUMMARY: ${{ steps.merge.outputs.summary }}
         run: |
-          if git diff --quiet -- public/looted.json; then
-            gh issue comment "$NUMBER" --body "Nothing to add: every city in this submission is already on the shared list."
+          if git diff --quiet -- "$FILE"; then
+            gh issue comment "$NUMBER" --body "Nothing to change: this was already recorded."
             gh issue close "$NUMBER"
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add public/looted.json
-          git commit -m "add looted from #$NUMBER"
+          git add "$FILE"
+          git commit -m "$MESSAGE"
           git push
           # A push made by this job does not start other workflows, so the site is rebuilt explicitly.
           gh workflow run pages.yml --ref main
-          gh issue comment "$NUMBER" --body "Added to the shared list. $SUMMARY The site will update in a minute or two."
+          gh issue comment "$NUMBER" --body "Done. $SUMMARY The site will update in a minute or two."
           gh issue close "$NUMBER"

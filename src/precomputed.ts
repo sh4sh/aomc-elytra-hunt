@@ -10,7 +10,7 @@ export class Precomputed {
   private constructor(
     readonly seed: string,
     readonly maxBlocks: number,
-    /** Flat [chunkX, chunkZ, hasShip, ...]. */
+    /** Flat [chunkX, chunkZ, ship, ...], ship being 0 (none), 1 (ship) or 2 (uncertain ship). */
     private readonly data: number[],
   ) {}
 
@@ -37,7 +37,7 @@ export class Precomputed {
     for (let i = 0; i < d.length; i += 3) {
       const x = chunkToBlock(d[i]);
       const z = chunkToBlock(d[i + 1]);
-      if (passes(x, z, filters)) out.push([x, z, d[i + 2] ? 1 : 0]);
+      if (passes(x, z, filters)) out.push([x, z, d[i + 2] as 0 | 1 | 2]);
     }
     return out;
   }

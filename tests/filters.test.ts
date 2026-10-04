@@ -378,3 +378,33 @@ describe('falling back to smaller batches', async () => {
     expect(makeBatchesOrSmaller({ cities: far, size: 27, shape: 'cluster', maxHop: 2000, lineDeviation: 0 }).batches).toEqual([]);
   });
 });
+
+describe('ship reports through the relay', async () => {
+  const { parseShipReport, issueForShip } = await import('../relay/src/validate');
+
+  it('accepts a city and one of the three things a player can find', () => {
+    for (const result of ['found', 'missing', 'no-city'] as const) {
+      expect(parseShipReport({ kind: 'ship', city: '-554792,8712', result, name: 'Steve_01' })).toEqual({
+        ok: true,
+        value: { name: 'Steve_01', city: '-554792,8712', result },
+      });
+    }
+  });
+
+  it('refuses anything else', () => {
+    for (const bad of [{ city: '1,2' }, { city: '1,2,3', result: 'found' }, { city: 'x', result: 'missing' }, { city: '1,2', result: 'maybe' }, null]) {
+      expect(parseShipReport(bad).ok).toBe(false);
+    }
+  });
+
+  it('writes an issue the merge script can read back', () => {
+    const line = /^ship-report: (missing|found|no-city) (-?\d+,-?\d+)$/gm;
+    const noShip = issueForShip({ name: 'Steve_01', city: '-554792,8712', result: 'missing' });
+    expect(noShip.title).toBe('Ship report: no ship at x: -554792, z: 8712');
+    expect(noShip.labels).toEqual(['ship-report']);
+    expect([...noShip.body.matchAll(line)].map((m) => [m[1], m[2]])).toEqual([['missing', '-554792,8712']]);
+    const noCity = issueForShip({ name: 'Steve_01', city: '30000,-4000', result: 'no-city' });
+    expect(noCity.title).toBe('Ship report: no End City at x: 30000, z: -4000');
+    expect([...noCity.body.matchAll(line)].map((m) => [m[1], m[2]])).toEqual([['no-city', '30000,-4000']]);
+  });
+});

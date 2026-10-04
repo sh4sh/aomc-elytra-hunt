@@ -60,6 +60,19 @@ npm run looted -- --issue 12    # merge issue #12 into public/looted.json
 git commit -am "add looted from #12" && git push
 ```
 
+## Ship reports
+
+Players can also report, from a city's right-click menu, that its ship was
+there, that the city had no ship, or that there was no End City at all. The relay files each report as an issue with the
+`ship-report` label. Replying `/merge` records it in
+`public/ship-reports.json`: "no ship" and "no End City" reports remove the city from the routes
+for everyone (they are stored separately), and a "ship found" report clears its
+"ship uncertain" mark. By
+hand, the same thing is `npm run ship-report -- --issue 12`, or
+`npm run ship-report -- missing -554792,8712`.
+
+After changing the relay's code, run `npx wrangler deploy` from `relay/`.
+
 ## Hourly webmap update
 
 `wrangler.toml` has a timer (`[triggers]`) set to 23 minutes past each hour. When

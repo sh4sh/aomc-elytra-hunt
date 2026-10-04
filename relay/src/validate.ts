@@ -47,3 +47,49 @@ export function issueFor(s: Submission): { title: string; body: string; labels: 
     ].join('\n'),
   };
 }
+
+/** What a player found at a city: its ship, the city with no ship, or no city at all. */
+export type ShipResult = 'found' | 'missing' | 'no-city';
+const SHIP_RESULTS: ShipResult[] = ['found', 'missing', 'no-city'];
+
+/** A player's report on one city. */
+export interface ShipReport {
+  name: string;
+  city: string;
+  result: ShipResult;
+}
+
+export const SHIP_LABEL = 'ship-report';
+
+export function parseShipReport(input: unknown): { ok: true; value: ShipReport } | { ok: false; error: string } {
+  if (!input || typeof input !== 'object') return { ok: false, error: 'Expected a JSON object.' };
+  const { name, city, result } = input as { name?: unknown; city?: unknown; result?: unknown };
+  if (typeof city !== 'string' || !/^-?\d{1,8},-?\d{1,8}$/.test(city)) return { ok: false, error: 'The city must look like "x,z".' };
+  if (!SHIP_RESULTS.includes(result as ShipResult)) return { ok: false, error: 'Say what was found: the ship, no ship, or no city.' };
+  const who = typeof name === 'string' ? name.replace(/[^A-Za-z0-9_]/g, '').slice(0, 32) : '';
+  return { ok: true, value: { name: who || 'anonymous', city, result: result as ShipResult } };
+}
+
+export function issueForShip(r: ShipReport): { title: string; body: string; labels: string[] } {
+  const [x, z] = r.city.split(',');
+  const headline = { found: 'ship found', missing: 'no ship', 'no-city': 'no End City' }[r.result];
+  const detail = {
+    found: 'The player found a ship at this city. Accepting this clears its "ship uncertain" mark.',
+    missing: 'The player found the city but no ship. Accepting this removes the city from the routes for everyone.',
+    'no-city': 'The player found no End City here at all. Accepting this removes it from the routes for everyone.',
+  }[r.result];
+  return {
+    labels: [SHIP_LABEL],
+    title: `Ship report: ${headline} at x: ${x}, z: ${z}`,
+    body: [
+      `Reported through the app by **${r.name}**. Not verified.`,
+      '',
+      detail,
+      '',
+      'To accept, reply to this issue with `/merge`. To reject, close it.',
+      '',
+      // Read back by scripts/merge-ship-report.mjs.
+      `ship-report: ${r.result} ${r.city}`,
+    ].join('\n'),
+  };
+}

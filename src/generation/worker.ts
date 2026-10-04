@@ -1,5 +1,5 @@
 // Runs the End City search off the main thread.
-import { endCityHasShip } from './end-city-pieces';
+import { shipCode } from './end-city-pieces';
 import { chunkToBlock, findEndCities } from './end-cities';
 import { passes } from '../filters';
 import { searchBounds, type Filters } from '../types';
@@ -9,8 +9,8 @@ export interface FindRequest {
   filters: Filters;
 }
 
-/** Block x, block z, and 1 if the city has a ship. */
-export type FoundCity = [number, number, 0 | 1];
+/** Block x, block z, and the ship: 0 for none, 1 for a ship, 2 for a ship that is a tight fit and so uncertain. */
+export type FoundCity = [number, number, 0 | 1 | 2];
 
 export type FindResponse = { type: 'progress'; fraction: number } | { type: 'done'; cities: FoundCity[] };
 
@@ -26,7 +26,7 @@ addEventListener('message', (e: MessageEvent<FindRequest>) => {
   const cities = chunks.map(([cx, cz]): FoundCity => [
     chunkToBlock(cx),
     chunkToBlock(cz),
-    endCityHasShip(worldSeed, cx, cz) ? 1 : 0,
+    shipCode(worldSeed, cx, cz),
   ]);
   postMessage({ type: 'done', cities } satisfies FindResponse);
 });

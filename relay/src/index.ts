@@ -7,7 +7,7 @@
 // The GitHub token lives here as a secret and is never sent
 // to the browser. Setup steps are in relay/README.md.
 
-import { issueFor, parseSubmission } from './validate';
+import { issueFor, issueForShip, parseShipReport, parseSubmission } from './validate';
 
 interface Env {
   /**
@@ -26,6 +26,8 @@ interface Env {
 const MAX_BYTES = 100_000;
 /** One submission per visitor address per this many seconds. */
 const COOLDOWN_SECONDS = 60;
+/** A ship report is one click, and a player may have several to make. */
+const SHIP_COOLDOWN_SECONDS = 10;
 
 /** Ask GitHub to run the webmap update workflow now. */
 async function startWebmapUpdate(env: Env): Promise<void> {
@@ -75,14 +77,22 @@ export default {
     } catch {
       return reply(400, { error: 'Expected JSON.' });
     }
-    const parsed = parseSubmission(json);
+    // Two kinds of message arrive here: a list of looted cities, or a report on a single ship.
+    const isShipReport = (json as { kind?: unknown } | null)?.kind === 'ship';
+    const parsed = isShipReport ? parseShipReport(json) : parseSubmission(json);
     if (!parsed.ok) return reply(400, { error: parsed.error });
+    const issueBody = isShipReport
+      ? issueForShip(parsed.value as Parameters<typeof issueForShip>[0])
+      : issueFor(parsed.value as Parameters<typeof issueFor>[0]);
 
     // A short cooldown per visitor address, remembered in Cloudflare's cache, so the repo can't be flooded.
     const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown';
     const cache = (caches as unknown as { default: Cache }).default;
-    const marker = new Request(`https://cooldown.invalid/${encodeURIComponent(ip)}`);
-    if (await cache.match(marker)) return reply(429, { error: 'Please wait a minute before submitting again.' });
+    // Looted lists and ship reports are limited separately, so reporting a ship does not block a submission.
+    const marker = new Request(`https://cooldown.invalid/${isShipReport ? 'ship' : 'looted'}/${encodeURIComponent(ip)}`);
+    if (await cache.match(marker)) {
+      return reply(429, { error: isShipReport ? 'Please wait a few seconds before reporting again.' : 'Please wait a minute before submitting again.' });
+    }
 
     const res = await fetch(`https://api.github.com/repos/${env.REPO}/issues`, {
       method: 'POST',
@@ -92,12 +102,13 @@ export default {
         'Content-Type': 'application/json',
         'User-Agent': 'aomc-looted-relay',
       },
-      body: JSON.stringify(issueFor(parsed.value)),
+      body: JSON.stringify(issueBody),
     });
     if (!res.ok) return reply(502, { error: 'Could not file the submission. Please try again later.' });
 
-    await cache.put(marker, new Response('1', { headers: { 'Cache-Control': `max-age=${COOLDOWN_SECONDS}` } }));
+    const wait = isShipReport ? SHIP_COOLDOWN_SECONDS : COOLDOWN_SECONDS;
+    await cache.put(marker, new Response('1', { headers: { 'Cache-Control': `max-age=${wait}` } }));
     const issue = (await res.json()) as { number: number };
-    return reply(200, { ok: true, issue: issue.number, cities: parsed.value.cities.length });
+    return reply(200, { ok: true, issue: issue.number });
   },
 };
