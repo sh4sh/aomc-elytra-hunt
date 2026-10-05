@@ -341,7 +341,7 @@ export function renderDetail(): void {
   // The line says what matters at a glance; the breakdown is there on hover.
   const reach = batch.length ? Math.hypot(batch[0].x - startPoint().x, batch[0].z - startPoint().z) : 0;
   const hundreds = (blocks: number) => fmt(Math.round(blocks / 100) * 100);
-  // Roughly how long the route takes: the flying, plus a couple of minutes at each ship. To the nearest
+  // Roughly how long the route takes: the flying, plus a minute and a half at each ship. To the nearest
   // five minutes, since it is only a guide.
   const flying = (length + reach) / FLIGHT_BLOCKS_PER_SECOND / 60;
   const minutes = Math.max(5, Math.round((flying + batch.length * MINUTES_PER_SHIP) / 5) * 5);

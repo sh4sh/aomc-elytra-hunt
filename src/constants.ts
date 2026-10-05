@@ -55,4 +55,4 @@ export const RENUMBERED_NOTE = "Routes renumbered. Old waypoints won't match.";
 /** How fast a player covers ground with an elytra and rockets, a little under the 33.5 blocks a second of a rocket's boost. */
 export const FLIGHT_BLOCKS_PER_SECOND = 30;
 /** How long a player is taken to spend at each ship, in minutes. */
-export const MINUTES_PER_SHIP = 2;
+export const MINUTES_PER_SHIP = 1.5;
