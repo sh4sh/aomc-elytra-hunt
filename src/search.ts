@@ -402,26 +402,29 @@ export function retireFinished(keep: number | null): boolean {
 // ---------- locate ----------
 
 /**
- * The position "Search near me" works from: the coordinates in its two boxes, or 0,0 (End Spawn)
- * while both are empty. Null, with a message beside the boxes, when only one is filled in.
+ * The position "Search near me" works from: the coordinates in its two boxes, or the middle of the
+ * map (its crosshair) while both are empty. Null, with a message beside the boxes, when only one is
+ * filled in.
  */
 function nearPosition(): { x: number; z: number } | null {
-  if (nearX.value.trim() === '' && nearZ.value.trim() === '') return { x: 0, z: 0 };
+  if (nearX.value.trim() === '' && nearZ.value.trim() === '') return { ...session.viewCentre };
   const [x, z] = [Number(nearX.value), Number(nearZ.value)];
   if (nearX.value.trim() !== '' && nearZ.value.trim() !== '' && Number.isFinite(x) && Number.isFinite(z)) {
     return { x: Math.round(x), z: Math.round(z) };
   }
-  nearX.setCustomValidity('Enter both x and z, or leave both empty for 0,0.');
+  nearX.setCustomValidity("Enter both x and z, or leave both empty to use the map's centre.");
   nearX.reportValidity();
   return null;
 }
 /** Show a search near a position as the player's own: the marker on the map, and the coordinates in the boxes. */
 export function showPosition(pos: { x: number; z: number }): void {
   session.you = { x: pos.x, z: pos.z };
-  // A search from the empty boxes was around 0,0, and they are empty again for it.
-  if (pos.x !== 0 || pos.z !== 0) return setNear(pos);
-  nearX.value = '';
-  nearZ.value = '';
+  setNear(pos);
+}
+/** While the boxes are empty they show, greyed, where the map's crosshair is: that is where a search would look. */
+export function showNearPlaceholders(): void {
+  nearX.placeholder = `x: ${session.viewCentre.x}`;
+  nearZ.placeholder = `z: ${session.viewCentre.z}`;
 }
 /** "Clear position" is offered whenever there is one to clear: a marker on the map, or coordinates in the boxes. */
 export function showClearPosition(): void {
@@ -484,6 +487,8 @@ function openNearest(pos: { x: number; z: number }, prefix = ''): boolean {
 /** Search around a position and open the route nearest it, whatever the search was showing before. */
 function searchAround(pos: { x: number; z: number }): void {
   session.you = { x: pos.x, z: pos.z };
+  // The place searched stays in the boxes, even when it came from the crosshair: the map is about to move.
+  setNear(session.you);
   session.searchCentre = session.you;
   showSearchFold();
   if (!(Number(aroundRadius.value) > 0)) aroundRadius.value = '10000';
@@ -502,7 +507,12 @@ function searchAround(pos: { x: number; z: number }): void {
 // far out that is, since the default leaves out the picked-over first 10,000 blocks.
 /** Under "Search near me": where its search is centred while one is showing, or what it will ask for. */
 function showNearLabel(): void {
-  const text = session.searchCentre ? `around x: ${session.searchCentre.x}, z: ${session.searchCentre.z}` : 'around your coordinates';
+  const empty = nearX.value.trim() === '' && nearZ.value.trim() === '';
+  const text = session.searchCentre
+    ? `around x: ${session.searchCentre.x}, z: ${session.searchCentre.z}`
+    : empty
+      ? "around the map's centre"
+      : 'around your coordinates';
   nearToggle.replaceChildren('Search near me', Object.assign(document.createElement('small'), { textContent: text }));
 }
 /** Mark which of the two search buttons has its search showing. */
@@ -535,6 +545,7 @@ for (const el of [nearX, nearZ]) {
   el.addEventListener('input', () => {
     nearX.setCustomValidity('');
     showClearPosition();
+    showNearLabel();
   });
 }
 $<HTMLFormElement>('nearMe').addEventListener('submit', (e) => {
@@ -568,14 +579,7 @@ $('showOnMap').addEventListener('click', () => {
   map.goTo(pos.x, pos.z);
 });
 
-// The other way round: the coordinates at the map's crosshair go into the boxes, once. They do not follow
-// the map afterwards.
-$('useCentre').addEventListener('click', () => {
-  setNear(session.viewCentre);
-  nearX.setCustomValidity('');
-});
-
-// Clear the boxes and the markers those two leave, and put the view back at 0,0.
+// Clear the boxes and the markers a search or Show on map leaves, and put the view back at End Spawn.
 $('mapReset').addEventListener('click', () => {
   session.you = null;
   session.pin = null;

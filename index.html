@@ -20,7 +20,7 @@
         <button id="quickSpawn" type="button" class="search-choice primary" title="Search the ring around End Spawn set under Settings">Find ships</button>
         <button id="nearToggle" type="button" class="search-choice" aria-expanded="false" aria-controls="nearPanel" title="Search around coordinates you give, instead of around End Spawn">Search near me</button>
         <div id="nearPanel" hidden>
-          <form id="nearMe" title="Search around these coordinates and open the nearest route. Left empty, they count as 0,0 (End Spawn).">
+          <form id="nearMe" title="Search around these coordinates and open the nearest route. Left empty, it searches around the middle of the map.">
             <input id="nearX" type="number" step="1" placeholder="x: 0" autocomplete="off" aria-label="Your x coordinate" />
             <input id="nearZ" type="number" step="1" placeholder="z: 0" autocomplete="off" aria-label="Your z coordinate" />
             <button type="submit">Search</button>
@@ -28,7 +28,6 @@
           </form>
           <div class="row quiet">
             <button id="showOnMap" type="button" class="textlink" title="Move the map to these coordinates without searching there">Show on map</button>
-            <button id="useCentre" type="button" class="textlink" title="Fill in the coordinates at the middle of the map, where its crosshair is">Use map centre</button>
           </div>
         </div>
         <div id="searchLinks" class="row quiet">

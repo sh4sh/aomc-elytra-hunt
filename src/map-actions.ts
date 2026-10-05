@@ -7,7 +7,7 @@ import { map } from './map-view';
 import { render, renderLegend, renderMap, select, setHot } from './render';
 import { copyText, openReport } from './route-panel';
 import { batchTitle, color, isCustom, moveCity, possible, possibleNote, pushEdit, rebuild, recordMarks, tooltip, undrop } from './routes';
-import { mapNote, setNear } from './search';
+import { mapNote, setNear, showNearPlaceholders } from './search';
 import { session } from './session';
 import { DEFAULT_SEED, save, state } from './state';
 import { ISSUES_URL } from './submissions';
@@ -429,4 +429,5 @@ map.onView = (centre) => {
   session.viewCentre = centre;
   showCoords();
   renderLegend();
+  showNearPlaceholders();
 };
