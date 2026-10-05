@@ -13,12 +13,12 @@ you can load into Xaero's Minimap, JourneyMap or another map mod as waypoints.
 The same steps are in the app under **How to use**.
 
 1. **Pick a route.** Route 1 takes the least flying.
-   Pick one from the list, click a city on the map, or type your x and z and
+   Pick one from the list, click a ship on the map, or type your x and z and
    press **Search near me**.
 2. **Get the waypoints into your map mod.** Choose your mod and enter your
    username. Then, in the End, go down the route's list: press **copy** beside
-   a city, paste into chat, send, and add the waypoint that appears.
-3. **Loot.** Press **Next city** as you go. If the elytra was already gone,
+   a ship, paste into chat, send, and add the waypoint that appears.
+3. **Loot.** Press **Next ship** as you go. If the elytra was already gone,
    press **Looted by someone else** instead.
 4. **Share where you have been.** Upload your map of the End to the
    [community webmap](https://map.diorite.xyz/?dim=the_end), or send your
@@ -28,17 +28,17 @@ The same steps are in the app under **How to use**.
 
 | Mark | Meaning |
 |---|---|
-| Filled dot | A city in a route, coloured by route |
-| White circle | The city you are up to in the open route |
+| Filled dot | A ship in a route, coloured by route |
+| White circle | The ship you are up to in the open route |
 | Green × | Looted |
 | Tan ×, `!` in the list | One you marked as looted by someone else. Once it is on the shared list it shows as a plain green × |
-| Small grey ring, `?` in the list | Possibly looted: near a city someone else looted, or on a guessed flight path. A guess |
+| Small grey ring, `?` in the list | Possibly looted: near a ship someone else looted, or on a guessed flight path. A guess |
 | Dashed tan line | A guess at where an earlier hunter flew |
-| Grey × | Ship or city reported missing |
-| Faint diamond | A city with a ship that is not in any route |
-| Green shading | Terrain already on the community webmap; cities there are left out |
+| Grey × | Ship or End City reported missing |
+| Faint diamond | A ship that is not in any route |
+| Green shading | Terrain already on the community webmap; ships there are left out |
 
-Click a city to open its route and see its details. Right-click it for more;
+Click a ship to open its route and see its details. Right-click it for more;
 on a touch screen, tap **⋯** on its row in the list, or **options** in its
 details under the map.
 

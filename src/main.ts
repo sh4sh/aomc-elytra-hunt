@@ -187,7 +187,7 @@ const MISSING_NOTE = { missing: 'End Ship reported missing', 'no-city': 'End Cit
 let uncertainShips = new Set<string>();
 /** A city this close (in blocks) to one found already looted counts as possibly looted. */
 const POSSIBLE_RADIUS = 2000;
-const POSSIBLE_NOTE = 'possibly looted: near a city found already looted';
+const POSSIBLE_NOTE = 'possibly looted: near a ship found already looted';
 /** Ships closer to End Spawn than this (along the longer axis, as the search measures) count as possibly looted. */
 const NEAR_SPAWN_BLOCKS = 10000;
 const NEAR_SPAWN_NOTE = 'possibly looted: within 10,000 blocks of End Spawn, where most ships were emptied long ago';
@@ -227,7 +227,7 @@ const possible = (c: City): boolean => possibleNote(c) !== null;
 /** Why each kind of "possibly looted" is said, in a sentence a player can read, keyed by how its note starts. */
 const POSSIBLE_WHY: [string, string][] = [
   ['possibly looted: within', 'Within 10,000 blocks of End Spawn, where most ships were emptied long ago.'],
-  ['possibly looted: near a city', 'Within 2,000 blocks of a city found already looted.'],
+  ['possibly looted: near a ship', 'Within 2,000 blocks of a ship found already looted.'],
   ['possibly looted: on a possible', 'On a guessed flight path of an earlier hunter.'],
 ];
 /** How many of `batches` were generated; the player's custom batches follow them. */
@@ -308,7 +308,7 @@ function lastEdit(i: number, from: RouteEdit[] | undefined = state.edits): Route
 
 const REMOVED_NOTE = 'removed from its route by hand';
 const MAPPED_NOTE = 'has a ship, but already on the webmap';
-const EXTRA_NOTE = 'outside the search area, added with Add +1 city to route';
+const EXTRA_NOTE = 'outside the search area, added with Add +1 ship to route';
 /** How far past the search area "+1 city" will look from a route's last stop, in blocks. */
 const BEYOND_BLOCKS = 4000;
 /**
@@ -688,7 +688,7 @@ function renderBatches(): void {
   // The line itself says what a player acts on; the rest of the tally is there on hover.
   $('stats').title = total
     ? [
-        shipless ? `${fmt(shipless)} cities without a ship left out` : '',
+        shipless ? `${fmt(shipless)} End Cities without a ship left out` : '',
         skipped ? `${fmt(skipped)} left out as already on the webmap` : '',
         unbatched ? `${fmt(unbatched)} without a route (faint diamonds)` : '',
         uncertainShips.size ? `${fmt(uncertainShips.size)} with an uncertain ship (marked ?)` : '',
@@ -699,13 +699,13 @@ function renderBatches(): void {
         .join(' · ')
     : '';
   $('stats').textContent = total
-    ? `${fmt(total)} cities · ${fmt(batches.length)} routes · ${fmt(done)} looted` +
+    ? `${fmt(total)} ships · ${fmt(batches.length)} routes · ${fmt(done)} looted` +
       (usedBatchSize < state.batchSize && generatedCount
         ? ` · no route of ${state.batchSize} fits here, so routes of ${usedBatchSize} were made`
         : '')
     : unbatched
-      ? `No routes: ${fmt(unbatched)} cities, but no two are within the longest flight of each other. Raise the longest flight.`
-      : 'No cities yet. Set a range and press Find cities.';
+      ? `No routes: ${fmt(unbatched)} ships, but no two are within the longest flight of each other. Raise the longest flight.`
+      : 'No ships yet. Set a range and press Find ships.';
 
 
   // Finished routes drop out of the list, so what is left is what there is still to fly. The open
@@ -779,7 +779,7 @@ function renderBatches(): void {
       dist.className = 'count';
       dist.textContent = batch.length ? `${round(reach + along)} blocks` : '';
       btn.title = batch.length
-        ? `About ${round(reach + along)} blocks of flying in all: ${round(reach)} to reach the first city, then ${round(along)} along the route`
+        ? `About ${round(reach + along)} blocks of flying in all: ${round(reach)} to reach the first ship, then ${round(along)} along the route`
         : '';
       btn.append(sw, name, dist, count);
       btn.addEventListener('click', () => {
@@ -818,7 +818,7 @@ function renderDetail(): void {
   const why = $('possibleWhy');
   why.hidden = !doubts.length;
   if (doubts.length) {
-    $('possibleCount').textContent = `${doubts.length} possibly looted ${doubts.length === 1 ? 'city' : 'cities'} in this route (marked ?)`;
+    $('possibleCount').textContent = `${doubts.length} possibly looted ${doubts.length === 1 ? 'ship' : 'ships'} in this route (marked ?)`;
     $('possibleReasons').replaceChildren(
       ...POSSIBLE_WHY.filter(([start]) => doubts.some((n) => n.startsWith(start))).map(([, text]) =>
         Object.assign(document.createElement('li'), { textContent: text }),
@@ -854,11 +854,11 @@ function renderDetail(): void {
   const reach = batch.length ? Math.hypot(batch[0].x - startPoint().x, batch[0].z - startPoint().z) : 0;
   const hundreds = (blocks: number) => fmt(Math.round(blocks / 100) * 100);
   $('detailMeta').textContent =
-    `${batch.length} cities · ${looted(batch)} looted · about ${hundreds(length + reach)} blocks` +
+    `${batch.length} ships · ${looted(batch)} looted · about ${hundreds(length + reach)} blocks` +
     (!isCustom(i) && batch.length < usedBatchSize ? ' · short route' : '') +
-    (isCustom(i) && !batch.length ? ' · right-click a city on the map to add it' : '');
+    (isCustom(i) && !batch.length ? ' · right-click a ship on the map to add it' : '');
   $('detailMeta').title = batch.length
-    ? `${hundreds(reach)} blocks to reach the first city, then ${hundreds(length)} along the route. Longest flight between cities: ${fmt(Math.round(longest))}.`
+    ? `${hundreds(reach)} blocks to reach the first ship, then ${hundreds(length)} along the route. Longest flight between ships: ${fmt(Math.round(longest))}.`
     : '';
 
   $('cities').replaceChildren(
@@ -908,7 +908,7 @@ function renderDetail(): void {
       chat.type = 'button';
       chat.className = 'chat';
       chat.textContent = 'copy';
-      chat.title = 'Copy this city as a chat line: paste it into Minecraft chat to make its waypoint';
+      chat.title = 'Copy this ship as a chat line: paste it into Minecraft chat to make its waypoint';
       chat.classList.toggle('was-copied', copiedLines.has(copiedKey(c)));
       chat.addEventListener('click', async (e) => {
         // Inside the row's label: don't let the click tick the looted box.
@@ -974,7 +974,7 @@ function renderDetail(): void {
       more.type = 'button';
       more.className = 'chat touch-only';
       more.textContent = '⋯';
-      more.setAttribute('aria-label', 'Options for this city');
+      more.setAttribute('aria-label', 'Options for this ship');
       more.addEventListener('click', (e) => {
         // Inside the row's label: don't let the tap tick the looted box.
         e.preventDefault();
@@ -1233,7 +1233,7 @@ function tooBig(ships: number): boolean {
   $('narrowBand').hidden = aroundMode();
   $('narrowAround').hidden = !aroundMode();
   $('searchWarningText').textContent =
-    `That search covers about ${fmt(Math.round(ships / 1000) * 1000)} cities, more than the ` +
+    `That search covers about ${fmt(Math.round(ships / 1000) * 1000)} ships, more than the ` +
     `${fmt(MAX_SEARCH_CITIES)} that can be routed at once.`;
   warning.hidden = false;
   foldWhenDone = false;
@@ -1244,7 +1244,7 @@ function tooBig(ships: number): boolean {
 function endSearch(): void {
   worker?.terminate();
   worker = null;
-  findBtn.textContent = 'Find cities';
+  findBtn.textContent = 'Find ships';
   findBtn.classList.remove('busy');
   progress.hidden = true;
 }
@@ -1263,7 +1263,7 @@ form.addEventListener('submit', (e) => {
   e.preventDefault();
   // While a search is running the button cancels it; the previous results stay as they were.
   if (worker) {
-    if (confirm('Cancel the search? The cities already shown will stay as they are.')) {
+    if (confirm('Cancel the search? The ships already shown will stay as they are.')) {
       endSearch();
       locateAfterSearch = null;
     }
@@ -1532,7 +1532,7 @@ function searchAround(pos: { x: number; z: number }): void {
 function showQuickSpawn(): void {
   const [from, to] = [Number(minInput.value), Number(maxInput.value)];
   const range = Number.isFinite(from) && Number.isFinite(to) && to > from ? `around End Spawn, ${fmt(from)}–${fmt(to)} blocks` : 'around End Spawn';
-  $('quickSpawn').replaceChildren('Find cities', Object.assign(document.createElement('small'), { textContent: range }));
+  $('quickSpawn').replaceChildren('Find ships', Object.assign(document.createElement('small'), { textContent: range }));
 }
 for (const el of [minInput, maxInput]) {
   el.addEventListener('input', showQuickSpawn);
@@ -1730,7 +1730,7 @@ $('surveyMake').addEventListener('click', () => {
   if (worker) return;
   const filters: Filters = { minDist: 0, maxDist: NEAR_SPAWN_BLOCKS, diagonalDeg: 45, quadrants: ['NE', 'NW', 'SE', 'SW'] };
   if (!precomputed?.covers(DEFAULT_SEED, filters)) {
-    note.textContent = 'The list of cities has not loaded. Try again in a moment.';
+    note.textContent = 'The list of ships has not loaded. Try again in a moment.';
     return;
   }
   if (state.survey?.ids.length && !confirm('Replace the current survey with a new one? Your looted marks are kept.')) return;
@@ -1797,7 +1797,7 @@ $('searchReset').addEventListener('click', () => {
 function showExploredNote(): void {
   const note = $('exploredNote');
   if (!explored) {
-    note.textContent = 'No webmap data loaded, so cities already on the webmap could not be left out.';
+    note.textContent = 'No webmap data loaded, so ships already on the webmap could not be left out.';
     return;
   }
   // The data's own date only moves when the webmap changes. Where the time of the last check is known,
@@ -1805,7 +1805,7 @@ function showExploredNote(): void {
   const changed = Date.parse(explored.fetchedAt);
   const when = (t: number) => new Date(t).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
   note.textContent =
-    `Cities already on the webmap are ${state.includeMapped ? 'included in' : 'left out of'} the routes. ` +
+    `Ships already on the webmap are ${state.includeMapped ? 'included in' : 'left out of'} the routes. ` +
     (webmapChecked !== null ? `Webmap last checked ${when(Math.max(webmapChecked, changed))}.` : `Webmap data from ${when(changed)}.`);
 }
 
@@ -1904,7 +1904,7 @@ function showChatHint(): void {
   $('chatHint').textContent =
     (state.chatName
       ? 'The lines are whispers to yourself: only you see them.'
-      : 'Without a username the lines go to public chat, where everyone sees them.') + ' Looted cities are left out.';
+      : 'Without a username the lines go to public chat, where everyone sees them.') + ' Looted ships are left out.';
 }
 chatNameInput.value = state.chatName;
 // Once a username is in, the box gives way to one line saying who the lines go to.
@@ -1950,7 +1950,7 @@ function markAll(v: boolean): void {
 }
 $('customDelete').addEventListener('click', () => {
   if (selected === null || !isCustom(selected)) return;
-  if (!confirm(`Delete ${batchTitle(selected).toLowerCase()}? Its cities go back to where they were. Looted marks are kept.`)) return;
+  if (!confirm(`Delete ${batchTitle(selected).toLowerCase()}? Its ships go back to where they were. Looted marks are kept.`)) return;
   state.custom.splice(selected - generatedCount, 1);
   save();
   selected = null;
@@ -2021,9 +2021,9 @@ addOneBtn.addEventListener('click', () => {
   if (beyond) state.extra = [...(state.extra ?? []), beyond];
   const say = (text: string) => {
     addOneBtn.textContent = text;
-    setTimeout(() => (addOneBtn.textContent = 'Add +1 city to route'), 2000);
+    setTimeout(() => (addOneBtn.textContent = 'Add +1 ship to route'), 2000);
   };
-  if (!best) return say(batch.length ? 'No city without a route' : 'Add a first city from the map');
+  if (!best) return say(batch.length ? 'No ship without a route' : 'Add a first ship from the map');
   const id = cityId(best);
   undrop(id);
   state.appended = [...(state.appended ?? []).filter((x) => x !== id), id];
@@ -2041,7 +2041,7 @@ addOneBtn.addEventListener('click', () => {
   }
   // Anchored to a city that belongs to the route of its own accord, so the move survives regrouping.
   const anchor = batch.find((x) => !(cityId(x) in state.moved));
-  if (!anchor) return say('No city without a route');
+  if (!anchor) return say('No ship without a route');
   state.moved[id] = cityId(anchor);
   save();
   rebuildKeeping(cityId(anchor));
@@ -2085,7 +2085,7 @@ function applyEdit(i: number, edit: RouteEdit): RouteEdit {
     const stuck = edit.before.filter(([, was], n) => was === 0 && tracker.isShared(cities[n])).length;
     if (stuck) {
       const note = $('routeNote');
-      note.textContent = `${stuck === 1 ? '1 city stays' : `${stuck} cities stay`} looted: on the shared looted list, which is the same for everyone.`;
+      note.textContent = `${stuck === 1 ? '1 ship stays' : `${stuck} ships stay`} looted: on the shared looted list, which is the same for everyone.`;
       note.hidden = false;
       setTimeout(() => (note.hidden = true), 6000);
     }
@@ -2179,7 +2179,7 @@ $('visitedReset').addEventListener('click', () => {
 
 function showSharedNote(): void {
   $('sharedNote').textContent = tracker.sharedCount
-    ? `${fmt(tracker.sharedCount)} cities on the shared list so far.`
+    ? `${fmt(tracker.sharedCount)} ships on the shared list so far.`
     : 'The shared list is empty so far.';
 }
 showSharedNote();
@@ -2290,10 +2290,10 @@ submitBtn.addEventListener('click', async () => {
   const already = tracker.ownAlready();
   const cities = [...new Set([...tracker.ownNew(), ...already])];
   if (!cities.length) {
-    submitNote.textContent = 'Nothing new to submit: mark some cities as looted first.';
+    submitNote.textContent = 'Nothing new to submit: mark some ships as looted first.';
     return;
   }
-  if (!confirm(`Send ${fmt(cities.length)} looted ${cities.length === 1 ? 'city' : 'cities'} for review? Once accepted they show as looted for everyone.`)) return;
+  if (!confirm(`Send ${fmt(cities.length)} looted ${cities.length === 1 ? 'ship' : 'ships'} for review? Once accepted they show as looted for everyone.`)) return;
   submitBtn.disabled = true;
   submitNote.textContent = 'Sending…';
   try {
@@ -2511,7 +2511,7 @@ function addCityItems(c: MapCity, items: [string, () => void][]): void {
       reselect();
     }]);
     items.push(['Mark as not looted', () => {
-      if (!confirm(`Mark the city at ${xzText(c.city)} as not looted?`)) return;
+      if (!confirm(`Mark the ship at ${xzText(c.city)} as not looted?`)) return;
       recordMarks([c.city]);
       tracker.set(c.city, false);
       state.excluded = state.excluded.filter((x) => x !== id);
@@ -2568,7 +2568,7 @@ function addCityItems(c: MapCity, items: [string, () => void][]): void {
         }]);
       }
     }
-    items.push(['Start a custom route with this city', () => addToCustom(state.custom.length)]);
+    items.push(['Start a custom route with this ship', () => addToCustom(state.custom.length)]);
   }
   // Its place in the open route.
   // With a mouse the rows can be dragged; these are for fingers.
@@ -2817,7 +2817,7 @@ const gooseTally = $('gooseTally');
 const showTally = () => {
   if (!showTrophies) return (gooseTally.textContent = '');
   const looted = lootedCities().length;
-  const parts = [looted ? `${fmt(looted)} ${looted === 1 ? 'city' : 'cities'} looted so far (gold)` : 'nothing looted yet'];
+  const parts = [looted ? `${fmt(looted)} ${looted === 1 ? 'ship' : 'ships'} looted so far (gold)` : 'nothing looted yet'];
   if (state.seed === DEFAULT_SEED && explored) {
     parts.push(webmapCities ? `${fmt(webmapCities.length)} more in areas on the webmap (green)` : 'counting the ones on the webmap…');
   }

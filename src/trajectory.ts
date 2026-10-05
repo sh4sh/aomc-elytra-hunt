@@ -112,12 +112,12 @@ export function studyTrajectories(reported: Pt[], intact: Pt[], mapped: Pt[] = [
       .sort((a, b) => own.across(a) - own.across(b))
       .slice(0, MAX_WEBMAP_SUPPORT);
     const pts = [...told, ...support];
-    if (pts.length === 2) near.push(`2 cities found already looted ${where(told)}: a third in line with them would make a path`);
+    if (pts.length === 2) near.push(`2 ships found already looted ${where(told)}: a third in line with them would make a path`);
     if (pts.length < MIN_POINTS) continue;
     const { ux, uz, across, ordered: points, slack } = fit(pts);
     // A blob of reports says someone was around, not which way they went.
     if (Math.max(...pts.map(across)) > slack) {
-      near.push(`${told.length} cities found already looted ${where(told)} do not line up, so no path is drawn`);
+      near.push(`${told.length} ships found already looted ${where(told)} do not line up, so no path is drawn`);
       continue;
     }
 
@@ -129,7 +129,7 @@ export function studyTrajectories(reported: Pt[], intact: Pt[], mapped: Pt[] = [
     else if (spoilers > 1) confidence = confidence === 'high' ? 'medium' : null;
     if (!confidence) {
       near.push(
-        `${told.length} cities found already looted ${where(told)} line up, but ${spoilers} cities along the line were looted the ordinary way, so no path is drawn`,
+        `${told.length} ships found already looted ${where(told)} line up, but ${spoilers} ships along the line were looted the ordinary way, so no path is drawn`,
       );
       continue;
     }
@@ -145,14 +145,14 @@ export function studyTrajectories(reported: Pt[], intact: Pt[], mapped: Pt[] = [
     });
   }
   if (reported.length >= MIN_POINTS && groups.size === reported.length) {
-    near.push(`${reported.length} cities found already looted, but none within ${LINK_BLOCKS.toLocaleString()} blocks of another`);
+    near.push(`${reported.length} ships found already looted, but none within ${LINK_BLOCKS.toLocaleString()} blocks of another`);
   }
   return { paths: out, near };
 }
 
 /** Why the path is believed, in words. */
 export const describeTrajectory = (t: Trajectory): string =>
-  `${t.confidence} confidence: ${t.points.length} cities in a line (` +
+  `${t.confidence} confidence: ${t.points.length} ships in a line (` +
   [
     t.points.length - t.mapped ? `${t.points.length - t.mapped} looted by someone else` : '',
     t.mapped ? `${t.mapped} on the webmap` : '',

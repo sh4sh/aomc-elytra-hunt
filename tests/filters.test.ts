@@ -516,7 +516,7 @@ describe('earlier flight paths with webmap cities', async () => {
     const { paths } = studyTrajectories(line.slice(0, 2), [], [line[2]]);
     expect(paths).toHaveLength(1);
     expect(paths[0]).toMatchObject({ confidence: 'medium', mapped: 1 });
-    expect(describeTrajectory(paths[0])).toContain('3 cities in a line (2 looted by someone else, 1 on the webmap)');
+    expect(describeTrajectory(paths[0])).toContain('3 ships in a line (2 looted by someone else, 1 on the webmap)');
   });
 
   it('never makes a path out of the webmap alone, or mostly', () => {

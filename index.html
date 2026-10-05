@@ -17,7 +17,7 @@
       </header>
 
       <div id="quick">
-        <button id="quickSpawn" type="button" class="primary" title="Search the ring around End Spawn set under Settings">Find cities</button>
+        <button id="quickSpawn" type="button" class="primary" title="Search the ring around End Spawn set under Settings">Find ships</button>
         <form id="nearMe" title="Search around these coordinates and open the nearest route. Left empty, they count as 0,0 (End Spawn).">
           <input id="nearX" type="number" step="1" placeholder="x: 0" autocomplete="off" aria-label="Your x coordinate" />
           <input id="nearZ" type="number" step="1" placeholder="z: 0" autocomplete="off" aria-label="Your z coordinate" />
@@ -28,7 +28,7 @@
           <button id="showOnMap" type="button" class="textlink" title="Move the map to these coordinates without searching there">Show on map</button>
           <button id="useCentre" type="button" class="textlink" title="Fill in the coordinates at the middle of the map, where its crosshair is">Use map centre</button>
           <button id="mapReset" type="button" class="textlink" title="Clear the coordinates and markers, and centre the map on End Spawn">Clear position</button>
-          <button id="searchBack" type="button" class="textlink" title="Return to the search that was showing before this one" hidden>Back</button>
+          <button id="searchBack" type="button" class="textlink" title="Return to the search that was showing before this one" hidden>Back to last search</button>
         </div>
       </div>
 
@@ -38,7 +38,7 @@
         <details id="routeSettings" name="settings-part">
           <summary>Routes <span id="routesSummary" class="fold-note"></span></summary>
           <div class="row">
-            <label>Cities per route <input id="batchSize" type="number" min="1" step="1" /></label>
+            <label>Ships per route <input id="batchSize" type="number" min="1" step="1" /></label>
             <label>
               Route shape
               <select id="batchShape">
@@ -50,18 +50,18 @@
           <p class="hint">27 fills a shulker box. Lines head away from End Spawn.</p>
           <div id="lineDeviationBox" class="panel" hidden>
             <label>Stray from a straight line, up to <input id="lineDeviation" type="number" min="0" step="250" /></label>
-            <p class="hint">In blocks, either side of straight. 0 means no limit. Tight values leave most cities without a route.</p>
+            <p class="hint">In blocks, either side of straight. 0 means no limit. Tight values leave most ships without a route.</p>
           </div>
-          <label>Longest flight between cities <input id="maxHop" type="number" min="0" step="250" /></label>
-          <p class="hint">In blocks; 0 means no limit. Cities out of reach are left without a route.</p>
-          <label class="check"><input id="skipPossible" type="checkbox" /> Leave out cities that are possibly looted</label>
-          <p class="hint">Within 2,000 blocks of a city looted by someone else.</p>
+          <label>Longest flight between ships <input id="maxHop" type="number" min="0" step="250" /></label>
+          <p class="hint">In blocks; 0 means no limit. Ships out of reach are left without a route.</p>
+          <label class="check"><input id="skipPossible" type="checkbox" /> Leave out ships that are possibly looted</label>
+          <p class="hint">Within 2,000 blocks of a ship looted by someone else.</p>
         </details>
         <details id="bandBox" name="settings-part">
-          <summary>Find cities: search area</summary>
+          <summary>Find ships: search area</summary>
           <div class="row" id="distanceBox">
-            <label>From <input id="minDist" type="number" min="0" step="500" required /></label>
-            <label>To <input id="maxDist" type="number" min="1000" step="500" required /></label>
+            <label>From (blocks) <input id="minDist" type="number" min="0" step="500" required /></label>
+            <label>To (blocks) <input id="maxDist" type="number" min="1000" step="500" required /></label>
           </div>
           <fieldset id="quadrants">
             <legend>Quadrants</legend>
@@ -82,7 +82,7 @@
         </details>
         <details id="advanced" name="settings-part">
           <summary>Advanced</summary>
-          <label class="check aomc-only"><input id="includeMapped" type="checkbox" /> Include cities already on the webmap</label>
+          <label class="check aomc-only"><input id="includeMapped" type="checkbox" /> Include ships already on the webmap</label>
           <p id="exploredNote" class="hint aomc-only"></p>
           <label class="check"><input id="oneFingerMap" type="checkbox" /> Move the map with one finger</label>
           <p class="hint">For touch screens. Normally two fingers move the map and one scrolls the page; with this on, scroll the page from outside the map.</p>
@@ -105,7 +105,7 @@
             <p id="surveyNote" class="hint" role="status"></p>
           </div>
         </details>
-        <button id="find" type="submit" class="primary">Find cities</button>
+        <button id="find" type="submit" class="primary">Find ships</button>
         <div class="row quiet">
           <button id="searchReset" type="button" class="textlink">Restore default settings</button>
         </div>
@@ -153,7 +153,7 @@
           </p>
         </div>
         <div class="share-option aomc-only">
-          <p class="hint"><strong>Or send your looted list</strong>, to show those cities as looted for everyone.</p>
+          <p class="hint"><strong>Or send your looted list</strong>, to show those ships as looted for everyone.</p>
           <div id="submitBox" class="panel aomc-only" hidden>
             <label class="field">
               <strong>Your Minecraft username</strong>
@@ -177,11 +177,11 @@
           <div class="row">
             <button id="visitedExport" type="button">Export looted</button>
             <button id="visitedImport" type="button">Import looted</button>
-            <button id="citiesExport" type="button">All cities CSV</button>
+            <button id="citiesExport" type="button">All ships CSV</button>
           </div>
           <div class="reset-zone">
             <button id="visitedReset" type="button" class="danger">Reset all looted</button>
-            <p class="hint">Clears your own marks, and cannot be undone. Cities on the shared list stay looted.</p>
+            <p class="hint">Clears your own marks, and cannot be undone. Ships on the shared list stay looted.</p>
           </div>
         </details>
         <input id="visitedFile" type="file" accept=".csv,text/csv,text/plain" hidden />
@@ -239,8 +239,8 @@
         <span class="key" data-key="outside"><i class="dot diamond"></i> not in a route</span>
         <span class="key"><i class="dot square area"></i> search area</span>
         <span class="key aomc-only"><i class="dot square green"></i> already on the webmap</span>
-        <span class="controls mouse-only">Drag to pan · scroll or use the slider to zoom · click a city to open its route and see its details · right-click for options</span>
-        <span class="controls touch-only">Two fingers to move the map · pinch or use the slider to zoom · tap a city to open its route and see its details, with its options</span>
+        <span class="controls mouse-only">Drag to pan · scroll or use the slider to zoom · click a ship to open its route and see its details · right-click for options</span>
+        <span class="controls touch-only">Two fingers to move the map · pinch or use the slider to zoom · tap a ship to open its route and see its details, with its options</span>
         <span id="cursor"></span>
       </footer>
     </main>
@@ -253,17 +253,17 @@
         <h3>1. Pick a route</h3>
         <p>
           Route 1 takes the least flying. Pick one from the
-          <button type="button" class="jump" data-target="batches">route list</button>, click a city on the map, or
+          <button type="button" class="jump" data-target="batches">route list</button>, click a ship on the map, or
           type your x and z and press <em>Search near me</em>.
         </p>
         <h3>2. Get the waypoints into your map mod</h3>
         <p>
           Choose your map mod and enter your username. Then, in the End, go down the route's list: press
-          <em>copy</em> beside a city, paste into chat, send, and add the waypoint that appears.
+          <em>copy</em> beside a ship, paste into chat, send, and add the waypoint that appears.
         </p>
         <h3>3. Loot</h3>
         <p>
-          Press <em>Next city</em> as you go. If the elytra was already gone, press
+          Press <em>Next ship</em> as you go. If the elytra was already gone, press
           <em>Looted by someone else</em> instead.
         </p>
         <div class="aomc-only help-step">
@@ -278,21 +278,21 @@
         <details class="more">
           <summary>Changing a route</summary>
           <ul>
-            <li><em>Add +1 city to route</em>, under the list, adds the nearest city that has no route.</li>
-            <li>Right-click a city to add it to the open route, or remove it. <span class="touch-only">On a touch screen, tap <em>⋯</em> on its row, or <em>options</em> under the map.</span></li>
-            <li class="mouse-only">Drag a city up or down the list to change the order.</li>
+            <li><em>Add +1 ship to route</em>, under the list, adds the nearest ship that has no route.</li>
+            <li>Right-click a ship to add it to the open route, or remove it. <span class="touch-only">On a touch screen, tap <em>⋯</em> on its row, or <em>options</em> under the map.</span></li>
+            <li class="mouse-only">Drag a ship up or down the list to change the order.</li>
             <li class="touch-only">Tap <em>⋯</em> on a row and choose <em>Move up</em> or <em>Move down</em> to change the order.</li>
-            <li>The arrows under <em>Next city</em> undo and redo your changes.</li>
-            <li>For a route of your own, right-click a city and choose <em>Start a custom route with this city</em>.</li>
+            <li>The arrows under <em>Next ship</em> undo and redo your changes.</li>
+            <li>For a route of your own, right-click a ship and choose <em>Start a custom route with this ship</em>.</li>
           </ul>
         </details>
         <details class="more">
-          <summary>Possibly looted cities</summary>
+          <summary>Possibly looted ships</summary>
           <ul>
-            <li>A city marked <em>looted by someone else</em> turns tan.</li>
-            <li>Cities within 2,000 blocks of it<span class="aomc-only">, or within 10,000 blocks of End Spawn,</span> show as possibly looted: a grey ring, and a <code>?</code> in the list. It is a guess; a route's <em>why?</em> link gives the reason.</li>
+            <li>A ship marked <em>looted by someone else</em> turns tan.</li>
+            <li>Ships within 2,000 blocks of it<span class="aomc-only">, or within 10,000 blocks of End Spawn,</span> show as possibly looted: a grey ring, and a <code>?</code> in the list. It is a guess; a route's <em>why?</em> link gives the reason.</li>
             <li>A dashed line is a guess at where that hunter flew.</li>
-            <li><button type="button" class="jump" data-target="skipPossible">Leave out cities that are possibly looted</button> keeps them out of the routes.</li>
+            <li><button type="button" class="jump" data-target="skipPossible">Leave out ships that are possibly looted</button> keeps them out of the routes.</li>
           </ul>
         </details>
         <details class="more">
@@ -306,11 +306,11 @@
           <summary>Good to know</summary>
           <ul>
             <li>For Minecraft Java Edition, not Bedrock.</li>
-            <li>To keep track in game, delete a city's waypoint in your map mod once you have looted it.</li>
+            <li>To keep track in game, delete a ship's waypoint in your map mod once you have looted it.</li>
             <li class="mouse-only">Map: drag to pan, scroll or use the slider to zoom.</li>
             <li class="touch-only">Map: two fingers to pan, pinch or use the slider to zoom.</li>
-            <li>Faint diamonds are cities with a ship that are not in any route.</li>
-            <li class="aomc-only">Green shading is terrain already on the community webmap; cities there are left out.</li>
+            <li>Faint diamonds are ships that are not in any route.</li>
+            <li class="aomc-only">Green shading is terrain already on the community webmap; ships there are left out.</li>
             <li>Far from End Spawn? Type your x and z beside <em>Search near me</em>. <button type="button" class="jump" data-target="settings">Settings</button> sets how far around you it looks.</li>
             <li class="wide-only">Drag the dividers either side of the map to resize the panels.</li>
           </ul>
@@ -328,7 +328,7 @@
           <p id="starCredit" class="hint credit"></p>
         </div>
         <p id="detailMeta" class="hint"></p>
-        <p id="routeDone" class="route-done" hidden>Route complete: every city in it is looted.</p>
+        <p id="routeDone" class="route-done" hidden>Route complete: every ship in it is looted.</p>
         <details id="exportBox" class="fold">
         <summary><strong>Add this route to your map mod</strong></summary>
         <div class="segmented" role="radiogroup" aria-label="Map mod">
@@ -345,7 +345,7 @@
             <strong>Your Minecraft username</strong>
             <input id="chatName" autocomplete="off" spellcheck="false" maxlength="16" placeholder="Type your username here, e.g. Steve_01" />
           </label>
-          <p class="hint">In the End, press <em>copy</em> beside each city in the list below, paste into chat and send.</p>
+          <p class="hint">In the End, press <em>copy</em> beside each ship in the list below, paste into chat and send.</p>
           <p id="chatModNote" class="hint"></p>
           <p id="chatHint" class="hint"></p>
         </div>
@@ -384,8 +384,8 @@
 
         <p id="currentCity" class="current-city" hidden></p>
         <div class="row actions">
-          <button id="nextCity" type="button" title="Mark the current city as looted and move on to the next one">Next city</button>
-          <button id="nextCityAlready" type="button" title="The current city's elytra was already gone: mark it as looted by someone else and move on to the next one">Looted by someone else</button>
+          <button id="nextCity" type="button" title="Mark the current ship as looted and move on to the next one">Next ship</button>
+          <button id="nextCityAlready" type="button" title="The current ship's elytra was already gone: mark it as looted by someone else and move on to the next one">Looted by someone else</button>
         </div>
         <p id="routeNote" class="hint" role="status" hidden></p>
         <details id="possibleWhy" class="more" hidden>
@@ -396,15 +396,15 @@
           <button id="markAll" type="button" class="textlink">Mark all looted</button>
           <button id="markNone" type="button" class="textlink">Clear all</button>
           <span class="undo-redo">
-            <button id="addOneUndo" type="button" class="iconbtn" title="Undo your last change to this route: looted marks, a city added, or its order changed" aria-label="Undo your last change to this route" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5 4 10l5 5"/><path d="M4 10h10a5 5 0 0 1 0 10h-3"/></svg></button>
+            <button id="addOneUndo" type="button" class="iconbtn" title="Undo your last change to this route: looted marks, a ship added, or its order changed" aria-label="Undo your last change to this route" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5 4 10l5 5"/><path d="M4 10h10a5 5 0 0 1 0 10h-3"/></svg></button>
             <button id="routeRedo" type="button" class="iconbtn" title="Redo the change you just undid" aria-label="Redo the change you just undid" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5 5 5-5 5"/><path d="M20 10H10a5 5 0 0 0 0 10h3"/></svg></button>
           </span>
         </div>
         <button id="customDelete" type="button" class="textlink" hidden>Delete this custom route</button>
         <ol id="cities"></ol>
         <div class="row actions">
-          <button id="addOne" type="button" title="Add the nearest city to this route's last stop that is not in any route, as the new last stop. It may come from just outside the search area">Add +1 city to route</button>
-          <button id="orderReset" type="button" title="Put this route back in the order it was worked out in. Cities you added stay, at the end" hidden>Original order</button>
+          <button id="addOne" type="button" title="Add the nearest ship to this route's last stop that is not in any route, as the new last stop. It may come from just outside the search area">Add +1 ship to route</button>
+          <button id="orderReset" type="button" title="Put this route back in the order it was worked out in. Ships you added stay, at the end" hidden>Original order</button>
         </div>
       </div>
     </section>
