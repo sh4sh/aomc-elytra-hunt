@@ -91,7 +91,7 @@ near them) to the route's first ship, plus the route itself.
 ## Looted by someone else, and possibly looted
 
 Mark a ship **looted by someone else** when its elytra was gone before you got
-there. These marks are sent with **Share progress**. Your own show as a tan ×
+there. These marks are sent with **Share progress**. Your own show as a tan ⊠ (a cross in a box)
 until they are on the shared list; from then on the ship is just a looted
 ship on the map, for you and everyone else. The shared list still records
 which ships were found that way, and the guesses below still use it.

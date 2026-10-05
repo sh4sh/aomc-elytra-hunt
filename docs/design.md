@@ -37,6 +37,9 @@ in the same change, so there is still only one way to do each thing.
 - **Destructive actions:** `button.danger`, on a line of its own under a rule,
   with a hint saying what is lost. Its confirmation says it cannot be undone.
 - **Colours:** only the variables at the top of `src/style.css`.
+- **Never colour alone.** Anything told apart by colour also differs in shape,
+  a letter or a label, so it reads the same for someone who cannot tell the
+  colours apart.
 
 ## Words
 

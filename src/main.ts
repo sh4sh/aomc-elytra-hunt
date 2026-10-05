@@ -22,9 +22,9 @@ const gooseTally = $('gooseTally');
 const showTally = () => {
   if (!session.showTrophies) return (gooseTally.textContent = '');
   const looted = lootedCities().length;
-  const parts = [looted ? `${fmt(looted)} ${looted === 1 ? 'ship' : 'ships'} looted so far (gold)` : 'nothing looted yet'];
+  const parts = [looted ? `${fmt(looted)} ${looted === 1 ? 'ship' : 'ships'} looted so far (gold ×)` : 'nothing looted yet'];
   if (state.seed === DEFAULT_SEED && session.explored) {
-    parts.push(session.webmapCities ? `${fmt(session.webmapCities.length)} more in areas on the webmap (green)` : 'counting the ones on the webmap…');
+    parts.push(session.webmapCities ? `${fmt(session.webmapCities.length)} more in areas on the webmap (green +)` : 'counting the ones on the webmap…');
   }
   gooseTally.textContent = `Honk! ${parts.join(', ')}.`;
 };

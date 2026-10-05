@@ -31,10 +31,10 @@ The same steps are in the app under **How to use**.
 | Filled dot | A ship in a route, coloured by route |
 | White circle | The ship you are up to in the open route |
 | Green × | Looted |
-| Tan ×, `!` in the list | One you marked as looted by someone else. Once it is on the shared list it shows as a plain green × |
+| Tan ⊠, `!` in the list | One you marked as looted by someone else. Once it is on the shared list it shows as a plain green × |
 | Small grey ring, `?` in the list | Possibly looted: near a ship someone else looted, or on a guessed flight path. A guess |
 | Dashed tan line | A guess at where an earlier hunter flew |
-| Grey × | Ship or End City reported missing |
+| Grey □ | Ship or End City reported missing |
 | Faint diamond | A ship that is not in any route |
 | Green shading | Terrain already on the community webmap; ships there are left out |
 

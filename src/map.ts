@@ -518,13 +518,25 @@ export class EndMap {
         ctx.arc(x, y, r, 0, Math.PI * 2);
       }
       if (c.visited || c.missing) {
-        // Looted, or reported missing: crossed off, whether or not it is in a batch.
+        // Looted, or reported missing: marked off, whether or not it is in a batch. Each kind has a shape
+        // of its own as well as a colour, so they can be told apart without telling the colours apart:
+        // a cross for looted, a cross in a box for one someone else got to first, an empty box for a
+        // missing one, and (in the goose's view) an upright cross for a ship on the webmap.
         const d = selected ? 4 : 3;
+        const missingOnly = !c.visited;
         ctx.beginPath();
-        ctx.moveTo(x - d, y - d);
-        ctx.lineTo(x + d, y + d);
-        ctx.moveTo(x + d, y - d);
-        ctx.lineTo(x - d, y + d);
+        if (c.trophy && c.trophy !== 'looted') {
+          ctx.moveTo(x - d - 1, y);
+          ctx.lineTo(x + d + 1, y);
+          ctx.moveTo(x, y - d - 1);
+          ctx.lineTo(x, y + d + 1);
+        } else if (!missingOnly) {
+          ctx.moveTo(x - d, y - d);
+          ctx.lineTo(x + d, y + d);
+          ctx.moveTo(x + d, y - d);
+          ctx.lineTo(x - d, y + d);
+        }
+        if (!c.trophy && (c.already || missingOnly)) ctx.rect(x - d - 1.5, y - d - 1.5, 2 * d + 3, 2 * d + 3);
         if (outside) ctx.globalAlpha = 0.6;
         // Green for a city the player looted, tan for one someone else got to first, grey for a missing one.
         ctx.strokeStyle = c.already ? ALREADY_COLOR : c.visited ? LOOTED_COLOR : '#8a8299';
