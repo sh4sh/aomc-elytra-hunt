@@ -353,14 +353,6 @@ for (const el of [minInput, maxInput, diagInput, angleFromSelect, aroundRadius, 
   });
 }
 
-const gotoBatch = $<HTMLInputElement>('gotoBatch');
-gotoBatch.addEventListener('change', () => {
-  const n = Math.round(Number(gotoBatch.value));
-  gotoBatch.value = '';
-  // Out-of-range numbers go to the nearest end of the list.
-  if (Number.isFinite(n) && session.generatedCount) select(Math.min(session.generatedCount, Math.max(1, n)) - 1, true);
-});
-
 $('finishedToggle').addEventListener('click', () => {
   session.showFinished = !session.showFinished;
   renderBatches();

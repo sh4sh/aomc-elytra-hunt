@@ -220,7 +220,6 @@ export function renderBatches(): void {
   pageSelect.value = String(session.page);
   $<HTMLButtonElement>('pagePrev').disabled = session.page === 0;
   $<HTMLButtonElement>('pageNext').disabled = session.page === pages - 1;
-  $<HTMLInputElement>('gotoBatch').max = String(session.generatedCount);
 
   // Custom batches stay pinned above whichever page of generated batches is showing.
   const shown: number[] = [];
