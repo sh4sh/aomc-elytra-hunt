@@ -30,22 +30,21 @@
           </div>
           <label>Radius, in blocks <input id="aroundRadius" type="number" min="500" step="500" value="10000" /></label>
           <button id="aroundSearch" type="submit" class="primary">Search</button>
-          <div class="row">
-            <button id="aroundUseMap" type="button">Use my position from the map</button>
-            <button id="aroundRandom" type="button">Random location</button>
+          <div class="row quiet">
+            <button id="aroundUseMap" type="button" class="textlink">Use my position from the map</button>
           </div>
-          <p class="hint">Finds cities within that distance of the position, in any direction. If a small radius holds too few cities for a full route, smaller routes are made instead.</p>
         </div>
         <div id="bandBox" class="panel band-only">
         <div class="row" id="distanceBox">
           <label>From <input id="minDist" type="number" min="0" step="500" required /></label>
           <label>To <input id="maxDist" type="number" min="1000" step="500" required /></label>
         </div>
-        <p class="hint">Blocks from 0,0 along the longer axis.</p>
+        <p class="hint">Distance from 0,0, in blocks.</p>
         </div>
         <details id="fineTuning">
           <summary><strong>Fine tuning (optional)</strong></summary>
-          <p class="hint">Route size and shape, flight limits and which cities to leave out. Changes here apply straight away.</p>
+          <p class="hint">Changes here apply straight away.</p>
+          <div class="group-label">Routes</div>
         <div class="row">
           <label>Cities per route <input id="batchSize" type="number" min="1" step="1" /></label>
           <label>
@@ -56,17 +55,14 @@
             </select>
           </label>
         </div>
-        <p class="hint">27 fills one shulker box; go higher for longer runs (up to 500). Clusters are easier to track; lines head away from 0,0 like a long exploration flight.</p>
+        <p class="hint">27 fills a shulker box. Lines head away from 0,0.</p>
         <div id="lineDeviationBox" class="panel" hidden>
           <label>Stray from a straight line, up to <input id="lineDeviation" type="number" min="0" step="250" /></label>
-          <p class="hint">
-            In blocks, to either side of the line from 0,0 through the route's first city. The default is 1,000; 0
-            means no limit. Tight values leave most cities without a route: ships are sparse, so if you get few routes, try
-            2,000 or more, or smaller routes. Needs a longest flight to be set.
-          </p>
+          <p class="hint">In blocks, either side of straight. 0 means no limit. Tight values leave most cities without a route.</p>
         </div>
         <label>Longest flight between cities <input id="maxHop" type="number" min="0" step="250" /></label>
-        <p class="hint">In blocks. Cities that can't be reached in a full route within this are left without a route (small faint diamonds on the map); right-click one to add it to a route. 0 means no limit. If no route of the chosen size fits at all, smaller routes are made, down to 2 cities.</p>
+        <p class="hint">In blocks; 0 means no limit. Cities out of reach are left without a route.</p>
+        <div class="group-label">Cities</div>
         <fieldset id="quadrants" class="band-only">
           <legend>Quadrants</legend>
           <label><input type="checkbox" value="NW" /> NW <small>−x −z</small></label>
@@ -74,9 +70,8 @@
           <label><input type="checkbox" value="SW" /> SW <small>−x +z</small></label>
           <label><input type="checkbox" value="SE" /> SE <small>+x +z</small></label>
         </fieldset>
-        <p id="exploredNote" class="hint aomc-only"></p>
         <label class="check"><input id="skipPossible" type="checkbox" /> Leave out cities that are possibly looted</label>
-        <p class="hint">Possibly looted means within 2,000 blocks of a city someone found already looted. Right-click a city and choose <em>Mark as looted by someone else</em> when you arrive to an empty ship.</p>
+        <p class="hint">Within 2,000 blocks of a city looted by someone else.</p>
         </details>
         <details id="advanced">
           <summary>Advanced</summary>
@@ -89,21 +84,21 @@
             </span>
             <input id="diag" type="range" min="5" max="45" step="5" />
           </label>
-          <p class="hint band-only">Narrows the search to directions near the diagonals or near the axes. 45° searches every direction.</p>
+          <p class="hint band-only">45° searches every direction.</p>
           <label class="check aomc-only"><input id="includeMapped" type="checkbox" /> Include cities already on the webmap</label>
-          <p class="hint aomc-only">Normally left out of the routes: someone has been there, so the elytra is probably gone.</p>
+          <p id="exploredNote" class="hint aomc-only"></p>
+          <label class="check"><input id="oneFingerMap" type="checkbox" /> Move the map with one finger</label>
+          <p class="hint">For touch screens. Normally two fingers move the map and one scrolls the page; with this on, scroll the page from outside the map.</p>
           <label>World seed <input id="seed" inputmode="numeric" autocomplete="off" spellcheck="false" /></label>
           <div class="row">
             <button id="seedReset" type="button">About Oliver Minecraft Seed</button>
           </div>
-          <p class="hint">
-            Set to the About Oliver server's seed. With any other seed, press <em>Find cities</em> to search; searches
-            are slower, and everything specific to that server (the webmap filter and shading, the shared looted
-            list and submitting to it) is hidden.
-          </p>
+          <p class="hint">Other seeds search more slowly, and hide the server's webmap and shared looted list.</p>
         </details>
         <button id="find" type="submit" class="primary">Find cities</button>
-        <button id="searchReset" type="button">Reset search settings</button>
+        <div class="row quiet">
+          <button id="searchReset" type="button" class="textlink">Reset search settings</button>
+        </div>
         <progress id="progress" max="1" value="0" hidden></progress>
       </form>
       </details>

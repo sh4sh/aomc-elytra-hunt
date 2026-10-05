@@ -172,6 +172,17 @@ export class EndMap {
     return best;
   }
 
+  /**
+   * On a touch screen, whether one finger moves the map. Normally it does not: one finger scrolls the
+   * page past the map and two fingers move it. Some players prefer the map to follow one finger.
+   */
+  set oneFingerPan(on: boolean) {
+    this.panWithOneFinger = on;
+    // With the browser's own panning switched off on the map, a finger on it belongs to the map alone.
+    this.canvas.style.touchAction = on ? 'none' : '';
+  }
+  private panWithOneFinger = false;
+
   private bindInput(): void {
     const el = this.canvas;
     let drag: { x: number; y: number; moved: boolean } | null = null;
@@ -231,8 +242,8 @@ export class EndMap {
       if (e.button !== 0) return;
       const touch = e.pointerType === 'touch';
       drag = { x: e.offsetX, y: e.offsetY, moved: false };
-      // A finger is not captured: if it turns into a page scroll, the browser takes it over.
-      if (!touch) el.setPointerCapture(e.pointerId);
+      // A finger is not captured, unless it moves the map: if it turns into a page scroll, the browser takes it over.
+      if (!touch || this.panWithOneFinger) el.setPointerCapture(e.pointerId);
     });
     el.addEventListener('pointermove', (e) => {
       if (drag) {
@@ -240,8 +251,8 @@ export class EndMap {
         const dy = e.offsetY - drag.y;
         if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
         if (drag.moved) cancelHold();
-        // One finger never moves the map; it only stops being a tap once it has moved.
-        if (e.pointerType === 'touch') return;
+        // One finger moves the map only if the player asked for that; otherwise it just stops being a tap once it has moved.
+        if (e.pointerType === 'touch' && !this.panWithOneFinger) return;
         if (drag.moved) {
           el.classList.add('dragging');
           this.cx -= dx / this.scale;

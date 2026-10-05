@@ -27,6 +27,8 @@ Everything the app can do, in more detail than the quick start.
 - **Angle:** stay near the diagonals or the axes, or search every direction.
 - **Include cities already on the webmap:** normally left out, since someone
   has been there.
+- **Move the map with one finger:** for touch screens. Normally two fingers
+  move the map and one scrolls the page.
 - **World seed:** for another world. Everything specific to the About Oliver
   server (webmap, shared looted list) is hidden for other seeds.
 
