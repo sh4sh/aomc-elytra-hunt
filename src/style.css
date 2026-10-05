@@ -366,6 +366,8 @@ body:not(.other-seed) .other-only { display: none; }
 #mapbar .dot.hollow { background: radial-gradient(var(--accent) 0 25%, transparent 30%); border: 1.5px solid #9d94b3; }
 #mapbar .cross.tan { color: #b3876a; }
 #mapbar .cross.green { color: #6fdc8c; }
+#mapbar .cross.gold { color: #ffd24a; }
+#mapbar .cross.mint { color: #7fe0b0; }
 #mapbar .cross { font-style: normal; font-weight: 700; font-size: 14px; line-height: 1; color: #8a8299; }
 #mapbar .dot.diamond { background: none; border: 1px solid var(--muted); border-radius: 0; transform: rotate(45deg) scale(0.8); }
 #mapbar .dot.square { border-radius: 2px; }

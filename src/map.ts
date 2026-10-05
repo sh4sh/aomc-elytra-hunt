@@ -148,6 +148,12 @@ export class EndMap {
     this.draw();
   }
 
+  /** The part of the world the map is showing, in blocks. */
+  viewBounds(): { x0: number; z0: number; x1: number; z1: number } {
+    const [halfW, halfH] = [this.w / 2 / this.scale, this.h / 2 / this.scale];
+    return { x0: this.cx - halfW, z0: this.cz - halfH, x1: this.cx + halfW, z1: this.cz + halfH };
+  }
+
   /** Whether a block position is within the part of the world the map is showing. */
   inView(x: number, z: number): boolean {
     const px = this.sx(x), py = this.sy(z);

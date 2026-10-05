@@ -32,9 +32,21 @@ export function previewFilters(): Filters {
 /** The legend only explains marks that are in view on the map just now. */
 export function renderLegend(): void {
   const seen = session.shownCities.filter((c) => map.inView(c.city.x, c.city.z));
+  // Whether any of the shaded search area is in view: for a search around a position, its circle; for
+  // Find ships, the band between its two distances (the quadrants and angle are not looked at).
+  const f = previewFilters();
+  const v = map.viewBounds();
+  const area = f.around
+    ? Math.hypot(Math.max(v.x0 - f.around.x, 0, f.around.x - v.x1), Math.max(v.z0 - f.around.z, 0, f.around.z - v.z1)) <= f.around.radius
+    : v.x0 <= f.maxDist && v.x1 >= -f.maxDist && v.z0 <= f.maxDist && v.z1 >= -f.maxDist &&
+      !(v.x0 > -f.minDist && v.x1 < f.minDist && v.z0 > -f.minDist && v.z1 < f.minDist);
   const legend = {
     route: seen.some((c) => c.batch >= 0 && !c.visited && !(c.possible && map.detailed)),
-    looted: seen.some((c) => c.visited && !c.already),
+    looted: seen.some((c) => c.visited && !c.already && !c.trophy),
+    // The goose's view has marks of its own.
+    gold: seen.some((c) => c.trophy === 'looted'),
+    mapped: seen.some((c) => c.trophy === 'mapped'),
+    area,
     missing: seen.some((c) => c.missing && !c.visited),
     already: seen.some((c) => c.already),
     possible: map.detailed && seen.some((c) => c.possible && !c.visited && c.batch >= 0),
