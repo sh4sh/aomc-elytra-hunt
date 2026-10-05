@@ -1,6 +1,6 @@
 // Drawing the page from the session: the route list, the open route's panel, the map and its legend.
 
-import { EXTRA_NOTE, MAPPED_NOTE, PAGE_SIZE, POSSIBLE_WHY, RENUMBERED_NOTE } from './constants';
+import { EXTRA_NOTE, FLIGHT_BLOCKS_PER_SECOND, MAPPED_NOTE, MINUTES_PER_SHIP, PAGE_SIZE, POSSIBLE_WHY, RENUMBERED_NOTE } from './constants';
 import { lookalike } from './constellations';
 import { $, fmt, xzText } from './dom';
 import type { MapCity } from './map';
@@ -341,12 +341,19 @@ export function renderDetail(): void {
   // The line says what matters at a glance; the breakdown is there on hover.
   const reach = batch.length ? Math.hypot(batch[0].x - startPoint().x, batch[0].z - startPoint().z) : 0;
   const hundreds = (blocks: number) => fmt(Math.round(blocks / 100) * 100);
+  // Roughly how long the route takes: the flying, plus a couple of minutes at each ship. To the nearest
+  // five minutes, since it is only a guide.
+  const flying = (length + reach) / FLIGHT_BLOCKS_PER_SECOND / 60;
+  const minutes = Math.max(5, Math.round((flying + batch.length * MINUTES_PER_SHIP) / 5) * 5);
+  const time = minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h${minutes % 60 ? ` ${minutes % 60} min` : ''}`;
   $('detailMeta').textContent =
-    `${batch.length} ships · ${looted(batch)} looted · about ${hundreds(length + reach)} blocks` +
+    `${batch.length} ships · ${looted(batch)} looted · ${hundreds(length + reach)} blocks` +
+    (batch.length ? ` · ~${time}` : '') +
     (!isCustom(i) && batch.length < session.usedBatchSize ? ' · short route' : '') +
     (isCustom(i) && !batch.length ? ' · right-click a ship on the map to add it' : '');
   $('detailMeta').title = batch.length
-    ? `${hundreds(reach)} blocks to reach the first ship, then ${hundreds(length)} along the route. Longest flight between ships: ${fmt(Math.round(longest))}.`
+    ? `${hundreds(reach)} blocks to reach the first ship, then ${hundreds(length)} along the route. Longest flight between ships: ${fmt(Math.round(longest))}.\n` +
+      `About ${time}: ${Math.round(flying)} min of flying at ${FLIGHT_BLOCKS_PER_SECOND} blocks a second with rockets, plus ${MINUTES_PER_SHIP} min at each ship.`
     : '';
 
   $('cities').replaceChildren(

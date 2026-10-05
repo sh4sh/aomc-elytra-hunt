@@ -48,6 +48,9 @@ Everything the app can do, in more detail than the quick start.
 
 ## Routes
 
+An open route shows roughly how long it takes: the flying at 30 blocks a
+second with rockets, plus 2 minutes at each ship, to the nearest 5 minutes.
+
 Routes are ordered by total flying: from 0,0 (or your coordinates, in a search
 near them) to the route's first ship, plus the route itself.
 
