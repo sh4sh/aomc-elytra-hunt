@@ -13,6 +13,7 @@ import { Precomputed } from './precomputed';
 import { loadSkyFigures } from './sky-cultures';
 import { DEFAULT_FILTERS, DEFAULT_LINE_DEVIATION, DEFAULT_SEED, save, state, type RouteEdit, type Saved } from './state';
 import { initDevMode } from './dev-mode';
+import { ISSUES_URL, initSubmissions, loadShipReports } from './submissions';
 import { NEAR_SPAWN_BLOCKS } from './survey';
 import { Tracker } from './tracker';
 import { describeTrajectory, onTrajectory, studyTrajectories, type Trajectory } from './trajectory';
@@ -21,15 +22,9 @@ import { OUTSIDE_COLOR, XAERO_COLORS, batchColor, setBatchTags, shareLine, waypo
 import './goose-emoji';
 import './panels';
 
-const ISSUES_URL = 'https://github.com/sh4sh/aomc-elytra-hunt/issues';
 /** The latest finished runs of the job that checks the webmap for changes, as GitHub reports them to anyone. */
 const WEBMAP_CHECKS_URL =
   'https://api.github.com/repos/sh4sh/aomc-elytra-hunt/actions/workflows/update-webmap.yml/runs?status=success&per_page=1';
-/**
- * Address of the relay that files looted-city submissions as GitHub issues (see relay/README.md).
- * While empty, the Submit button is hidden and players are pointed at GitHub instead.
- */
-const SUBMIT_URL = 'https://aomc-looted-relay.sh4sh.workers.dev';
 /**
  * Most ship cities one search may bring in. Batching and drawing slow down with every city, and beyond
  * this the page would hang for many seconds, so a wider search is refused with advice to narrow it.
@@ -2025,134 +2020,9 @@ function showSharedNote(): void {
 }
 showSharedNote();
 
-// ---------- ship reports ----------
+// ---------- ship reports and looted submissions ----------
 
-/** Whether the app's own layout marks this city's ship as a tight fit, whatever has been reported since. */
-const wasUncertain = (city: City) => state.found.some((c) => c[0] === city.x && c[1] === city.z && c[2] === 2);
-
-/** Send a player's report on whether a city's ship was there, for the maintainer to review. */
-async function reportShip(city: City, result: 'found' | 'missing' | 'no-city'): Promise<void> {
-  const where = xzText(city);
-  if (!SUBMIT_URL) {
-    // Without the relay, the report is filed by hand as a GitHub issue.
-    const headline = { found: 'ship found', missing: 'no ship', 'no-city': 'no End City' }[result];
-    window.open(`${ISSUES_URL}/new?title=${encodeURIComponent(`Ship report: ${headline} at ${where}`)}`, '_blank', 'noopener');
-    return;
-  }
-  mapNote.textContent = 'Sending your report…';
-  try {
-    const res = await fetch(SUBMIT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        kind: 'ship',
-        city: cityId(city),
-        result,
-        name: state.chatName,
-        // Lets the maintainer see whether the app had already flagged this ship as doubtful.
-        uncertain: wasUncertain(city),
-      }),
-    });
-    const body = await res.json().catch(() => ({}));
-    mapNote.textContent = res.ok ? 'Report sent for review. Thank you!' : (body.error ?? 'That did not go through. Please try again later.');
-  } catch {
-    mapNote.textContent = 'Could not reach the report service. Please try again later.';
-  }
-}
-
-// The little window for a report: pick what was found, give a username, then send.
-const reportBox = $('reportBox');
-const reportForm = $<HTMLFormElement>('reportForm');
-const reportName = $<HTMLInputElement>('reportName');
-let reportCity: City | null = null;
-/** Open the window for a city. `found` asks about a ship being present; otherwise about something missing. */
-/** Ask what the player found at a city. `missing` offers "no ship" and "no city"; `found` offers "the ship is here". */
-function openReport(city: City, missing: boolean, found: boolean): void {
-  reportCity = city;
-  $('reportWhere').textContent = `At ${xzText(city)}`;
-  reportForm.reset();
-  // Only the choices that fit are offered, with the first of them selected.
-  for (const row of reportForm.querySelectorAll<HTMLElement>('.report-missing')) row.hidden = !missing;
-  for (const row of reportForm.querySelectorAll<HTMLElement>('.report-found')) row.hidden = !found;
-  reportForm.querySelector<HTMLInputElement>(`input[value="${missing ? 'missing' : 'found'}"]`)!.checked = true;
-  reportName.value = state.chatName;
-  reportBox.hidden = false;
-  reportName.focus();
-}
-const closeReport = () => {
-  reportBox.hidden = true;
-  reportCity = null;
-};
-$('reportCancel').addEventListener('click', closeReport);
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && !reportBox.hidden) closeReport();
-});
-reportName.addEventListener('input', () => {
-  reportName.value = cleanUsername(reportName.value);
-});
-reportForm.addEventListener('submit', (e) => {
-  e.preventDefault();
-  const city = reportCity;
-  const kind = new FormData(reportForm).get('reportKind');
-  // Remembered for next time, and shared with the other places a username is asked for.
-  state.chatName = reportName.value;
-  save();
-  closeReport();
-  if (city && (kind === 'missing' || kind === 'no-city' || kind === 'found')) void reportShip(city, kind);
-});
-
-async function loadShipReports(): Promise<{ missing?: string[]; found?: string[]; noCity?: string[] }> {
-  try {
-    const res = await fetch('./ship-reports.json');
-    return res.ok ? await res.json() : {};
-  } catch {
-    return {};
-  }
-}
-
-// ---------- submit looted ----------
-
-const submitName = $<HTMLInputElement>('submitName');
-const submitBtn = $<HTMLButtonElement>('submitLooted');
-const submitNote = $('submitNote');
-$('submitBox').hidden = !SUBMIT_URL;
-$('submitFallback').hidden = !!SUBMIT_URL;
-// The JourneyMap username is the same person: start with it.
-submitName.value = state.chatName;
-submitName.addEventListener('input', () => {
-  submitName.value = cleanUsername(submitName.value);
-});
-
-submitBtn.addEventListener('click', async () => {
-  if (state.seed !== DEFAULT_SEED) {
-    submitNote.textContent = 'The shared list is only for the default server seed.';
-    return;
-  }
-  const already = tracker.ownAlready();
-  const cities = [...new Set([...tracker.ownNew(), ...already])];
-  if (!cities.length) {
-    submitNote.textContent = 'Nothing new to submit: mark some ships as looted first.';
-    return;
-  }
-  if (!confirm(`Send ${fmt(cities.length)} looted ${cities.length === 1 ? 'ship' : 'ships'} for review? Once accepted they show as looted for everyone.`)) return;
-  submitBtn.disabled = true;
-  submitNote.textContent = 'Sending…';
-  try {
-    const res = await fetch(SUBMIT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: submitName.value, cities, already }),
-    });
-    const body = await res.json().catch(() => ({}));
-    submitNote.textContent = res.ok
-      ? `Sent ${fmt(cities.length)} for review. They will show as looted for everyone once accepted.`
-      : (body.error ?? 'That did not go through. Please try again later.');
-  } catch {
-    submitNote.textContent = 'Could not reach the submission service. Please try again later.';
-  } finally {
-    submitBtn.disabled = false;
-  }
-});
+const { openReport } = initSubmissions({ tracker: () => tracker });
 
 // Names of other parts of the page in the help text bring that part into view, wherever the layout has put it.
 for (const link of document.querySelectorAll<HTMLElement>('.jump')) {
