@@ -170,14 +170,18 @@ export function renderBatches(): void {
         .join(' · ')
     : '';
   // While routes are being worked out again the old ones are still listed, and the counts wait with them.
-  if (!batchWorker) $('stats').textContent = total
-    ? `${fmt(total)} ships · ${fmt(session.batches.length)} routes · ${fmt(done)} looted` +
-      (session.usedBatchSize < state.batchSize && session.generatedCount
-        ? ` · no route of ${state.batchSize} fits here, so routes of ${session.usedBatchSize} were made`
-        : '')
-    : session.unbatched
-      ? `No routes: ${fmt(session.unbatched)} ships, but no two are within the longest flight of each other. Raise the longest flight.`
-      : 'No ships yet. Set a range and press Find ships.';
+  if (!batchWorker) {
+    // The counts head the list of routes below them; anything longer to say follows in a plain line.
+    const head = total ? `${fmt(total)} ships · ${fmt(session.batches.length)} routes · ${fmt(done)} looted` : '';
+    const more = total
+      ? session.usedBatchSize < state.batchSize && session.generatedCount
+        ? `No route of ${state.batchSize} fits here, so routes of ${session.usedBatchSize} were made.`
+        : ''
+      : session.unbatched
+        ? `No routes: ${fmt(session.unbatched)} ships, but no two are within the longest flight of each other. Raise the longest flight.`
+        : 'No ships yet. Press Find ships.';
+    $('stats').replaceChildren(head, ...(more ? [Object.assign(document.createElement('small'), { textContent: more })] : []));
+  }
 
 
   // Finished routes drop out of the list, so what is left is what there is still to fly. The open

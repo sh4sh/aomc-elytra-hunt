@@ -51,6 +51,9 @@ in the same change, so there is still only one way to do each thing.
 - **Hints:** one short sentence under the thing it explains. Say what happens,
   not how it works.
 - **Titles:** a few plain words.
+- **A list is headed by its count.** Where a line of counts sits above a list
+  ("4,240 ships · 112 routes · 52 looted"), that line is the list's heading:
+  style it as one, and do not add a title that says the same thing.
 - **No hint that restates its label.** If the title or the field already
   says it, leave the hint out.
 - **End Spawn**, not 0,0, for the place. Use 0,0 only where a coordinate is
