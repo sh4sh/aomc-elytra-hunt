@@ -3,7 +3,7 @@
 
 import { $, fmt, xzText } from './dom';
 import { cleanUsername } from './journeymap';
-import { DEFAULT_SEED, save, state } from './state';
+import { DEFAULT_SEED, onUsername, setUsername, state } from './state';
 import type { Tracker } from './tracker';
 import { cityId, type City } from './types';
 
@@ -101,8 +101,7 @@ export function initSubmissions(host: SubmissionsHost): { openReport(city: City,
     const city = reportCity;
     const kind = new FormData(reportForm).get('reportKind');
     // Remembered for next time, and shared with the other places a username is asked for.
-    state.chatName = reportName.value;
-    save();
+    setUsername(reportName.value);
     closeReport();
     if (city && (kind === 'missing' || kind === 'no-city' || kind === 'found')) void reportShip(city, kind);
   });
@@ -117,6 +116,10 @@ export function initSubmissions(host: SubmissionsHost): { openReport(city: City,
   submitName.value = state.chatName;
   submitName.addEventListener('input', () => {
     submitName.value = cleanUsername(submitName.value);
+    setUsername(submitName.value);
+  });
+  onUsername(() => {
+    if (document.activeElement !== submitName) submitName.value = state.chatName;
   });
 
   submitBtn.addEventListener('click', async () => {

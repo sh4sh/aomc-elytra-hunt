@@ -100,3 +100,18 @@ export const save = () => {
     // Not fatal: the search can be rerun.
   }
 };
+
+/**
+ * The player's Minecraft username is asked for in three places (map-mod lines, Share progress and
+ * ship reports) and remembered once. Each place shows it and hears when another changes it.
+ */
+const usernameWatchers: (() => void)[] = [];
+export function onUsername(changed: () => void): void {
+  usernameWatchers.push(changed);
+}
+export function setUsername(name: string): void {
+  if (name === state.chatName) return;
+  state.chatName = name;
+  save();
+  for (const changed of usernameWatchers) changed();
+}

@@ -11,7 +11,7 @@ import { chatLine, cleanUsername } from './journeymap';
 import { EndMap, type MapCity } from './map';
 import { Precomputed } from './precomputed';
 import { loadSkyFigures } from './sky-cultures';
-import { DEFAULT_FILTERS, DEFAULT_LINE_DEVIATION, DEFAULT_SEED, save, state, type RouteEdit, type Saved } from './state';
+import { DEFAULT_FILTERS, DEFAULT_LINE_DEVIATION, DEFAULT_SEED, onUsername, save, setUsername, state, type RouteEdit, type Saved } from './state';
 import { initDevMode } from './dev-mode';
 import { ISSUES_URL, initSubmissions, loadShipReports } from './submissions';
 import { NEAR_SPAWN_BLOCKS } from './survey';
@@ -861,7 +861,7 @@ function renderDetail(): void {
       // The same menu as right-clicking the city's dot on the map.
       const menuAt = (x: number, y: number) => {
         const city: MapCity = { city: c, batch: i, order: k, color: color(i), visited: tracker.has(c), possible: possible(c) };
-        openMenu(city, x, y, c);
+        openMenu(city, x, y, c, label);
       };
       label.addEventListener('contextmenu', (e) => {
         e.preventDefault();
@@ -1751,9 +1751,15 @@ function showChatName(editing = false): void {
   $('chatNameShown').textContent = state.chatName;
 }
 chatNameInput.addEventListener('input', () => {
-  state.chatName = cleanUsername(chatNameInput.value);
+  setUsername(cleanUsername(chatNameInput.value));
   if (chatNameInput.value !== state.chatName) chatNameInput.value = state.chatName;
-  save();
+});
+// The same name can be given under Share progress or in a report: show it here too.
+onUsername(() => {
+  if (document.activeElement !== chatNameInput) {
+    chatNameInput.value = state.chatName;
+    showChatName();
+  }
   showChatHint();
 });
 // Done typing: leaving the box, or Enter.
@@ -2172,6 +2178,8 @@ map.onPick = (c) => {
 // ---------- right-click menu ----------
 
 const menu = $('menu');
+/** What the open menu was opened on: the map, or a row of the route's list. */
+let menuAnchor: Element = menu;
 const closeMenu = () => (menu.hidden = true);
 document.addEventListener('pointerdown', (e) => {
   if (!menu.contains(e.target as Node)) closeMenu();
@@ -2180,8 +2188,15 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') closeMenu();
 });
 $('map').addEventListener('wheel', closeMenu);
-// It does not follow the page, so it closes when something scrolls under it.
-document.addEventListener('scroll', closeMenu, true);
+// It does not follow the page, so it closes when what it was opened on scrolls away from under it.
+// Scrolling somewhere else (another panel settling after a jump, say) leaves it open.
+document.addEventListener(
+  'scroll',
+  (e) => {
+    if (e.target === document || (e.target instanceof Node && e.target.contains(menuAnchor))) closeMenu();
+  },
+  true,
+);
 
 /** Rebuild after a change, keeping the batch that holds this city selected. */
 function rebuildKeeping(id: string | null): void {
@@ -2327,7 +2342,8 @@ map.onMenu = (c, px, py, pos) => {
 };
 
 /** The menu for a city, or for a bare spot on the map, opened at a place in the window. */
-function openMenu(c: MapCity | null, px: number, py: number, pos: { x: number; z: number }): void {
+function openMenu(c: MapCity | null, px: number, py: number, pos: { x: number; z: number }, anchor: Element = $('map')): void {
+  menuAnchor = anchor;
   const items: [string, () => void][] = [];
   if (c) addCityItems(c, items);
   // On a city, "here" is the city itself rather than the exact pixel that was clicked.
