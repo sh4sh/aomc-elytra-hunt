@@ -1019,6 +1019,8 @@ function applyResult(seed: string, filters: Filters, cities: FoundCity[]): void 
     state.edits = [];
     state.redo = [];
     state.custom = [];
+    // The survey's route went with them.
+    state.survey = undefined;
     session.tracker = new Tracker(seed);
     session.tracker.setShared(seed === DEFAULT_SEED ? session.sharedLooted : [], seed === DEFAULT_SEED ? session.sharedAlready : [], seed === DEFAULT_SEED ? session.sharedBy : {});
   }
@@ -1032,6 +1034,9 @@ function applyResult(seed: string, filters: Filters, cities: FoundCity[]): void 
   state.found = cities;
   save();
   session.selected = null;
+  // The ship picked out under the map, and any menu left open, belonged to the routes this search replaces.
+  $('picked').hidden = true;
+  $('menu').hidden = true;
   fillForm();
   showExploredNote();
   if (refit) fitSearch(filters);
@@ -1295,8 +1300,10 @@ function nearPosition(): { x: number; z: number } | null {
 /** Show a search near a position as the player's own: the marker on the map, and the coordinates in the boxes. */
 function showPosition(pos: { x: number; z: number }): void {
   session.you = { x: pos.x, z: pos.z };
-  // A search from the empty boxes was around 0,0, and they stay empty for it.
-  if (pos.x !== 0 || pos.z !== 0 || nearX.value.trim() !== '' || nearZ.value.trim() !== '') setNear(pos);
+  // A search from the empty boxes was around 0,0, and they are empty again for it.
+  if (pos.x !== 0 || pos.z !== 0) return setNear(pos);
+  nearX.value = '';
+  nearZ.value = '';
 }
 /** Put a position in those boxes, to stay there until the player changes it. */
 function setNear(pos: { x: number; z: number }): void {
