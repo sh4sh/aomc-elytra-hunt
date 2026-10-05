@@ -300,6 +300,7 @@ function rebuild(done?: () => void): void {
   batchWorker = null;
   const finish = (made: { batches: City[][]; size: number }) => {
     finishRebuild(made, pool, cities);
+    if (reopening) reopen();
     done?.();
   };
   if (job.maxHop <= 0 || cities.length * job.size <= BATCH_IN_PLACE_LIMIT) {
@@ -517,8 +518,15 @@ function renderSettingsSummary(): void {
 
 function renderBatches(): void {
   renderSettingsSummary();
-  const total = session.batches.reduce((n, b) => n + b.length, 0);
-  const done = session.batches.reduce((n, b) => n + looted(b), 0);
+  // Every ship of the search that is the player's to deal with: in a route, without one, or looted and
+  // taken out of its route. Counted this way the numbers stay put however the routes are cut. Ships left
+  // out as on the webmap or reported missing, and ones brought in from beyond the search, are not in it.
+  const counted = [
+    ...session.batches.flat(),
+    ...session.outside.filter((o) => !o.missing && o.note !== MAPPED_NOTE && o.note !== EXTRA_NOTE).map((o) => o.city),
+  ];
+  const total = counted.length;
+  const done = looted(counted);
   const maybeCount = session.batches.flat().filter(possible).length;
   // Earlier flight paths get a line of their own, and only when one is drawn. Reports that nearly made
   // a path are not listed: they are the app's working, and came and went as the map was zoomed.
@@ -544,7 +552,8 @@ function renderBatches(): void {
         .filter(Boolean)
         .join(' · ')
     : '';
-  $('stats').textContent = total
+  // While routes are being worked out again the old ones are still listed, and the counts wait with them.
+  if (!batchWorker) $('stats').textContent = total
     ? `${fmt(total)} ships · ${fmt(session.batches.length)} routes · ${fmt(done)} looted` +
       (session.usedBatchSize < state.batchSize && session.generatedCount
         ? ` · no route of ${state.batchSize} fits here, so routes of ${session.usedBatchSize} were made`
@@ -891,7 +900,33 @@ function renderStars(batch: City[], batchColor: string): void {
   }
 }
 
+/**
+ * What the open route is remembered by between visits: a ship in it, since routes are numbered afresh
+ * whenever they are worked out, or a custom route's number.
+ */
+function openRouteKey(): string | undefined {
+  const i = session.selected;
+  if (i === null) return undefined;
+  if (isCustom(i)) return `custom:${i - session.generatedCount}`;
+  return session.batches[i]?.length ? cityId(session.batches[i][0]) : undefined;
+}
+/** True from the start of a visit until the routes have been worked out with everything loaded: until then the route to reopen is still being looked for. */
+let reopening = true;
+/** Open the route that was open at the end of the last visit, if it is still there. */
+function reopen(): void {
+  const key = state.openRoute;
+  if (!key) return;
+  const at = key.startsWith('custom:')
+    ? session.generatedCount + Number(key.slice(7))
+    : session.batches.findIndex((b) => b.some((c) => cityId(c) === key));
+  session.selected = at >= 0 && at < session.batches.length ? at : null;
+}
+
 function render(): void {
+  if (!reopening && openRouteKey() !== state.openRoute) {
+    state.openRoute = openRouteKey();
+    save();
+  }
   renderBatches();
   renderDetail();
   renderMap();
@@ -905,6 +940,8 @@ function setHot(c: City | null): void {
 }
 
 function select(i: number | null, zoom = false): void {
+  // The player has chosen for themselves: nothing left to reopen.
+  reopening = false;
   // Opening a batch, from the list or the map, puts the help away.
   if (i !== null) session.helpOpen = false;
   // Leaving a finished route is the moment to regroup what is left. The routes are numbered afresh,
@@ -1146,6 +1183,22 @@ form.addEventListener('submit', (e) => {
     $<HTMLDetailsElement>('advanced').open = true;
     seedInput.setCustomValidity('A world seed is a whole number.');
     seedInput.reportValidity();
+    return;
+  }
+  // Another world has other ships: routes made or changed by hand do not carry over.
+  const byHand =
+    state.custom.some((r) => r.length) ||
+    Object.keys(state.moved).length ||
+    state.dropped?.length ||
+    state.extra?.length ||
+    Object.keys(state.orders ?? {}).length;
+  if (
+    seed !== state.seed &&
+    byHand &&
+    !confirm('Change the world seed? Your custom routes and the changes you made to routes by hand belong to this world, and will be lost. Looted marks are kept for each world.')
+  ) {
+    seedInput.value = state.seed;
+    showSeedReset();
     return;
   }
 
@@ -1962,6 +2015,9 @@ $('visitedReset').addEventListener('click', () => {
   if (!session.tracker.count || !confirm(`Clear all ${session.tracker.count} of your looted marks? This cannot be undone: press Export looted first to keep a copy.`)) return;
   session.tracker.clear();
   state.excluded = [];
+  // The marks that undo and redo would put back are gone with the rest.
+  state.edits = (state.edits ?? []).filter((e) => e.kind !== 'marks');
+  state.redo = (state.redo ?? []).filter((e) => e.kind !== 'marks');
   save();
   session.selected = null;
   rebuild();
@@ -2511,7 +2567,11 @@ Promise.all([Explored.load(), Precomputed.load(), loadSharedLooted(), loadShipRe
   showExploredNote();
   // Routes finished on an earlier visit are regrouped away once the routes are first worked out.
   rebuild(() => {
-    if (retireFinished(null)) rebuild();
+    const settled = () => {
+      reopening = false;
+    };
+    if (retireFinished(null)) rebuild(settled);
+    else settled();
   });
   render();
   if (!state.found.length) form.requestSubmit();

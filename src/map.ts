@@ -606,7 +606,7 @@ export class EndMap {
       ctx.arc(x, y, 8, 0, Math.PI * 2);
       ctx.stroke();
       ctx.font = 'bold 11px system-ui, sans-serif';
-      const label = `${current === route[0] ? 'Start here' : 'Current city'}: ${waypointName(current.batch, current.order)}`;
+      const label = `${current === route[0] ? 'Start here' : 'Current ship'}: ${waypointName(current.batch, current.order)}`;
       const width = ctx.measureText(label).width;
       // A dark plate behind the words keeps them readable over other cities.
       ctx.fillStyle = 'rgba(15, 12, 23, 0.85)';

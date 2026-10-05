@@ -51,6 +51,8 @@ export interface Saved {
   redo?: RouteEdit[];
   /** Keep cities near one found already looted out of the routes. */
   skipPossible?: boolean;
+  /** The route that was open, to open again on the next visit: a ship in it, or "custom:" and a custom route's number. */
+  openRoute?: string;
   /** The search that was showing before the current one, to go back to. */
   lastSearch?: Filters;
   /** Whether the tools for working on the app are shown. */
