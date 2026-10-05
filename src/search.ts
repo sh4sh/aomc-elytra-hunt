@@ -205,6 +205,9 @@ form.addEventListener('submit', (e) => {
     if (confirm('Cancel the search? The ships already shown will stay as they are.')) {
       endSearch();
       session.locateAfterSearch = null;
+      // The search that was cancelled may have been for another world: the box goes back to the one on show.
+      seedInput.value = state.seed;
+      showSeedReset();
     }
     return;
   }
