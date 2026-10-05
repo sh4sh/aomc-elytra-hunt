@@ -1588,6 +1588,7 @@ fingerBox.addEventListener('change', () => {
   state.oneFingerMap = fingerBox.checked;
   map.oneFingerPan = fingerBox.checked;
   save();
+  showBackToMap();
 });
 
 const mappedBox = $<HTMLInputElement>('includeMapped');
@@ -2503,10 +2504,18 @@ function openMenu(c: MapCity | null, px: number, py: number, pos: { x: number; z
 // On narrow screens the route's list sits below the map: once the map has scrolled out of sight,
 // offer a way back to it. (The button only ever shows at those widths; see the stylesheet.)
 const backToMap = $('backToMap');
+// And the way down: with one finger moving the map, a swipe on the map no longer scrolls the page, so
+// while the map fills the view there is a button to the route's details below it.
+const toRoute = $('toRoute');
 const showBackToMap = () => {
-  backToMap.hidden = $('map').getBoundingClientRect().bottom > 0;
+  const mapBox = $('map').getBoundingClientRect();
+  backToMap.hidden = mapBox.bottom > 0;
+  toRoute.hidden = !state.oneFingerMap || mapBox.bottom <= 0 || $('detail').getBoundingClientRect().top < window.innerHeight * 0.6;
 };
+toRoute.addEventListener('click', () => $('detail').scrollIntoView({ block: 'start', behavior: 'smooth' }));
 window.addEventListener('scroll', showBackToMap, { passive: true });
+window.addEventListener('resize', showBackToMap);
+showBackToMap();
 backToMap.addEventListener('click', () => $('map').scrollIntoView({ block: 'start', behavior: 'smooth' }));
 
 // The line under the map saying how to move it is for newcomers: once the map has been used, it goes for good.
