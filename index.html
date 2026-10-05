@@ -17,19 +17,22 @@
       </header>
 
       <div id="quick">
-        <button id="quickSpawn" type="button" class="primary" title="Search the ring around End Spawn set under Settings">Find ships</button>
-        <form id="nearMe" title="Search around these coordinates and open the nearest route. Left empty, they count as 0,0 (End Spawn).">
-          <input id="nearX" type="number" step="1" placeholder="x: 0" autocomplete="off" aria-label="Your x coordinate" />
-          <input id="nearZ" type="number" step="1" placeholder="z: 0" autocomplete="off" aria-label="Your z coordinate" />
-          <button type="submit">Search near me</button>
-          <label id="aroundBox" hidden>within <input id="aroundRadius" type="number" min="500" step="500" value="10000" aria-label="Radius, in blocks" /> blocks</label>
-        </form>
-        <div class="row quiet">
-          <button id="showOnMap" type="button" class="textlink" title="Move the map to these coordinates without searching there">Show on map</button>
-          <button id="useCentre" type="button" class="textlink" title="Fill in the coordinates at the middle of the map, where its crosshair is">Use map centre</button>
-          <button id="mapReset" type="button" class="textlink" title="Clear the coordinates and markers, and centre the map on End Spawn">Clear position</button>
-          <button id="searchBack" type="button" class="textlink" title="Return to the search that was showing before this one" hidden>Back to last search</button>
+        <button id="quickSpawn" type="button" class="search-choice primary" title="Search the ring around End Spawn set under Settings">Find ships</button>
+        <button id="nearToggle" type="button" class="search-choice" aria-expanded="false" aria-controls="nearPanel" title="Search around coordinates you give, instead of around End Spawn">Search near me</button>
+        <div id="nearPanel" hidden>
+          <form id="nearMe" title="Search around these coordinates and open the nearest route. Left empty, they count as 0,0 (End Spawn).">
+            <input id="nearX" type="number" step="1" placeholder="x: 0" autocomplete="off" aria-label="Your x coordinate" />
+            <input id="nearZ" type="number" step="1" placeholder="z: 0" autocomplete="off" aria-label="Your z coordinate" />
+            <button type="submit">Search</button>
+            <label id="aroundBox" hidden>within <input id="aroundRadius" type="number" min="500" step="500" value="10000" aria-label="Radius, in blocks" /> blocks</label>
+          </form>
+          <div class="row quiet">
+            <button id="showOnMap" type="button" class="textlink" title="Move the map to these coordinates without searching there">Show on map</button>
+            <button id="useCentre" type="button" class="textlink" title="Fill in the coordinates at the middle of the map, where its crosshair is">Use map centre</button>
+            <button id="mapReset" type="button" class="textlink" title="Clear the coordinates and markers, and centre the map on End Spawn">Clear position</button>
+          </div>
         </div>
+        <button id="searchBack" type="button" class="textlink" title="Return to the search that was showing before this one" hidden>Back to last search</button>
       </div>
 
       <details id="settings">
@@ -152,7 +155,7 @@
             Mapped areas are left out of the routes.
           </p>
         </div>
-        <div class="share-option aomc-only">
+        <div class="card aomc-only">
           <p class="hint"><strong>Or send your looted list</strong>, to show those ships as looted for everyone.</p>
           <div id="submitBox" class="panel aomc-only" hidden>
             <label class="field">
@@ -256,7 +259,7 @@
         <p>
           Route 1 takes the least flying. Pick one from the
           <button type="button" class="jump" data-target="batches">route list</button>, click a ship on the map, or
-          type your x and z and press <em>Search near me</em>.
+          open <em>Search near me</em> and type your x and z.
         </p>
         <h3>2. Get the waypoints into your map mod</h3>
         <p>
@@ -313,7 +316,7 @@
             <li class="touch-only">Map: two fingers to pan, pinch or use the slider to zoom.</li>
             <li>Faint diamonds are ships that are not in any route.</li>
             <li class="aomc-only">Green shading is terrain already on the community webmap; ships there are left out.</li>
-            <li>Far from End Spawn? Type your x and z beside <em>Search near me</em>. <button type="button" class="jump" data-target="settings">Settings</button> sets how far around you it looks.</li>
+            <li>Far from End Spawn? Open <em>Search near me</em> and type your x and z. <button type="button" class="jump" data-target="settings">Settings</button> sets how far around you it looks.</li>
             <li class="wide-only">Drag the dividers either side of the map to resize the panels.</li>
           </ul>
         </details>

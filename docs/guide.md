@@ -6,15 +6,16 @@ Everything the app can do, in more detail than the quick start.
 
 ## Searching and settings
 
-- **The two search buttons**, above **Settings**. **Find ships** searches a
-  band around End Spawn, and shows its range. **Search near me** searches
-  around the coordinates in its two boxes and opens the nearest route; left
-  empty, the boxes count as 0,0 (End Spawn). Afterwards a number appears under
-  them: how far around the coordinates it looked, which you can change.
-  **Back to last search** returns to what you had before. **Show on map**
+- **Find ships** searches a band around End Spawn, and shows its range.
+- **Search near me**, the other search button, brings out two boxes for your
+  coordinates. **Search**
+  searches around them and opens the nearest route; left empty, the boxes
+  count as 0,0 (End Spawn). Afterwards a number appears under them: how far
+  around the coordinates it looked, which you can change. **Show on map**
   moves the map to the coordinates without searching, **Use map centre** fills
-  the boxes with the coordinates at the map's crosshair, and **Clear position** clears
-  the boxes and markers and returns the map to End Spawn.
+  the boxes with the coordinates at the map's crosshair, and **Clear
+  position** clears the boxes and markers and returns the map to End Spawn.
+- **Back to last search** returns to what you had before.
 
 **Settings**, grouped by what they apply to:
 

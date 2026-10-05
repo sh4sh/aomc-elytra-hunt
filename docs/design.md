@@ -29,7 +29,9 @@ in the same change, so there is still only one way to do each thing.
 ## Emphasis
 
 - **Accent colour:** one thing per panel, the action or card a newcomer should
-  pick. Everything else is neutral, and turns accent on hover.
+  pick. Everything else is neutral, and turns accent on hover. Where two
+  buttons are alternatives of equal standing (the two searches), they look
+  the same and the accent marks the one in use.
 - **Fields and buttons:** a field is sunk into the panel (the page's dark
   background); a button stands out from it (lighter). The panel's main action
   is outlined in the accent colour over a faint wash of it, never a solid

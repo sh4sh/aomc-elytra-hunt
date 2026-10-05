@@ -49,6 +49,7 @@ function fillSearch(f: Filters): void {
   for (const b of quadBoxes) b.checked = f.quadrants.includes(b.value as Quadrant);
   showDiag();
   showQuickSpawn();
+  showSearchChoice();
 }
 
 export function fillForm(): void {
@@ -190,9 +191,24 @@ function endSearch(): void {
 
 const settings = $<HTMLDetailsElement>('settings');
 const bandFold = $<HTMLDetailsElement>('bandBox');
+const nearPanel = $('nearPanel');
+const nearToggle = $<HTMLButtonElement>('nearToggle');
+/** Show or put away the coordinate boxes under "Search near me". */
+function showNearPanel(open: boolean): void {
+  nearPanel.hidden = !open;
+  nearToggle.setAttribute('aria-expanded', String(open));
+}
+nearToggle.addEventListener('click', () => {
+  showNearPanel(nearPanel.hidden);
+  if (!nearPanel.hidden) nearX.focus();
+});
 /** Unfold the Find cities settings while that search is in use. Only on a button press, never while a field is being changed. */
 export function showSearchFold(): void {
   bandFold.open = !aroundMode();
+  // The two search buttons are equals: the one whose search is showing carries the accent. The boxes
+  // under "Search near me" stay out while it is the search in use, and are put away for Find ships.
+  showNearPanel(aroundMode());
+  showSearchChoice();
   showRadius();
 }
 /** Set when the search button itself was pressed, so the settings fold away once the results are in. */
@@ -418,6 +434,7 @@ export function showPosition(pos: { x: number; z: number }): void {
 }
 /** Put a position in those boxes, to stay there until the player changes it. */
 export function setNear(pos: { x: number; z: number }): void {
+  showNearPanel(true);
   nearX.value = String(pos.x);
   nearZ.value = String(pos.z);
 }
@@ -487,6 +504,17 @@ function searchAround(pos: { x: number; z: number }): void {
 
 // The main search button: the band around End Spawn, as set under Settings. Its label says how
 // far out that is, since the default leaves out the picked-over first 10,000 blocks.
+/** Under "Search near me": where its search is centred while one is showing, or what it will ask for. */
+function showNearLabel(): void {
+  const text = session.searchCentre ? `around x: ${session.searchCentre.x}, z: ${session.searchCentre.z}` : 'around your coordinates';
+  nearToggle.replaceChildren('Search near me', Object.assign(document.createElement('small'), { textContent: text }));
+}
+/** Mark which of the two search buttons has its search showing. */
+function showSearchChoice(): void {
+  $('quickSpawn').classList.toggle('primary', !aroundMode());
+  nearToggle.classList.toggle('primary', aroundMode());
+  showNearLabel();
+}
 function showQuickSpawn(): void {
   const [from, to] = [Number(minInput.value), Number(maxInput.value)];
   const range = Number.isFinite(from) && Number.isFinite(to) && to > from ? `around End Spawn, ${fmt(from)}–${fmt(to)} blocks` : 'around End Spawn';

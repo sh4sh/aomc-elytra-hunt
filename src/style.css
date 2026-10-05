@@ -129,13 +129,16 @@ details.fold { border-top: 0; padding-top: 0; }
 #possibleWhy > summary, #possibleWhy > summary:hover { color: var(--muted); font-size: 12px; font-weight: 400; }
 label.field[hidden] { display: none; }
 /* The two search buttons, above the settings: your position and one button on a single line, then End Spawn. */
-#quick { display: flex; flex-direction: column; gap: 6px; }
-#quickSpawn { padding: 8px 10px; }
+#quick { display: flex; flex-direction: column; gap: 8px; }
+#searchBack { align-self: flex-start; font-size: 12px; }
+.search-choice { padding: 8px 10px; font-weight: 600; }
 /* The range on a line of its own, so it never breaks in the middle. */
-#quickSpawn small { display: block; font-weight: 400; }
+.search-choice small { display: block; font-weight: 400; }
+/* What "Search near me" needs, shown under it once it is pressed. */
+#nearPanel { display: flex; flex-direction: column; gap: 8px; padding: 2px 0 4px 10px; border-left: 2px solid var(--line); }
+#nearPanel[hidden] { display: none; }
 /* The boxes get a line to themselves: coordinates run to seven characters. */
-#nearMe { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-#nearMe button { grid-column: 1 / -1; }
+#nearMe { display: grid; grid-template-columns: 1fr 1fr auto; gap: 6px; }
 #nearMe input { min-width: 0; }
 /* How far around the position it looks, said as part of the sentence the row makes. */
 #aroundBox { grid-column: 1 / -1; flex-direction: row; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
@@ -229,7 +232,7 @@ ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: col
 .actions { gap: 6px; }
 .actions button { flex: 1 1 auto; padding: 5px 8px; font-size: 13px; }
 /* Lesser actions as plain links, so they do not compete with the row above. */
-.row.quiet { gap: 14px; font-size: 12px; }
+.row.quiet { gap: 4px 14px; font-size: 12px; }
 .current-city { margin: 6px 0 0; display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .current-city[hidden] { display: none; }
 .current-city strong { color: var(--text); font-size: 14px; }
@@ -324,9 +327,9 @@ main { position: relative; min-width: 0; min-height: 0; display: flex; flex-dire
 #find:not(.busy) { display: none; }
 #narrowAround[hidden], #narrowBand[hidden] { display: none; }
 .webmap-first { border: 1px solid var(--accent); border-radius: 6px; padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
-/* The second way to share, as a plainer card under the recommended one. */
-.share-option { border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; display: flex; flex-direction: column; gap: 8px; }
-.share-option .hint strong { color: var(--text); font-size: 13px; }
+/* A plain card: one of several ways of doing something, set apart by its own border. */
+.card { border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; display: flex; flex-direction: column; gap: 8px; }
+.card .hint strong { color: var(--text); font-size: 13px; }
 /* Only the recommended card is outlined in the accent colour: the username box keeps a plain edge until it is typed in. */
 #share label.field input:not(:focus) { border-color: var(--line); }
 #submitLooted { flex: 1; }

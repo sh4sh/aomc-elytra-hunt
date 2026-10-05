@@ -13,8 +13,8 @@ you can load into Xaero's Minimap, JourneyMap or another map mod as waypoints.
 The same steps are in the app under **How to use**.
 
 1. **Pick a route.** Route 1 takes the least flying.
-   Pick one from the list, click a ship on the map, or type your x and z and
-   press **Search near me**.
+   Pick one from the list, click a ship on the map, or open **Search near me**
+   and type your x and z.
 2. **Get the waypoints into your map mod.** Choose your mod and enter your
    username. Then, in the End, go down the route's list: press **copy** beside
    a ship, paste into chat, send, and add the waypoint that appears.
