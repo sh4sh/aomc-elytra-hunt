@@ -82,8 +82,13 @@ near them) to the route's first ship, plus the route itself.
   It looks up to 4,000 blocks past the search area (2,500 with another seed or
   beyond 100,000 blocks out), and skips ships left out as on the webmap or
   possibly looted.
-- Right-click a ship for **Add to route**, **Remove from route** and **Put back
-  in its route**.
+- Right-click a ship, or press **⋯** on its row, for **Add to route**, **Remove
+  from route** and **Put back in its route**.
+- **End route here** stops a route part-way. The ships you looted are put
+  away, the ones you did not reach are grouped into new routes, and nothing
+  else is marked as looted. The routes are numbered afresh, so waypoints
+  already in your map mod stop matching their route numbers; the map says so
+  whenever that happens.
 - Drag a ship up or down the list to reorder; on a touch screen use **Move up**
   and **Move down** from its **⋯** menu. **Original order** undoes reordering
   and keeps ships you added, at the end.

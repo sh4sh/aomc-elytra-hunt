@@ -420,7 +420,7 @@ body:not(.other-seed) .other-only { display: none; }
   li.touch-only { display: list-item; }
   label.touch-only { display: flex; }
   p.touch-only { display: block; }
-  #cities .chat.touch-only { display: inline-block; padding: 4px 10px; font-size: 14px; }
+  #cities .chat.more { padding: 4px 10px; font-size: 14px; }
   /* Room for a fingertip. */
   .actions button { padding: 9px 8px; }
   .row.quiet .textlink { padding: 8px 0; font-size: 14px; }

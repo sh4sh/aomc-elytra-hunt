@@ -1,7 +1,7 @@
 // What the open route's panel does: sending waypoints to a map mod, ticking ships off, adding and
 // reordering them, plus the help links and the looted-list files.
 
-import { BEYOND_BLOCKS, MAPPED_NOTE } from './constants';
+import { BEYOND_BLOCKS, MAPPED_NOTE, RENUMBERED_NOTE } from './constants';
 import { $, download, fmt } from './dom';
 import type { FoundCity } from './generation/worker';
 import { chatLine, cleanUsername } from './journeymap';
@@ -144,6 +144,28 @@ $('customDelete').addEventListener('click', () => {
   session.selected = null;
   rebuild();
   render();
+});
+
+// Stop a route where it stands. The ships looted so far are put away for good and the ones not reached
+// go back to be grouped afresh. Unlike finishing a route, nothing more is marked as looted.
+$('endRoute').addEventListener('click', () => {
+  const i = session.selected;
+  if (i === null || isCustom(i)) return;
+  const done = session.batches[i].filter((c) => session.tracker.has(c));
+  const left = session.batches[i].length - done.length;
+  if (
+    !confirm(
+      `End ${batchTitle(i).toLowerCase()} here? The ${done.length === 1 ? 'ship you looted is' : `${done.length} ships you looted are`} put away, and the ${left === 1 ? 'one' : left} you did not reach ${left === 1 ? 'goes' : 'go'} back to be grouped into new routes. Nothing else is marked as looted.\n\nThe routes are then numbered afresh, so waypoints already in your map mod will no longer match their route numbers.`,
+    )
+  ) {
+    return;
+  }
+  state.excluded = [...new Set([...state.excluded, ...done.map(cityId)])];
+  save();
+  session.selected = null;
+  rebuild();
+  render();
+  $('mapNote').textContent = RENUMBERED_NOTE;
 });
 
 $('markAll').addEventListener('click', () => markAll(true));

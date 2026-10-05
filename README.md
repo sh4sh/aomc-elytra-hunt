@@ -38,9 +38,9 @@ The same steps are in the app under **How to use**.
 | Faint diamond | A ship that is not in any route |
 | Green shading | Terrain already on the community webmap; ships there are left out |
 
-Click a ship to open its route and see its details. Right-click it for more;
-on a touch screen, tap **⋯** on its row in the list, or **options** in its
-details under the map.
+Click a ship to open its route and see its details. Right-click it for more,
+or press **⋯** on its row in the list; on a touch screen there is also
+**options** in its details under the map.
 
 ## Things to know
 

@@ -1,6 +1,6 @@
 // Drawing the page from the session: the route list, the open route's panel, the map and its legend.
 
-import { EXTRA_NOTE, MAPPED_NOTE, PAGE_SIZE, POSSIBLE_WHY } from './constants';
+import { EXTRA_NOTE, MAPPED_NOTE, PAGE_SIZE, POSSIBLE_WHY, RENUMBERED_NOTE } from './constants';
 import { lookalike } from './constellations';
 import { $, fmt, xzText } from './dom';
 import type { MapCity } from './map';
@@ -287,6 +287,8 @@ export function renderDetail(): void {
   });
   $('detailTitle').textContent = batchTitle(i);
   $('customDelete').hidden = !isCustom(i);
+  // Ending a route early only means something part-way through a route the app made.
+  $('endRoute').hidden = isCustom(i) || looted(batch) === 0 || looted(batch) === batch.length;
   // Always there, faded when there is nothing to undo or redo, so they do not jump in and out.
   // Which of the route's cities are in doubt, and a "why?" that unfolds the reasons that apply.
   const doubts = batch.map(possibleNote).filter((n): n is string => n !== null);
@@ -447,7 +449,7 @@ export function renderDetail(): void {
       // No right-click under a finger: there, each row carries a small button for the same menu.
       const more = document.createElement('button');
       more.type = 'button';
-      more.className = 'chat touch-only';
+      more.className = 'chat more';
       more.textContent = '⋯';
       more.setAttribute('aria-label', 'Options for this ship');
       more.addEventListener('click', (e) => {
@@ -572,6 +574,7 @@ export function select(i: number | null, zoom = false): void {
       if (zoom && session.selected !== null) map.fit(session.batches[session.selected], state.filters.maxDist);
     });
     render();
+    $('mapNote').textContent = RENUMBERED_NOTE;
     return;
   }
   session.selected = i;

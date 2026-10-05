@@ -48,3 +48,6 @@ export const BATCH_IN_PLACE_LIMIT = 150_000;
 
 // The line under the map saying how to move it is for newcomers: once the map has been used, it goes for good.
 export const MAP_HINT_KEY = 'end-cities:map-hint-seen';
+
+/** Said on the map whenever routes are regrouped under the player, since their numbers change. */
+export const RENUMBERED_NOTE = 'Routes regrouped and numbered afresh. Waypoints from before no longer match their route numbers.';
