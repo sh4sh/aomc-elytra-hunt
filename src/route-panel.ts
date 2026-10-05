@@ -155,7 +155,7 @@ $('endRoute').addEventListener('click', () => {
   const left = session.batches[i].length - done.length;
   if (
     !confirm(
-      `End ${batchTitle(i).toLowerCase()} here?\n\nYour ${done.length} looted ${done.length === 1 ? 'ship is' : 'ships are'} put away. The other ${left} ${left === 1 ? 'goes' : 'go'} into new routes.\n\nRoutes get renumbered, so old waypoints won't match.`,
+      `End ${batchTitle(i).toLowerCase()} here after looting ${done.length} ${done.length === 1 ? 'ship' : 'ships'}?\n\nThe other ${left} will turn into new routes.\n\nMap waypoints will no longer match after this point.`,
     )
   ) {
     return;
