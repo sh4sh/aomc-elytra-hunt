@@ -740,7 +740,7 @@ function renderDetail(): void {
   currentCity.hidden = at < 0;
   if (at >= 0) {
     currentCity.replaceChildren(
-      Object.assign(document.createElement('strong'), { textContent: `Current city: ${waypointName(i, at)}` }),
+      Object.assign(document.createElement('strong'), { textContent: `Current ship: ${waypointName(i, at)}` }),
       Object.assign(document.createElement('span'), { textContent: `${at + 1} of ${batch.length} · ${xzText(batch[at])}` }),
     );
   }
