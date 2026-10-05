@@ -14,6 +14,9 @@ in the same change, so there is still only one way to do each thing.
   a section by id. A section inside another is
   indented, with a lighter title, so the levels are told apart. A folded
   section may show what it is set to in a `.fold-note` line under its title.
+  The one exception to "no outlines": a section that is its panel's main
+  action (`details.action`) has its title outlined like the main button. Its
+  contents still open plainly beneath.
 - **Groups of settings:** each group is its own collapsible section, named
   for what uses it, with a one-line hint saying so. Groups are equals: none is
   left permanently open above the others, and opening one closes the others

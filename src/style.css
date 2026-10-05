@@ -126,6 +126,9 @@ details[open]:not([hidden]) + details, details[open] + .feedback { border-top: 0
 #xaeroPanel[open], #journeymapPanel[open], #share details[open] { border-bottom: 0; padding-bottom: 0; }
 /* The first thing in its panel needs no rule above it. */
 details.fold { border-top: 0; padding-top: 0; }
+/* A section that is its panel's main action: its title is that panel's main button, outlined the same way. */
+details.action > summary { padding: 8px 10px; border: 1px solid var(--accent); border-radius: 6px; background: color-mix(in srgb, var(--accent) 14%, var(--panel)); }
+details.action > summary:hover { color: var(--text); background: color-mix(in srgb, var(--accent) 24%, var(--panel)); }
 /* Not a section: a note that unfolds its reasons. */
 #possibleWhy, #possibleWhy[open] { border: 0; padding: 0; }
 #possibleWhy > summary, #possibleWhy > summary:hover { color: var(--muted); font-size: 12px; font-weight: 400; }
