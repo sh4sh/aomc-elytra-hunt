@@ -287,8 +287,16 @@ export function renderDetail(): void {
   });
   $('detailTitle').textContent = batchTitle(i);
   $('customDelete').hidden = !isCustom(i);
-  // Ending a route early only means something part-way through a route the app made.
-  $('endRoute').hidden = isCustom(i) || looted(batch) === 0 || looted(batch) === batch.length;
+  // Ending a route early only means something part-way through a route the app made. Like the undo
+  // arrows, the button is always there and faded when it has nothing to do, so it can be found.
+  const endRoute = $<HTMLButtonElement>('endRoute');
+  endRoute.hidden = isCustom(i);
+  endRoute.disabled = looted(batch) === 0 || looted(batch) === batch.length;
+  endRoute.title = looted(batch) === 0
+    ? 'Nothing to end yet: this is for stopping a route after looting some of its ships'
+    : looted(batch) === batch.length
+      ? 'This route is complete: every ship in it is looted'
+      : 'Stop this route where it is: the ships you looted are put away, and the ones you did not reach are grouped into new routes';
   // Always there, faded when there is nothing to undo or redo, so they do not jump in and out.
   // Which of the route's cities are in doubt, and a "why?" that unfolds the reasons that apply.
   const doubts = batch.map(possibleNote).filter((n): n is string => n !== null);
