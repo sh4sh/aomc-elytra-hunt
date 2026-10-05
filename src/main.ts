@@ -1,22 +1,25 @@
 import { lookalike, type Constellation } from './constellations';
+import { $, download, fmt, xzText } from './dom';
 import { Explored } from './explored';
-import { endCityHasShip, shipCode } from './generation/end-city-pieces';
-import { END_CITY, candidateChunk, chunkToBlock, findEndCities } from './generation/end-cities';
-import { EndTerrain } from './generation/end-terrain';
 import { BATCH_SIZE, DEFAULT_MAX_HOP, makeBatchesOrSmaller, passes, route, type BatchJob, type BatchShape } from './filters';
+import { END_CITY, candidateChunk, chunkToBlock, findEndCities } from './generation/end-cities';
+import { endCityHasShip, shipCode } from './generation/end-city-pieces';
+import { EndTerrain } from './generation/end-terrain';
 import type { FindRequest, FindResponse, FoundCity } from './generation/worker';
 import { parseCoordinates } from './import';
 import { chatLine, cleanUsername } from './journeymap';
 import { EndMap, type MapCity } from './map';
 import { Precomputed } from './precomputed';
 import { loadSkyFigures } from './sky-cultures';
+import { DEFAULT_FILTERS, DEFAULT_LINE_DEVIATION, DEFAULT_SEED, save, state, type RouteEdit, type Saved } from './state';
 import { surveyEstimate, surveySample } from './survey';
 import { Tracker } from './tracker';
 import { describeTrajectory, onTrajectory, studyTrajectories, type Trajectory } from './trajectory';
 import { cityId, searchBounds, type City, type Filters, type Quadrant } from './types';
 import { OUTSIDE_COLOR, XAERO_COLORS, batchColor, setBatchTags, shareLine, waypointFile, waypointLines, waypointName } from './xaero';
+import './goose-emoji';
+import './panels';
 
-const DEFAULT_SEED = '856461443495910397';
 const ISSUES_URL = 'https://github.com/sh4sh/aomc-elytra-hunt/issues';
 /** The latest finished runs of the job that checks the webmap for changes, as GitHub reports them to anyone. */
 const WEBMAP_CHECKS_URL =
@@ -26,8 +29,6 @@ const WEBMAP_CHECKS_URL =
  * While empty, the Submit button is hidden and players are pointed at GitHub instead.
  */
 const SUBMIT_URL = 'https://aomc-looted-relay.sh4sh.workers.dev';
-/** How far a line batch may stray to either side of straight, in blocks, unless the player changes it. */
-const DEFAULT_LINE_DEVIATION = 1000;
 /**
  * Most ship cities one search may bring in. Batching and drawing slow down with every city, and beyond
  * this the page would hang for many seconds, so a wider search is refused with advice to narrow it.
@@ -35,83 +36,6 @@ const DEFAULT_LINE_DEVIATION = 1000;
 const MAX_SEARCH_CITIES = 25000;
 /** Ship cities per square block, measured over the first 100,000 blocks of the default world. */
 const SHIP_DENSITY = 4.6e-7;
-const DEFAULT_FILTERS: Filters = { minDist: 10000, maxDist: 50000, diagonalDeg: 45, quadrants: ['NE', 'NW', 'SE', 'SW'] };
-const STORE = 'end-cities:state';
-
-interface Saved {
-  seed: string;
-  filters: Filters;
-  /** Result of the last search. */
-  found: FoundCity[];
-  imported: [number, number][];
-  /** Leave out cities that already show up on the community webmap. */
-  /** Leave out cities that generate without a ship, since only ships hold elytra. */
-  shipsOnly: boolean;
-  /** Cities per batch. A full shulker box is 27. */
-  batchSize: number;
-  batchShape: BatchShape;
-  /** Longest allowed flight between consecutive cities in a batch, in blocks. 0 means no limit. */
-  maxHop: number;
-  /** For line batches: how many blocks a line may stray to either side of straight. 0 means no limit. */
-  lineDeviation: number;
-  /** Looted cities (by id) taken out of the batches the last time they were regrouped. */
-  excluded: string[];
-  /** Cities moved by hand: city id -> id of a city in the batch it was added to. */
-  moved: Record<string, string>;
-  /** Put cities already on the webmap in the routes too. Normally they are left out as probably looted. */
-  includeMapped?: boolean;
-  /** Cities from beyond the search area that "+1 city" brought into a route. */
-  extra?: FoundCity[];
-  /** Cities taken out of their route by hand. They stay on the map without a route. */
-  dropped?: string[];
-  /** Cities added to a route by hand, oldest first: they go at the end of their route, in this order. */
-  appended?: string[];
-  /** Routes put in an order by hand: the city ids in that order, under the id of one city that belongs to the route. */
-  orders?: Record<string, string[]>;
-  /** Changes made by hand to routes, oldest first, so the latest can be taken back. */
-  edits?: RouteEdit[];
-  /** On a touch screen, move the map with one finger (and so give up scrolling the page across it). */
-  oneFingerMap?: boolean;
-  /** Whether the "add to your map mod" section of a route is unfolded. */
-  exportOpen?: boolean;
-  /** Changes that undo took back, latest last, so they can be made again. */
-  redo?: RouteEdit[];
-  /** Keep cities near one found already looted out of the routes. */
-  skipPossible?: boolean;
-  /** The search that was showing before the current one, to go back to. */
-  lastSearch?: Filters;
-  /** Whether the tools for working on the app are shown. */
-  devMode?: boolean;
-  /** The latest survey of the cities near End Spawn: the cities picked, and how many they were picked from. */
-  survey?: { ids: string[]; frame: number };
-  /** Minecraft username to whisper JourneyMap chat lines to, or empty to write them for public chat. */
-  /** Batches the player put together by hand, each a list of city ids. */
-  custom: string[][];
-  chatName: string;
-  /** Which map mod the export controls are shown for. */
-  mapMod: 'xaero' | 'journeymap';
-}
-
-const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
-
-function load(): Saved {
-  try {
-    const s = JSON.parse(localStorage.getItem(STORE) ?? 'null');
-    if (s?.seed && s.filters) {
-      const saved: Saved = { found: [], imported: [], shipsOnly: true, batchSize: BATCH_SIZE, batchShape: 'cluster', maxHop: DEFAULT_MAX_HOP, lineDeviation: DEFAULT_LINE_DEVIATION, excluded: [], moved: {}, custom: [], chatName: '', mapMod: 'xaero', ...s };
-      // Fixed since the setting for it was removed.
-      saved.shipsOnly = true;
-      // Results saved before ships were tracked have no ship flag: search again.
-      if (saved.found.some((c) => c.length < 3)) saved.found = [];
-      return saved;
-    }
-  } catch {
-    // Fall through to defaults.
-  }
-  return { seed: DEFAULT_SEED, filters: DEFAULT_FILTERS, found: [], imported: [], shipsOnly: true, batchSize: BATCH_SIZE, batchShape: 'cluster', maxHop: DEFAULT_MAX_HOP, lineDeviation: DEFAULT_LINE_DEVIATION, excluded: [], moved: {}, custom: [], chatName: '', mapMod: 'xaero' };
-}
-
-const state = load();
 let tracker = new Tracker(state.seed);
 let batches: City[][] = [];
 let selected: number | null = null;
@@ -238,14 +162,6 @@ const isCustom = (i: number) => i >= generatedCount;
 const batchTitle = (i: number) => (isCustom(i) ? `Custom ${i - generatedCount + 1}` : `Route ${i + 1}`);
 /** Cities that could not be fitted into a full batch within the longest-flight limit. */
 let unbatched = 0;
-/** A change made by hand to a route: a city added to it, or its order changed (`before` being the order it had, if any). */
-type RouteEdit =
-  | { kind: 'add'; id: string }
-  | { kind: 'order'; key: string; before: string[] | null }
-  // Looted marks changed: what each city's mark was before (0 not looted, 1 looted, 2 looted by someone else).
-  | { kind: 'marks'; before: [string, 0 | 1 | 2][] }
-  // Only ever waiting to be redone: a city that undo took back out, and how it had been held in its route.
-  | { kind: 'readd'; id: string; anchor?: string; custom?: number; extra?: FoundCity };
 const pushEdit = (e: RouteEdit) => {
   state.edits = [...(state.edits ?? []), e].slice(-100);
   // A fresh change leaves nothing to redo.
@@ -337,14 +253,6 @@ const undrop = (id: string) => {
 let dragFrom: number | null = null;
 /** Cities kept out of the batches but still drawn on the map, with the reason. */
 let outside: { city: City; note: string; missing?: boolean }[] = [];
-
-const save = () => {
-  try {
-    localStorage.setItem(STORE, JSON.stringify(state));
-  } catch {
-    // Not fatal: the search can be rerun.
-  }
-};
 
 const map = new EndMap($<HTMLCanvasElement>('map'));
 const tooltip = $('tooltip');
@@ -559,10 +467,6 @@ function finishRebuild(
 
 const looted = (batch: City[]) => batch.filter((c) => tracker.has(c)).length;
 const color = (i: number) => XAERO_COLORS[batchColor(i)];
-const fmt = (n: number) => n.toLocaleString();
-/** Coordinates the way Minecraft writes them. No thousands separators, so they can be typed straight in. */
-const xzText = (c: { x: number; z: number }) => `x: ${c.x}, z: ${c.z}`;
-
 // ---------- rendering ----------
 
 /**
@@ -1826,14 +1730,6 @@ if (!import.meta.env.DEV) {
 
 // ---------- export ----------
 
-function download(name: string, text: string): void {
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
-  a.download = name;
-  a.click();
-  URL.revokeObjectURL(a.href);
-}
-
 const selectedLines = (): string[] =>
   selected === null ? [] : waypointLines(batches[selected], selected, (c) => tracker.has(c));
 
@@ -2759,56 +2655,6 @@ map.onView = (centre) => {
   renderLegend();
 };
 
-// ---------- resizable panels ----------
-
-const LAYOUT_STORE = 'end-cities:layout';
-const PANEL_MIN = 220;
-const PANEL_DEFAULT = { left: 300, right: 350 };
-type Side = keyof typeof PANEL_DEFAULT;
-
-const panelWidth: Record<Side, number> = { ...PANEL_DEFAULT };
-try {
-  Object.assign(panelWidth, JSON.parse(localStorage.getItem(LAYOUT_STORE) ?? '{}'));
-} catch {
-  // Keep the defaults.
-}
-
-function setPanel(side: Side, width: number, persist = true): void {
-  // Leave the map at least as much room as a panel's minimum.
-  const max = Math.max(PANEL_MIN, window.innerWidth - panelWidth[side === 'left' ? 'right' : 'left'] - PANEL_MIN);
-  panelWidth[side] = Math.round(Math.min(max, Math.max(PANEL_MIN, width)));
-  document.body.style.setProperty(`--${side}`, `${panelWidth[side]}px`);
-  if (!persist) return;
-  try {
-    localStorage.setItem(LAYOUT_STORE, JSON.stringify(panelWidth));
-  } catch {
-    // The size still applies for this visit.
-  }
-}
-
-for (const handle of document.querySelectorAll<HTMLElement>('.resizer')) {
-  const side = handle.dataset.side as Side;
-  setPanel(side, panelWidth[side], false);
-  const fromPointer = (e: PointerEvent) => (side === 'left' ? e.clientX : window.innerWidth - e.clientX);
-  handle.addEventListener('pointerdown', (e) => {
-    handle.setPointerCapture(e.pointerId);
-    handle.classList.add('dragging');
-    e.preventDefault();
-  });
-  handle.addEventListener('pointermove', (e) => {
-    if (handle.hasPointerCapture(e.pointerId)) setPanel(side, fromPointer(e));
-  });
-  handle.addEventListener('pointerup', () => handle.classList.remove('dragging'));
-  handle.addEventListener('dblclick', () => setPanel(side, PANEL_DEFAULT[side]));
-  handle.addEventListener('keydown', (e) => {
-    // Arrow keys move the divider itself, whichever panel it belongs to.
-    const step = e.key === 'ArrowLeft' ? -16 : e.key === 'ArrowRight' ? 16 : 0;
-    if (!step) return;
-    e.preventDefault();
-    setPanel(side, panelWidth[side] + (side === 'left' ? step : -step));
-  });
-}
-
 // ---------- goose ----------
 
 // The goose keeps count: click it to see every looted city at once, click again to put them away.
@@ -2842,41 +2688,6 @@ gooseCredit.addEventListener('click', async () => {
   }
 });
 
-
-// The goose emoji only exists on systems from 2022 onwards; elsewhere it shows as an empty box.
-// Those get the nearest bird their system does have: the swan (2018), then the duck (2016).
-const GOOSE_STAND_INS = ['🦢', '🦆'];
-
-/** Whether this system can draw the emoji in colour, as opposed to a blank or a monochrome box. */
-function drawsEmoji(emoji: string): boolean {
-  try {
-    const canvas = document.createElement('canvas');
-    canvas.width = canvas.height = 32;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    if (!ctx) return true;
-    ctx.textBaseline = 'top';
-    ctx.font = '24px sans-serif';
-    ctx.fillText(emoji, 2, 2);
-    const px = ctx.getImageData(0, 0, 32, 32).data;
-    for (let i = 0; i < px.length; i += 4) {
-      // A missing glyph is drawn in the text colour; a real emoji has coloured pixels.
-      if (px[i + 3] > 0 && (Math.abs(px[i] - px[i + 1]) > 16 || Math.abs(px[i + 1] - px[i + 2]) > 16)) return true;
-    }
-    return false;
-  } catch {
-    // Can't tell (e.g. canvas reading blocked): leave the emoji alone.
-    return true;
-  }
-}
-
-if (!drawsEmoji('🪿')) {
-  const bird = GOOSE_STAND_INS.find(drawsEmoji) ?? '';
-  $('gooseEmoji').textContent = bird;
-  const icon = $<HTMLLinkElement>('favicon');
-  // With no bird at all, drop the icon rather than show an empty box in the tab.
-  if (bird) icon.href = icon.href.replace(encodeURIComponent('🪿'), encodeURIComponent(bird)).replace('🪿', bird);
-  else icon.remove();
-}
 
 // ---------- start ----------
 
