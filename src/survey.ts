@@ -6,6 +6,9 @@
 // into distance bands and quadrants, and each piece gives cities in proportion to how many it
 // holds. With shares in proportion, the plain fraction found looted estimates the whole area.
 
+/** Ships closer to End Spawn than this (along the longer axis, as the search measures) count as possibly looted. */
+export const NEAR_SPAWN_BLOCKS = 10000;
+
 interface Point {
   x: number;
   z: number;
