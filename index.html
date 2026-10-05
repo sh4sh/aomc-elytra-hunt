@@ -17,11 +17,12 @@
       </header>
 
       <div id="quick">
-        <button id="quickSpawn" type="button" class="primary" title="Search the ring around End Spawn set under Search settings">Find cities</button>
+        <button id="quickSpawn" type="button" class="primary" title="Search the ring around End Spawn set under Settings">Find cities</button>
         <form id="nearMe" title="Open the route nearest these coordinates, searching around them if the current search does not reach that far. Left empty, they count as 0,0 (End Spawn).">
           <input id="nearX" type="number" step="1" placeholder="x: 0" autocomplete="off" aria-label="Your x coordinate" />
           <input id="nearZ" type="number" step="1" placeholder="z: 0" autocomplete="off" aria-label="Your z coordinate" />
           <button type="submit">Search near me</button>
+          <label id="aroundBox" hidden>within <input id="aroundRadius" type="number" min="500" step="500" value="10000" aria-label="Radius, in blocks" /> blocks</label>
         </form>
         <div class="row quiet">
           <button id="showOnMap" type="button" class="textlink" title="Move the map to these coordinates without searching there">Show on map</button>
@@ -30,54 +31,45 @@
       </div>
 
       <details id="settings">
-        <summary><span class="settings-title">Search settings</span> <span id="settingsSummary"></span></summary>
+        <summary><span class="settings-title">Settings</span> <span id="settingsSummary"></span></summary>
       <form id="search">
-        <div id="bandBox" class="panel">
-          <div class="group-label">Find cities</div>
+        <details id="routeSettings">
+          <summary>Routes</summary>
+          <div class="row">
+            <label>Cities per route <input id="batchSize" type="number" min="1" step="1" /></label>
+            <label>
+              Route shape
+              <select id="batchShape">
+                <option value="cluster">Clusters</option>
+                <option value="line">Lines outward</option>
+              </select>
+            </label>
+          </div>
+          <p class="hint">27 fills a shulker box. Lines head away from 0,0.</p>
+          <div id="lineDeviationBox" class="panel" hidden>
+            <label>Stray from a straight line, up to <input id="lineDeviation" type="number" min="0" step="250" /></label>
+            <p class="hint">In blocks, either side of straight. 0 means no limit. Tight values leave most cities without a route.</p>
+          </div>
+          <label>Longest flight between cities <input id="maxHop" type="number" min="0" step="250" /></label>
+          <p class="hint">In blocks; 0 means no limit. Cities out of reach are left without a route.</p>
+          <label class="check"><input id="skipPossible" type="checkbox" /> Leave out cities that are possibly looted</label>
+          <p class="hint">Within 2,000 blocks of a city looted by someone else.</p>
+        </details>
+        <details id="bandBox">
+          <summary>Find cities: search area</summary>
+          <p class="hint">Where the Find cities button looks.</p>
           <div class="row" id="distanceBox">
             <label>From <input id="minDist" type="number" min="0" step="500" required /></label>
             <label>To <input id="maxDist" type="number" min="1000" step="500" required /></label>
           </div>
           <p class="hint">Distance from 0,0, in blocks.</p>
-        </div>
-        <div id="aroundBox" class="panel">
-          <div class="group-label">Search near me</div>
-          <label>Radius, in blocks <input id="aroundRadius" type="number" min="500" step="500" value="10000" /></label>
-        </div>
-        <details id="fineTuning">
-          <summary><strong>Fine tuning (optional)</strong></summary>
-          <p class="hint">Changes here apply straight away.</p>
-          <div class="group-label">Routes</div>
-        <div class="row">
-          <label>Cities per route <input id="batchSize" type="number" min="1" step="1" /></label>
-          <label>
-            Route shape
-            <select id="batchShape">
-              <option value="cluster">Clusters</option>
-              <option value="line">Lines outward</option>
-            </select>
-          </label>
-        </div>
-        <p class="hint">27 fills a shulker box. Lines head away from 0,0.</p>
-        <div id="lineDeviationBox" class="panel" hidden>
-          <label>Stray from a straight line, up to <input id="lineDeviation" type="number" min="0" step="250" /></label>
-          <p class="hint">In blocks, either side of straight. 0 means no limit. Tight values leave most cities without a route.</p>
-        </div>
-        <label>Longest flight between cities <input id="maxHop" type="number" min="0" step="250" /></label>
-        <p class="hint">In blocks; 0 means no limit. Cities out of reach are left without a route.</p>
-        <div class="group-label">Cities</div>
-        <fieldset id="quadrants">
-          <legend>Quadrants</legend>
-          <label><input type="checkbox" value="NW" /> NW <small>−x −z</small></label>
-          <label><input type="checkbox" value="NE" /> NE <small>+x −z</small></label>
-          <label><input type="checkbox" value="SW" /> SW <small>−x +z</small></label>
-          <label><input type="checkbox" value="SE" /> SE <small>+x +z</small></label>
-        </fieldset>
-        <label class="check"><input id="skipPossible" type="checkbox" /> Leave out cities that are possibly looted</label>
-        <p class="hint">Within 2,000 blocks of a city looted by someone else.</p>
-        </details>
-        <details id="advanced">
-          <summary>Advanced</summary>
+          <fieldset id="quadrants">
+            <legend>Quadrants</legend>
+            <label><input type="checkbox" value="NW" /> NW <small>−x −z</small></label>
+            <label><input type="checkbox" value="NE" /> NE <small>+x −z</small></label>
+            <label><input type="checkbox" value="SW" /> SW <small>−x +z</small></label>
+            <label><input type="checkbox" value="SE" /> SE <small>+x +z</small></label>
+          </fieldset>
           <label id="angleBox">
             <span>Stay within <output id="diagOut"></output> of
               <select id="angleFrom" aria-label="Measure the angle from">
@@ -88,6 +80,9 @@
             <input id="diag" type="range" min="5" max="45" step="5" />
           </label>
           <p class="hint">45° searches every direction.</p>
+        </details>
+        <details id="advanced">
+          <summary>Advanced</summary>
           <label class="check aomc-only"><input id="includeMapped" type="checkbox" /> Include cities already on the webmap</label>
           <p id="exploredNote" class="hint aomc-only"></p>
           <label class="check"><input id="oneFingerMap" type="checkbox" /> Move the map with one finger</label>
@@ -113,7 +108,7 @@
         </details>
         <button id="find" type="submit" class="primary">Find cities</button>
         <div class="row quiet">
-          <button id="searchReset" type="button" class="textlink">Reset search settings</button>
+          <button id="searchReset" type="button" class="textlink">Reset settings</button>
         </div>
         <progress id="progress" max="1" value="0" hidden></progress>
       </form>
@@ -317,7 +312,7 @@
             <li class="touch-only">Map: two fingers to pan, pinch or use the slider to zoom.</li>
             <li>Faint diamonds are cities with a ship that are not in any route.</li>
             <li class="aomc-only">Green shading is terrain already on the community webmap; cities there are left out.</li>
-            <li>Far from 0,0? Type your x and z beside <em>Search near me</em>. <button type="button" class="jump" data-target="settings">Search settings</button> sets how far around you it looks.</li>
+            <li>Far from 0,0? Type your x and z beside <em>Search near me</em>. <button type="button" class="jump" data-target="settings">Settings</button> sets how far around you it looks.</li>
             <li class="wide-only">Drag the dividers either side of the map to resize the panels.</li>
           </ul>
         </details>

@@ -11,7 +11,11 @@ in the same change, so there is still only one way to do each thing.
 - **Collapsible sections:** a plain `<details>`. It gets a rule above and a
   bold title; while open, a rule below shows where it ends. No outlines or
   bars. The base `details` and `summary` styles do all of this: do not restyle
-  a section by id.
+  a section by id. A section inside another is
+  indented, with a lighter title, so the levels are told apart.
+- **Groups of settings:** each group is its own collapsible section, named
+  for what uses it, with a one-line hint saying so. Groups are equals: none is
+  left permanently open above the others.
 - **Cards:** a bordered box is for a choice between ways of doing something
   (as in Share progress). The recommended one has the accent border, the
   others a plain one.

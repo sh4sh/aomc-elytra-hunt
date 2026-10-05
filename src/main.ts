@@ -652,18 +652,12 @@ function renderMap(): void {
   });
 }
 
-/** One-line description of the current search, shown while the settings are folded away. */
+/**
+ * One line on how the routes are made, shown while the settings are folded away. Where each search
+ * looks is said on or beside its own button, so it is not repeated here.
+ */
 function renderSettingsSummary(): void {
-  const f = state.filters;
-  const where = f.around
-    ? [`within ${fmt(f.around.radius)} blocks of ${xzText(f.around)}`]
-    : [
-        `${fmt(f.minDist)}–${fmt(f.maxDist)} blocks out`,
-        f.diagonalDeg >= 45 ? 'any angle' : `within ${f.diagonalDeg}° of ${f.angleFrom === 'axis' ? 'an axis' : 'a diagonal'}`,
-        f.quadrants.length === 4 ? 'all quadrants' : f.quadrants.join(' '),
-      ];
   $('settingsSummary').textContent = [
-    ...where,
     `${state.batchSize} per route`,
     state.batchShape !== 'line'
       ? 'clusters'
@@ -1094,6 +1088,10 @@ const nearZ = $<HTMLInputElement>('nearZ');
 const aroundRadius = $<HTMLInputElement>('aroundRadius');
 /** Whether the form is set to search around a position rather than outward from 0,0. */
 const aroundMode = () => searchCentre !== null;
+/** How far "Search near me" looks is only shown once it is the search in use: until then it is one thing less to read. */
+function showRadius(): void {
+  $('aroundBox').hidden = !aroundMode();
+}
 const minInput = $<HTMLInputElement>('minDist');
 const maxInput = $<HTMLInputElement>('maxDist');
 const diagInput = $<HTMLInputElement>('diag');
@@ -1107,6 +1105,7 @@ function fillForm(): void {
   showSeedReset();
   searchCentre = state.filters.around ? { x: state.filters.around.x, z: state.filters.around.z } : null;
   if (state.filters.around) aroundRadius.value = String(state.filters.around.radius);
+  showRadius();
   minInput.value = String(state.filters.minDist);
   maxInput.value = String(state.filters.maxDist);
   diagInput.value = String(state.filters.diagonalDeg);
@@ -1239,6 +1238,12 @@ function endSearch(): void {
 }
 
 const settings = $<HTMLDetailsElement>('settings');
+const bandFold = $<HTMLDetailsElement>('bandBox');
+/** Unfold the Find cities settings while that search is in use. Only on a button press, never while a field is being changed. */
+function showSearchFold(): void {
+  bandFold.open = !aroundMode();
+  showRadius();
+}
 /** Set when the search button itself was pressed, so the settings fold away once the results are in. */
 let foldWhenDone = false;
 
@@ -1256,20 +1261,21 @@ form.addEventListener('submit', (e) => {
   foldWhenDone = e.submitter !== null;
   const filters = formFilters();
   if (aroundMode() && !filters.around) {
-    // The radius is under the settings, which may be folded: open them so the message has somewhere to show.
-    settings.open = true;
     aroundRadius.setCustomValidity('Enter a radius in blocks.');
     aroundRadius.reportValidity();
     return;
   }
   if (!filters.around && filters.maxDist <= filters.minDist) {
+    settings.open = true;
+    bandFold.open = true;
     maxInput.setCustomValidity('Must be larger than the starting distance.');
     maxInput.reportValidity();
     return;
   }
   if (!filters.around && !filters.quadrants.length) {
-    // The quadrants are folded away under Fine tuning: open it so the message has somewhere to show.
-    $<HTMLDetailsElement>('fineTuning').open = true;
+    // The quadrants are under the settings, which may be folded: open them so the message has somewhere to show.
+    settings.open = true;
+    bandFold.open = true;
     quadBoxes[0].setCustomValidity('Pick at least one quadrant.');
     quadBoxes[0].reportValidity();
     return;
@@ -1277,6 +1283,7 @@ form.addEventListener('submit', (e) => {
   const seed = seedInput.value.trim();
   if (!/^-?\d+$/.test(seed)) {
     // The field is inside a folded section; open it so the message can be shown.
+    settings.open = true;
     $<HTMLDetailsElement>('advanced').open = true;
     seedInput.setCustomValidity('A world seed is a whole number.');
     seedInput.reportValidity();
@@ -1335,20 +1342,19 @@ for (const el of [minInput, maxInput, diagInput, angleFromSelect, aroundRadius, 
 // A typed number snaps to the nearest step its field accepts (500 blocks for distances and the radius,
 // 250 for flight limits), so an in-between value never blocks the search. Listening in the capture
 // phase means this runs before the handlers that read the value.
-form.addEventListener(
-  'change',
-  (e) => {
-    const field = e.target;
-    if (!(field instanceof HTMLInputElement) || field.type !== 'number' || field.value.trim() === '') return;
-    const step = Number(field.step) || 1;
-    const min = field.min === '' ? -Infinity : Number(field.min);
-    const max = field.max === '' ? Infinity : Number(field.max);
-    const typed = Number(field.value);
-    if (!Number.isFinite(typed)) return;
-    field.value = String(Math.min(max, Math.max(min, Math.round(typed / step) * step)));
-  },
-  true,
-);
+const snapToStep = (e: Event) => {
+  const field = e.target;
+  if (!(field instanceof HTMLInputElement) || field.type !== 'number' || field.value.trim() === '') return;
+  const step = Number(field.step) || 1;
+  const min = field.min === '' ? -Infinity : Number(field.min);
+  const max = field.max === '' ? Infinity : Number(field.max);
+  const typed = Number(field.value);
+  if (!Number.isFinite(typed)) return;
+  field.value = String(Math.min(max, Math.max(min, Math.round(typed / step) * step)));
+};
+form.addEventListener('change', snapToStep, true);
+// The radius sits beside "Search near me", outside the settings form.
+$('nearMe').addEventListener('change', snapToStep, true);
 aroundRadius.addEventListener('input', () => aroundRadius.setCustomValidity(''));
 
 // Instant searches are applied as the controls change; slow ones wait for the button.
@@ -1490,6 +1496,7 @@ let locateAfterSearch: { x: number; z: number } | null = null;
 function searchAround(pos: { x: number; z: number }): void {
   you = { x: pos.x, z: pos.z };
   searchCentre = you;
+  showSearchFold();
   if (!(Number(aroundRadius.value) > 0)) aroundRadius.value = '10000';
   mapNote.textContent = 'Searching around your position…';
   locateAfterSearch = you;
@@ -1497,12 +1504,12 @@ function searchAround(pos: { x: number; z: number }): void {
   // A refused or invalid search never reports back, so don't leave the request hanging.
   if (!worker && locateAfterSearch) {
     locateAfterSearch = null;
-    mapNote.textContent = 'Could not search around that position. Check the search settings.';
+    mapNote.textContent = 'Could not search around that position. Check the settings.';
     renderMap();
   }
 }
 
-// The main search button: the band around End Spawn, as set under Search settings. Its label says how
+// The main search button: the band around End Spawn, as set under Settings. Its label says how
 // far out that is, since the default leaves out the picked-over first 10,000 blocks.
 function showQuickSpawn(): void {
   const [from, to] = [Number(minInput.value), Number(maxInput.value)];
@@ -1516,11 +1523,12 @@ for (const el of [minInput, maxInput]) {
 showQuickSpawn();
 $('quickSpawn').addEventListener('click', () => {
   searchCentre = null;
+  showSearchFold();
   renderMap();
   form.requestSubmit();
 });
 
-// "Search near me", above the search settings.
+// "Search near me", above the settings.
 for (const el of [nearX, nearZ]) el.addEventListener('input', () => nearX.setCustomValidity(''));
 $<HTMLFormElement>('nearMe').addEventListener('submit', (e) => {
   e.preventDefault();
@@ -1717,7 +1725,7 @@ $('searchReset').addEventListener('click', () => {
   if (worker) return;
   if (
     !confirm(
-      'Reset all search settings to their defaults? Your looted marks are kept. Custom routes are kept too, unless the world seed had been changed.',
+      'Reset all settings to their defaults? Your looted marks are kept. Custom routes are kept too, unless the world seed had been changed.',
     )
   ) {
     return;
@@ -2839,6 +2847,7 @@ if (!drawsEmoji('🪿')) {
 // ---------- start ----------
 
 fillForm();
+showSearchFold();
 rebuild();
 render();
 fitSearch(state.filters);
