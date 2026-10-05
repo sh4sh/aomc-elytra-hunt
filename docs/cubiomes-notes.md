@@ -29,23 +29,3 @@ One more difference is ours alone and is **not a cubiomes bug**: the game builds
 | 8-chunk reach (ours) | 157 | 0 |
 | 2. Ship not taken as the bridge's last piece | 31 | 2 |
 | All together | 225 | 64 |
-
-## Things a person should check before saying anything upstream
-
-1. **Read the game's own code.** Everything here rests on in-game checks and on recollection of the game's logic, not on reading it. Someone with a decompiled copy of `EndCityPieces` can confirm points 1 and 2 in a few minutes: which piece the tower's bridges are added to, and whether the ship is assigned to the variable the final `bridge_end` is added from.
-2. **Point 2 in game: done.** x: 26008, z: -53384 has no ship and x: -37752, z: -26824 has a full one, as the fix predicts and published cubiomes does not.
-3. **Decide whether to say anything at all.** The report exists. A comment there with our table of in-game results would support it; it is not needed for the app.
-
-## What we would add, if anything
-
-A short comment on the existing issue, not a new one:
-
-> We hit point 1 independently while predicting End ships for a server (seed 856461443495910397, Java 26.2). In a single-player copy of the world, 8 cities where published cubiomes reports a ship have none, and all 11 cities we checked match once bridges are attached to `floor`. Table and coordinates: (link to docs/accuracy.md).
-
-Nothing has been posted upstream. Note that a clickable link to the upstream issue from one of this repository's issues shows up on the upstream issue as a mention, so the links here and in our issues are written as plain text.
-
-## Where the details are
-
-- [accuracy.md](accuracy.md): the full table of in-game checks and what is still unproven.
-- Issue #11 in this repository: the single-player check, with results.
-- `tests/end-cities.test.ts`: the checked cities as automated tests.
