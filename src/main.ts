@@ -1087,29 +1087,13 @@ function select(i: number | null, zoom = false): void {
 
 const form = $<HTMLFormElement>('search');
 const seedInput = $<HTMLInputElement>('seed');
-const modeRadios = [...document.querySelectorAll<HTMLInputElement>('input[name="searchMode"]')];
-const aroundX = $<HTMLInputElement>('aroundX');
-const aroundZ = $<HTMLInputElement>('aroundZ');
-/** The position typed into the two coordinate fields, or null while either is empty. */
-function aroundPosition(): { x: number; z: number } | null {
-  if (aroundX.value.trim() === '' || aroundZ.value.trim() === '') return null;
-  const [x, z] = [Number(aroundX.value), Number(aroundZ.value)];
-  return Number.isFinite(x) && Number.isFinite(z) ? { x: Math.round(x), z: Math.round(z) } : null;
-}
-function setAroundPosition(pos: { x: number; z: number }): void {
-  aroundX.value = String(pos.x);
-  aroundZ.value = String(pos.z);
-  aroundX.setCustomValidity('');
-}
+/** Where the search set in the form is centred: a position, for a search around the player, or null for the band around End Spawn. */
+let searchCentre: { x: number; z: number } | null = null;
 const nearX = $<HTMLInputElement>('nearX');
 const nearZ = $<HTMLInputElement>('nearZ');
 const aroundRadius = $<HTMLInputElement>('aroundRadius');
 /** Whether the form is set to search around a position rather than outward from 0,0. */
-const aroundMode = () => modeRadios.some((r) => r.checked && r.value === 'around');
-function showSearchMode(): void {
-  for (const r of modeRadios) r.parentElement!.classList.toggle('on', r.checked);
-  document.body.classList.toggle('around-mode', aroundMode());
-}
+const aroundMode = () => searchCentre !== null;
 const minInput = $<HTMLInputElement>('minDist');
 const maxInput = $<HTMLInputElement>('maxDist');
 const diagInput = $<HTMLInputElement>('diag');
@@ -1121,12 +1105,8 @@ const progress = $<HTMLProgressElement>('progress');
 function fillForm(): void {
   seedInput.value = state.seed;
   showSeedReset();
-  for (const r of modeRadios) r.checked = (r.value === 'around') === !!state.filters.around;
-  if (state.filters.around) {
-    setAroundPosition(state.filters.around);
-    aroundRadius.value = String(state.filters.around.radius);
-  }
-  showSearchMode();
+  searchCentre = state.filters.around ? { x: state.filters.around.x, z: state.filters.around.z } : null;
+  if (state.filters.around) aroundRadius.value = String(state.filters.around.radius);
   minInput.value = String(state.filters.minDist);
   maxInput.value = String(state.filters.maxDist);
   diagInput.value = String(state.filters.diagonalDeg);
@@ -1138,10 +1118,9 @@ function fillForm(): void {
 
 /** The search as currently set in the form, applied or not. */
 function formFilters(): Filters {
-  const pos = aroundPosition();
   const radius = Number(aroundRadius.value);
   return {
-    around: aroundMode() && pos && radius > 0 ? { x: pos.x, z: pos.z, radius } : undefined,
+    around: searchCentre && radius > 0 ? { ...searchCentre, radius } : undefined,
     minDist: Number(minInput.value),
     maxDist: Number(maxInput.value),
     diagonalDeg: Number(diagInput.value),
@@ -1214,7 +1193,7 @@ function applyResult(seed: string, filters: Filters, cities: FoundCity[]): void 
     const pos = locateAfterSearch;
     locateAfterSearch = null;
     if (!openNearest(pos, 'Searched around your position. ')) {
-      locateNote.textContent = 'No route near your position. Try a larger radius or a longer flight limit.';
+      mapNote.textContent = 'No route near your position. Try a larger radius or a longer flight limit.';
       renderMap();
     }
   });
@@ -1277,9 +1256,10 @@ form.addEventListener('submit', (e) => {
   foldWhenDone = e.submitter !== null;
   const filters = formFilters();
   if (aroundMode() && !filters.around) {
-    const field = aroundPosition() ? aroundRadius : aroundX.value.trim() === '' ? aroundX : aroundZ;
-    field.setCustomValidity(field === aroundRadius ? 'Enter a radius in blocks.' : 'Enter both x and z.');
-    field.reportValidity();
+    // The radius is under the settings, which may be folded: open them so the message has somewhere to show.
+    settings.open = true;
+    aroundRadius.setCustomValidity('Enter a radius in blocks.');
+    aroundRadius.reportValidity();
     return;
   }
   if (!filters.around && filters.maxDist <= filters.minDist) {
@@ -1349,7 +1329,7 @@ seedReset.addEventListener('click', () => {
 });
 
 // Redraw the shaded search area while a control is being moved, before anything is applied.
-for (const el of [minInput, maxInput, diagInput, angleFromSelect, aroundX, aroundZ, aroundRadius, ...quadBoxes]) {
+for (const el of [minInput, maxInput, diagInput, angleFromSelect, aroundRadius, ...quadBoxes]) {
   el.addEventListener('input', renderMap);
 }
 // A typed number snaps to the nearest step its field accepts (500 blocks for distances and the radius,
@@ -1369,33 +1349,13 @@ form.addEventListener(
   },
   true,
 );
-for (const el of [aroundX, aroundZ, aroundRadius]) el.addEventListener('input', () => el.setCustomValidity(''));
-for (const r of modeRadios) {
-  r.addEventListener('change', () => {
-    showSearchMode();
-    // Starting an around-search with the position already given on the map saves typing it twice.
-    if (aroundMode() && !aroundPosition() && you) setAroundPosition(you);
-    renderMap();
-    if (formCovered() && form.checkValidity() && (!aroundMode() || formFilters().around)) form.requestSubmit();
-  });
-}
-$('aroundUseMap').addEventListener('click', () => {
-  const pos = you ?? locatePosition();
-  if (!pos) {
-    aroundX.setCustomValidity('Type your position into the x and z boxes on the map first, or enter it here.');
-    aroundX.reportValidity();
-    return;
-  }
-  setAroundPosition(pos);
-  renderMap();
-  if (formCovered() && formFilters().around) form.requestSubmit();
-});
+aroundRadius.addEventListener('input', () => aroundRadius.setCustomValidity(''));
 
 // Instant searches are applied as the controls change; slow ones wait for the button.
 function formCovered(): boolean {
   return !!precomputed && !worker && precomputed.covers(seedInput.value.trim(), previewFilters());
 }
-for (const el of [minInput, maxInput, diagInput, angleFromSelect, aroundX, aroundZ, aroundRadius, ...quadBoxes]) {
+for (const el of [minInput, maxInput, diagInput, angleFromSelect, aroundRadius, ...quadBoxes]) {
   el.addEventListener('change', () => {
     if (aroundMode() && !formFilters().around) return;
     if (formCovered() && form.checkValidity()) form.requestSubmit();
@@ -1458,18 +1418,24 @@ function retireFinished(keep: number | null): boolean {
 
 // ---------- locate ----------
 
-const locateForm = $<HTMLFormElement>('locate');
-const locateX = $<HTMLInputElement>('locateX');
-const locateZ = $<HTMLInputElement>('locateZ');
-/** The coordinates typed into the two boxes on the map, or null while either is empty. */
-function locatePosition(): { x: number; z: number } | null {
-  if (locateX.value.trim() === '' || locateZ.value.trim() === '') return null;
-  const [x, z] = [Number(locateX.value), Number(locateZ.value)];
-  return Number.isFinite(x) && Number.isFinite(z) ? { x: Math.round(x), z: Math.round(z) } : null;
+/**
+ * The position "Search near me" works from: the coordinates in its two boxes, or 0,0 (End Spawn)
+ * while both are empty. Null, with a message beside the boxes, when only one is filled in.
+ */
+function nearPosition(): { x: number; z: number } | null {
+  if (nearX.value.trim() === '' && nearZ.value.trim() === '') return { x: 0, z: 0 };
+  const [x, z] = [Number(nearX.value), Number(nearZ.value)];
+  if (nearX.value.trim() !== '' && nearZ.value.trim() !== '' && Number.isFinite(x) && Number.isFinite(z)) {
+    return { x: Math.round(x), z: Math.round(z) };
+  }
+  nearX.setCustomValidity('Enter both x and z, or leave both empty for 0,0.');
+  nearX.reportValidity();
+  return null;
 }
-function setLocate(pos: { x: number; z: number } | null): void {
-  locateX.value = pos ? String(pos.x) : '';
-  locateZ.value = pos ? String(pos.z) : '';
+/** Put a position in those boxes, to stay there until the player changes it. */
+function setNear(pos: { x: number; z: number }): void {
+  nearX.value = String(pos.x);
+  nearZ.value = String(pos.z);
 }
 
 /**
@@ -1492,9 +1458,8 @@ function pasteIntoBoth(xBox: HTMLInputElement, zBox: HTMLInputElement): void {
     });
   }
 }
-pasteIntoBoth(locateX, locateZ);
-pasteIntoBoth(aroundX, aroundZ);
-const locateNote = $('locateNote');
+pasteIntoBoth(nearX, nearZ);
+const mapNote = $('mapNote');
 
 /** Open the batch holding the nearest city worth visiting. Returns false when there is none. */
 function openNearest(pos: { x: number; z: number }, prefix = ''): boolean {
@@ -1512,7 +1477,7 @@ function openNearest(pos: { x: number; z: number }, prefix = ''): boolean {
   }
   const hit = best as { batch: number; order: number; d: number } | null;
   if (!hit) return false;
-  locateNote.textContent = `${prefix}Nearest: ${waypointName(hit.batch, hit.order)}, ${fmt(Math.round(hit.d))} blocks away.`;
+  mapNote.textContent = `${prefix}Nearest: ${waypointName(hit.batch, hit.order)}, ${fmt(Math.round(hit.d))} blocks away.`;
   select(hit.batch);
   map.fit([...batches[hit.batch], pos], state.filters.maxDist);
   return true;
@@ -1521,46 +1486,28 @@ function openNearest(pos: { x: number; z: number }, prefix = ''): boolean {
 /** Set while a search around the player's position is running, so the nearest batch is opened once it lands. */
 let locateAfterSearch: { x: number; z: number } | null = null;
 
-locateForm.addEventListener('submit', (e) => {
-  e.preventDefault();
-  const pos = locatePosition();
-  if (!pos) {
-    locateNote.textContent = 'Enter both x and z.';
-    return;
-  }
-  you = { x: pos.x, z: pos.z };
-  // Inside the area already searched, the nearest batch is among the ones on screen.
-  if (passes(pos.x, pos.z, state.filters) && openNearest(you)) return;
-
-  // Otherwise the current search does not cover where the player is: search around them instead.
-  searchAround(you);
-});
-
 /** Search around a position and open the route nearest it, whatever the search was showing before. */
 function searchAround(pos: { x: number; z: number }): void {
   you = { x: pos.x, z: pos.z };
-  setLocate(you);
-  for (const r of modeRadios) r.checked = r.value === 'around';
-  showSearchMode();
-  setAroundPosition(you);
+  searchCentre = you;
   if (!(Number(aroundRadius.value) > 0)) aroundRadius.value = '10000';
-  locateNote.textContent = 'Searching around your position…';
+  mapNote.textContent = 'Searching around your position…';
   locateAfterSearch = you;
   form.requestSubmit();
   // A refused or invalid search never reports back, so don't leave the request hanging.
   if (!worker && locateAfterSearch) {
     locateAfterSearch = null;
-    locateNote.textContent = 'Could not search around that position. Check the search settings.';
+    mapNote.textContent = 'Could not search around that position. Check the search settings.';
     renderMap();
   }
 }
 
-// The other quick search: the band around End Spawn, as set under Search settings. Its label says how
+// The main search button: the band around End Spawn, as set under Search settings. Its label says how
 // far out that is, since the default leaves out the picked-over first 10,000 blocks.
 function showQuickSpawn(): void {
   const [from, to] = [Number(minInput.value), Number(maxInput.value)];
-  const range = Number.isFinite(from) && Number.isFinite(to) && to > from ? `${fmt(from)}–${fmt(to)} blocks out` : '';
-  $('quickSpawn').replaceChildren('Search near End Spawn', Object.assign(document.createElement('small'), { textContent: range }));
+  const range = Number.isFinite(from) && Number.isFinite(to) && to > from ? `${fmt(from)}–${fmt(to)} blocks from End Spawn` : '';
+  $('quickSpawn').replaceChildren('Find cities', Object.assign(document.createElement('small'), { textContent: range }));
   // The obvious first thing to press, until there are routes to work through.
   $('quickSpawn').classList.toggle('primary', state.found.length === 0);
 }
@@ -1570,63 +1517,45 @@ for (const el of [minInput, maxInput]) {
 }
 showQuickSpawn();
 $('quickSpawn').addEventListener('click', () => {
-  for (const r of modeRadios) r.checked = r.value === 'band';
-  showSearchMode();
+  searchCentre = null;
   renderMap();
   form.requestSubmit();
 });
 
-// "Search near me", always in reach under the search settings even while they are folded away.
-// Its boxes show where the map's crosshair is and follow it as the map moves, until the player types
-// coordinates of their own; emptying the boxes hands them back to the crosshair.
-let nearTyped = false;
-function showNearDefault(): void {
-  if (nearTyped) return;
-  nearX.value = String(viewCentre.x);
-  nearZ.value = String(viewCentre.z);
-}
-for (const el of [nearX, nearZ]) {
-  el.addEventListener('input', () => {
-    nearX.setCustomValidity('');
-    nearTyped = nearX.value.trim() !== '' || nearZ.value.trim() !== '';
-    if (!nearTyped) showNearDefault();
-  });
-}
+// "Search near me", above the search settings.
+for (const el of [nearX, nearZ]) el.addEventListener('input', () => nearX.setCustomValidity(''));
 $<HTMLFormElement>('nearMe').addEventListener('submit', (e) => {
   e.preventDefault();
-  const typed =
-    nearX.value.trim() !== '' && nearZ.value.trim() !== '' && Number.isFinite(Number(nearX.value)) && Number.isFinite(Number(nearZ.value))
-      ? { x: Math.round(Number(nearX.value)), z: Math.round(Number(nearZ.value)) }
-      : null;
-  if (!typed) {
-    nearX.setCustomValidity('Enter an x and a z.');
-    nearX.reportValidity();
-    return;
+  const typed = nearPosition();
+  if (!typed) return;
+  // Inside the area already searched, the nearest route is among the ones on screen.
+  if (passes(typed.x, typed.z, state.filters)) {
+    you = typed;
+    if (openNearest(you)) return;
   }
-  // The search recentres the map, and the boxes go back to following the crosshair from there.
-  nearTyped = false;
+  // Otherwise the current search does not cover where the player is: search around them instead.
   searchAround(typed);
 });
 
-// Jump the map to typed coordinates, leaving the open route and the player's position as they are.
-$('locateGo').addEventListener('click', () => {
-  const pos = locatePosition();
-  if (!pos) {
-    locateNote.textContent = 'Enter both x and z.';
-    return;
-  }
-  pin = { x: pos.x, z: pos.z };
-  locateNote.textContent = '';
+// Look at a place without searching there: the map jumps to the coordinates in the boxes and marks them,
+// leaving the open route and the player's position as they are.
+$('showOnMap').addEventListener('click', () => {
+  const pos = nearPosition();
+  if (!pos) return;
+  pin = pos;
+  mapNote.textContent = '';
   renderMap();
   map.goTo(pos.x, pos.z);
 });
 
-// One reset for the map's coordinates row: the boxes, the markers they left, and the view back to 0,0.
-$('locateClear').addEventListener('click', () => {
+// Clear the boxes and the markers those two leave, and put the view back at 0,0.
+$('mapReset').addEventListener('click', () => {
   you = null;
   pin = null;
-  setLocate(null);
-  locateNote.textContent = '';
+  nearX.value = '';
+  nearZ.value = '';
+  nearX.setCustomValidity('');
+  mapNote.textContent = '';
   renderMap();
   map.centreOn(0, 0);
 });
@@ -1782,10 +1711,7 @@ $('surveyMake').addEventListener('click', () => {
   state.custom.push(ids);
   state.survey = { ids, frame: open.length };
   openCustomAfterSearch = state.custom.length - 1;
-  for (const r of modeRadios) r.checked = r.value === 'band';
-  seedInput.value = DEFAULT_SEED;
   applyResult(DEFAULT_SEED, filters, found);
-  showSearchMode();
 });
 
 // Put every search setting back to how a first-time visitor finds it, and search again.
@@ -2232,7 +2158,7 @@ async function reportShip(city: City, result: 'found' | 'missing' | 'no-city'): 
     window.open(`${ISSUES_URL}/new?title=${encodeURIComponent(`Ship report: ${headline} at ${where}`)}`, '_blank', 'noopener');
     return;
   }
-  locateNote.textContent = 'Sending your report…';
+  mapNote.textContent = 'Sending your report…';
   try {
     const res = await fetch(SUBMIT_URL, {
       method: 'POST',
@@ -2247,9 +2173,9 @@ async function reportShip(city: City, result: 'found' | 'missing' | 'no-city'): 
       }),
     });
     const body = await res.json().catch(() => ({}));
-    locateNote.textContent = res.ok ? 'Report sent for review. Thank you!' : (body.error ?? 'That did not go through. Please try again later.');
+    mapNote.textContent = res.ok ? 'Report sent for review. Thank you!' : (body.error ?? 'That did not go through. Please try again later.');
   } catch {
-    locateNote.textContent = 'Could not reach the report service. Please try again later.';
+    mapNote.textContent = 'Could not reach the report service. Please try again later.';
   }
 }
 
@@ -2659,17 +2585,17 @@ function openMenu(c: MapCity | null, px: number, py: number, pos: { x: number; z
     const text = xzText(here);
     const ok = await copyText(text);
     // The menu has closed by now, so the result is reported beside the position box.
-    locateNote.textContent = ok ? `Copied ${text}` : `Could not copy. The coordinates are ${text}`;
+    mapNote.textContent = ok ? `Copied ${text}` : `Could not copy. The coordinates are ${text}`;
     if (ok) {
       setTimeout(() => {
-        if (locateNote.textContent === `Copied ${text}`) locateNote.textContent = '';
+        if (mapNote.textContent === `Copied ${text}`) mapNote.textContent = '';
       }, 2500);
     }
   }]);
   items.push(['Set my position here', () => {
     you = here;
-    setLocate(here);
-    locateNote.textContent = '';
+    setNear(here);
+    mapNote.textContent = '';
     renderMap();
   }]);
 
@@ -2791,7 +2717,6 @@ map.onView = (centre) => {
   viewCentre = centre;
   showCoords();
   renderLegend();
-  showNearDefault();
 };
 
 // ---------- resizable panels ----------
@@ -2920,8 +2845,6 @@ rebuild();
 render();
 fitSearch(state.filters);
 // With results from last time, start with the settings folded so the batches are in view.
-// In the simplified layout the search buttons are outside the fold, so it starts closed.
-settings.open = state.found.length === 0 && !document.body.classList.contains('simple-search');
 
 /** Looted cities published with the site, for the default server's world only. */
 let sharedLooted: string[] = [];

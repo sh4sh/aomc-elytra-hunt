@@ -8,7 +8,7 @@
     <meta name="description" content="Find Elytra on the About Oliver Minecraft Server." />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
-  <body class="simple-search">
+  <body>
     <aside id="sidebar">
       <header>
         <h1>AOMC Elytra Hunt</h1>
@@ -17,41 +17,32 @@
       </header>
 
       <div id="quick">
-        <div class="group-label">Quick search</div>
-        <form id="nearMe" title="Search around these coordinates and open the nearest route. They start at the map's crosshair: type your own to search around yourself.">
-          <input id="nearX" type="number" step="1" placeholder="x" autocomplete="off" aria-label="Your x coordinate" />
-          <input id="nearZ" type="number" step="1" placeholder="z" autocomplete="off" aria-label="Your z coordinate" />
+        <button id="quickSpawn" type="button" title="Search the ring around End Spawn set under Search settings">Find cities</button>
+        <form id="nearMe" title="Open the route nearest these coordinates, searching around them if the current search does not reach that far. Left empty, they count as 0,0 (End Spawn).">
+          <input id="nearX" type="number" step="1" placeholder="x: 0" autocomplete="off" aria-label="Your x coordinate" />
+          <input id="nearZ" type="number" step="1" placeholder="z: 0" autocomplete="off" aria-label="Your z coordinate" />
           <button type="submit">Search near me</button>
         </form>
-        <button id="quickSpawn" type="button" title="Search the band around End Spawn set under Search settings">Search near End Spawn</button>
+        <div class="row quiet">
+          <button id="showOnMap" type="button" class="textlink" title="Move the map to these coordinates without searching there">Show on map</button>
+          <button id="mapReset" type="button" class="textlink" title="Clear the coordinates and markers, and centre the map on 0,0 (End Spawn)">Reset</button>
+        </div>
       </div>
 
-      <details id="settings" open>
+      <details id="settings">
         <summary><span class="settings-title">Search settings</span> <span id="settingsSummary"></span></summary>
       <form id="search">
-        <div class="segmented" role="radiogroup" aria-label="Where to search">
-          <label><input type="radio" name="searchMode" value="band" /> Near End Spawn</label>
-          <label><input type="radio" name="searchMode" value="around" /> Near my coordinates</label>
-        </div>
-        <div id="aroundBox" class="panel around-only">
-          <div class="group-label simple-only">Search near me</div>
-          <div class="row" id="aroundPosBox">
-            <label>x <input id="aroundX" type="number" step="1" placeholder="100000" aria-label="Position x" /></label>
-            <label>z <input id="aroundZ" type="number" step="1" placeholder="200000" aria-label="Position z" /></label>
+        <div id="bandBox" class="panel">
+          <div class="group-label">Find cities</div>
+          <div class="row" id="distanceBox">
+            <label>From <input id="minDist" type="number" min="0" step="500" required /></label>
+            <label>To <input id="maxDist" type="number" min="1000" step="500" required /></label>
           </div>
+          <p class="hint">Distance from 0,0, in blocks.</p>
+        </div>
+        <div id="aroundBox" class="panel">
+          <div class="group-label">Search near me</div>
           <label>Radius, in blocks <input id="aroundRadius" type="number" min="500" step="500" value="10000" /></label>
-          <button id="aroundSearch" type="submit" class="primary">Search</button>
-          <div class="row quiet">
-            <button id="aroundUseMap" type="button" class="textlink">Use my position from the map</button>
-          </div>
-        </div>
-        <div id="bandBox" class="panel band-only">
-        <div class="group-label simple-only">Search near End Spawn</div>
-        <div class="row" id="distanceBox">
-          <label>From <input id="minDist" type="number" min="0" step="500" required /></label>
-          <label>To <input id="maxDist" type="number" min="1000" step="500" required /></label>
-        </div>
-        <p class="hint">Distance from 0,0, in blocks.</p>
         </div>
         <details id="fineTuning">
           <summary><strong>Fine tuning (optional)</strong></summary>
@@ -75,7 +66,7 @@
         <label>Longest flight between cities <input id="maxHop" type="number" min="0" step="250" /></label>
         <p class="hint">In blocks; 0 means no limit. Cities out of reach are left without a route.</p>
         <div class="group-label">Cities</div>
-        <fieldset id="quadrants" class="band-only">
+        <fieldset id="quadrants">
           <legend>Quadrants</legend>
           <label><input type="checkbox" value="NW" /> NW <small>−x −z</small></label>
           <label><input type="checkbox" value="NE" /> NE <small>+x −z</small></label>
@@ -87,7 +78,7 @@
         </details>
         <details id="advanced">
           <summary>Advanced</summary>
-          <label id="angleBox" class="band-only">
+          <label id="angleBox">
             <span>Stay within <output id="diagOut"></output> of
               <select id="angleFrom" aria-label="Measure the angle from">
                 <option value="diagonal">a diagonal</option>
@@ -96,7 +87,7 @@
             </span>
             <input id="diag" type="range" min="5" max="45" step="5" />
           </label>
-          <p class="hint band-only">45° searches every direction.</p>
+          <p class="hint">45° searches every direction.</p>
           <label class="check aomc-only"><input id="includeMapped" type="checkbox" /> Include cities already on the webmap</label>
           <p id="exploredNote" class="hint aomc-only"></p>
           <label class="check"><input id="oneFingerMap" type="checkbox" /> Move the map with one finger</label>
@@ -213,14 +204,7 @@
 
     <main>
       <canvas id="map"></canvas>
-      <form id="locate">
-        <input id="locateX" type="number" step="1" placeholder="x" autocomplete="off" aria-label="x coordinate" />
-        <input id="locateZ" type="number" step="1" placeholder="z" autocomplete="off" aria-label="z coordinate" />
-        <button type="submit">Nearest route</button>
-        <button id="locateGo" type="button" title="Move the map to these coordinates without opening a route">Go to coordinates</button>
-        <button id="locateClear" type="button" title="Clear the coordinates and markers, and centre the map on 0,0 (End Spawn)">reset</button>
-        <span id="locateNote"></span>
-      </form>
+      <span id="mapNote" role="status"></span>
       <div id="zoom">
         <button id="zoomOut" type="button" aria-label="Zoom out">−</button>
         <input id="zoomSlider" type="range" min="0" max="1000" step="1" aria-label="Zoom" />
@@ -274,7 +258,7 @@
         <h2>How to use</h2>
         <h3>1. Pick a route</h3>
         <p>
-          Route 1 takes the least flying. Pick one from the
+          Press <em>Find cities</em>. Route 1 takes the least flying. Pick one from the
           <button type="button" class="jump" data-target="batches">route list</button>, click a city on the map, or
           type your x and z and press <em>Search near me</em>.
         </p>

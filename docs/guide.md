@@ -6,11 +6,14 @@ Everything the app can do, in more detail than the quick start.
 
 ## Search settings
 
-- **The two search buttons**, above the search settings. **Search near me**
-  searches around the coordinates in its two boxes and opens the nearest
-  route; the boxes start at the map's crosshair and follow it until you type
-  your own. **Search near End Spawn** searches a band around 0,0, and shows its
-  range. The settings below hold the numbers each one uses.
+- **The two search buttons**, above the search settings. **Find cities**
+  searches a band around End Spawn, and shows its range. **Search near me**
+  opens the route nearest the coordinates in its two boxes. If the current
+  search does not cover them, it searches around them first. Left empty, the
+  boxes count as 0,0 (End Spawn). **Show on map** under them moves the map to
+  those coordinates without searching, and **Reset** clears the boxes and
+  markers and returns the map to 0,0. The settings below hold the numbers
+  each button uses.
 - **From / To:** how far from 0,0 to look, measured along the longer axis. A
   search covering more than 25,000 cities is refused with a prompt to narrow it.
 - **Radius:** how far around your coordinates **Search near me** looks.
@@ -23,7 +26,7 @@ Everything the app can do, in more detail than the quick start.
 - **Longest flight between cities:** no hop in a route is longer than this.
   Cities that can't be reached in a full route are left without a route. If no
   route of the chosen size fits, smaller ones are made, down to 2 cities.
-- **Quadrants:** which quarters of the map to search (Search near End Spawn only).
+- **Quadrants:** which quarters of the map to search (Find cities only).
 - **Leave out cities that are possibly looted.**
 
 **Advanced:**

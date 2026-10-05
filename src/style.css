@@ -118,9 +118,7 @@ details.fold { border-top: 0; padding-top: 0; }
 #possibleWhy, #possibleWhy[open] { border: 0; padding: 0; }
 #possibleWhy > summary, #possibleWhy > summary:hover { color: var(--muted); font-size: 12px; font-weight: 400; }
 label.field[hidden] { display: none; }
-/* In the older layout the settings come first in the sidebar, with nothing to rule them off from. */
-body:not(.simple-search) #settings { border-top: 0; padding-top: 0; }
-/* The quick search under the folded settings: your position and one button, on a single line. */
+/* The two search buttons, above the settings: your position and one button on a single line, then End Spawn. */
 #quick { display: flex; flex-direction: column; gap: 6px; }
 #quickSpawn { text-align: left; }
 /* The range on a line of its own, so it never breaks in the middle. */
@@ -259,29 +257,12 @@ main { position: relative; min-width: 0; min-height: 0; display: flex; flex-dire
   max-width: min(340px, calc(100% - 8px));
   font-variant-numeric: tabular-nums;
 }
-#locate {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  display: flex;
-  /* Overrides the column layout the sidebar form uses. */
-  flex-direction: row;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-}
-#locate { max-width: calc(100% - 210px); flex-wrap: wrap; }
+/* What the app has to say about the map, in its top corner, clear of the zoom control. */
+#mapNote { position: absolute; top: 10px; left: 10px; max-width: calc(100% - 210px); font-size: 12px; background: var(--panel); border-radius: 6px; padding: 3px 8px; }
+#mapNote:empty { display: none; }
 #zoom { position: absolute; top: 10px; right: 10px; display: flex; align-items: center; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 2px 4px; }
 #zoom button { border: 0; background: none; padding: 0 6px; font-size: 16px; line-height: 1.2; }
 #zoom input { width: 110px; }
-/* Reset: small and muted, at the end of the coordinates row. */
-#locate #locateClear { font-size: 11px; color: var(--muted); padding: 3px 6px; }
-#locate #locateClear:hover { color: var(--text); }
-#locate input { width: 96px; padding: 3px 6px; font-size: 12px; background: var(--panel); }
-#locate button { padding: 3px 8px; font-size: 12px; white-space: nowrap; background: var(--panel); }
-#locateNote { white-space: nowrap; background: var(--panel); border-radius: 6px; padding: 3px 8px; }
-#locateNote:empty { display: none; }
 #menu {
   /* Fixed, so it can open over the route list as well as the map. */
   position: fixed;
@@ -320,24 +301,9 @@ main { position: relative; min-width: 0; min-height: 0; display: flex; flex-dire
 #gooseTally { display: block; color: var(--text); }
 #gooseTally:empty { display: none; }
 .subhead { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 13px; }
-/* Around a position has its own Search button up top; the one at the bottom only shows there to cancel a running search. */
-body.around-mode #find:not(.busy) { display: none; }
-/* Controls for one kind of search are hidden while the other is chosen. */
-body.around-mode:not(.simple-search) .band-only { display: none; }
-body:not(.around-mode):not(.simple-search) .around-only { display: none; }
-/* Simplified search (the class on <body>): the two quick-search buttons at the top are the only way to
-   search, and the settings fold just holds their numbers. Without the class, the older layout with its
-   two tabs and its own search buttons comes back. */
-body:not(.simple-search) .simple-only { display: none; }
-.simple-search #quick .group-label,
-.simple-search .segmented,
-.simple-search #aroundPosBox,
-.simple-search #aroundSearch,
-.simple-search #aroundBox .row.quiet,
-.simple-search #find:not(.busy) { display: none; }
-.simple-search #bandBox { order: -1; }
-.simple-search #quick button { padding-top: 8px; padding-bottom: 8px; }
-#quickSpawn.primary small { color: inherit; opacity: 0.75; font-weight: 400; }
+/* The form's own button only shows while a slow search is running, to cancel it: searches start from the two buttons above. */
+#find:not(.busy) { display: none; }
+#quick button { padding-top: 8px; padding-bottom: 8px; }
 #narrowAround[hidden], #narrowBand[hidden] { display: none; }
 .webmap-first { border: 1px solid var(--accent); border-radius: 6px; padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
 /* The second way to share, as a plainer card under the recommended one. */
@@ -425,7 +391,7 @@ body:not(.other-seed) .other-only { display: none; }
   .iconbtn svg { width: 22px; height: 22px; }
   .mouse-only { display: none; }
   input:not([type]), input[type='number'], textarea, select,
-  #pager input, #pager select, #locate input, #angleFrom { font-size: 16px; }
+  #pager input, #pager select, #angleFrom { font-size: 16px; }
   #pager button, #zoom button { padding: 6px 12px; }
   #pager select { flex-basis: 100%; order: -1; }
   #pager input { flex: 1; width: auto; }
