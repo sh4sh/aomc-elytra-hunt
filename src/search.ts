@@ -202,9 +202,8 @@ nearToggle.addEventListener('click', () => {
   showNearPanel(nearPanel.hidden);
   if (!nearPanel.hidden) nearX.focus();
 });
-/** Unfold the Find cities settings while that search is in use. Only on a button press, never while a field is being changed. */
+/** Show which of the two searches is in use: its button marked, and the boxes under "Search near me" out or away. */
 export function showSearchFold(): void {
-  bandFold.open = !aroundMode();
   // The two search buttons are equals: the one whose search is showing carries the accent. The boxes
   // under "Search near me" stay out while it is the search in use, and are put away for Find ships.
   showNearPanel(aroundMode());
