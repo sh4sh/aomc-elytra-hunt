@@ -1508,8 +1508,6 @@ function showQuickSpawn(): void {
   const [from, to] = [Number(minInput.value), Number(maxInput.value)];
   const range = Number.isFinite(from) && Number.isFinite(to) && to > from ? `${fmt(from)}–${fmt(to)} blocks from End Spawn` : '';
   $('quickSpawn').replaceChildren('Find cities', Object.assign(document.createElement('small'), { textContent: range }));
-  // The obvious first thing to press, until there are routes to work through.
-  $('quickSpawn').classList.toggle('primary', state.found.length === 0);
 }
 for (const el of [minInput, maxInput]) {
   el.addEventListener('input', showQuickSpawn);

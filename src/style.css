@@ -69,9 +69,10 @@ label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color:
 form .hint { margin: -3px 0 6px; }
 .row { display: flex; gap: 8px; flex-wrap: wrap; }
 
+/* Fields are sunk into the panel, darker than it; buttons stand out from it, lighter. The two never look alike. */
 input:not([type]), input[type='number'], textarea, select {
   width: 100%;
-  background: var(--panel-2);
+  background: var(--bg);
   color: var(--text);
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -98,7 +99,9 @@ button {
   cursor: pointer;
 }
 button:hover { border-color: var(--accent); }
-button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+/* A panel's main action: outlined in the accent colour over a faint wash of it, never a solid block. */
+button.primary { background: color-mix(in srgb, var(--accent) 14%, var(--panel)); color: var(--text); border-color: var(--accent); font-weight: 600; }
+button.primary:hover { background: color-mix(in srgb, var(--accent) 24%, var(--panel)); }
 button:disabled { opacity: 0.5; cursor: default; }
 progress { width: 100%; accent-color: var(--accent); }
 
@@ -120,10 +123,10 @@ details.fold { border-top: 0; padding-top: 0; }
 label.field[hidden] { display: none; }
 /* The two search buttons, above the settings: your position and one button on a single line, then End Spawn. */
 #quick { display: flex; flex-direction: column; gap: 6px; }
-#quickSpawn { text-align: left; }
+#quickSpawn { padding: 8px 10px; }
 /* The range on a line of its own, so it never breaks in the middle. */
-#quickSpawn small { display: block; }
-#nearMe { flex-direction: row; align-items: center; gap: 6px; }
+#quickSpawn small { display: block; font-weight: 400; }
+#nearMe { flex-direction: row; align-items: stretch; gap: 6px; }
 #nearMe input { flex: 1; min-width: 0; }
 #nearMe button { white-space: nowrap; }
 #tooltip .why { margin-top: 3px; color: var(--muted); }
@@ -303,7 +306,6 @@ main { position: relative; min-width: 0; min-height: 0; display: flex; flex-dire
 .subhead { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 13px; }
 /* The form's own button only shows while a slow search is running, to cancel it: searches start from the two buttons above. */
 #find:not(.busy) { display: none; }
-#quick button { padding-top: 8px; padding-bottom: 8px; }
 #narrowAround[hidden], #narrowBand[hidden] { display: none; }
 .webmap-first { border: 1px solid var(--accent); border-radius: 6px; padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
 /* The second way to share, as a plainer card under the recommended one. */

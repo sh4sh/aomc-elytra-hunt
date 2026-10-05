@@ -24,6 +24,10 @@ in the same change, so there is still only one way to do each thing.
 
 - **Accent colour:** one thing per panel, the action or card a newcomer should
   pick. Everything else is neutral, and turns accent on hover.
+- **Fields and buttons:** a field is sunk into the panel (the page's dark
+  background); a button stands out from it (lighter). The panel's main action
+  is outlined in the accent colour over a faint wash of it, never a solid
+  block.
 - **Destructive actions:** `button.danger`, on a line of its own under a rule,
   with a hint saying what is lost. Its confirmation says it cannot be undone.
 - **Colours:** only the variables at the top of `src/style.css`.
