@@ -78,6 +78,8 @@ interface Saved {
   redo?: RouteEdit[];
   /** Keep cities near one found already looted out of the routes. */
   skipPossible?: boolean;
+  /** The search that was showing before the current one, to go back to. */
+  lastSearch?: Filters;
   /** Whether the tools for working on the app are shown. */
   devMode?: boolean;
   /** The latest survey of the cities near End Spawn: the cities picked, and how many they were picked from. */
@@ -657,15 +659,14 @@ function renderMap(): void {
  * looks is said on or beside its own button, so it is not repeated here.
  */
 function renderSettingsSummary(): void {
-  $('settingsSummary').textContent = [
-    `${state.batchSize} per route`,
-    state.batchShape !== 'line'
-      ? 'clusters'
-      : state.lineDeviation && state.maxHop
-        ? `lines outward within ${fmt(state.lineDeviation)} of straight`
-        : 'lines outward',
+  // Short enough to stay on one line at the sidebar's default width, even indented under Routes.
+  const text = [
+    `${state.batchShape === 'line' ? 'Lines' : 'Clusters'} of ${state.batchSize}`,
     state.maxHop ? `flights up to ${fmt(state.maxHop)}` : 'any flight length',
   ].join(' · ');
+  // Under Settings while that is folded, and under Routes inside it, where these are changed.
+  $('settingsSummary').textContent = text;
+  $('routesSummary').textContent = text;
 }
 
 function renderBatches(): void {
@@ -673,14 +674,14 @@ function renderBatches(): void {
   const total = batches.reduce((n, b) => n + b.length, 0);
   const done = batches.reduce((n, b) => n + looted(b), 0);
   const maybeCount = batches.flat().filter(possible).length;
-  // Earlier flight paths get a line of their own, and only when there is something to say: the paths
-  // drawn, then the reports that nearly made one and what stopped them.
+  // Earlier flight paths get a line of their own, and only when one is drawn. Reports that nearly made
+  // a path are not listed: they are the app's working, and came and went as the map was zoomed.
   const study = earlierStudy();
   const pathNote = $('pathNote');
   // Like the lines themselves, only once zoomed in.
-  pathNote.hidden = !map.detailed || (!study.paths.length && !study.near.length);
+  pathNote.hidden = !map.detailed || !study.paths.length;
   pathNote.replaceChildren(
-    ...[...study.paths.map((t) => `Possible earlier flight path (${describeTrajectory(t)}).`), ...study.near.map((why) => `${why[0].toUpperCase()}${why.slice(1)}.`)].map(
+    ...study.paths.map((t) => `Possible earlier flight path (${describeTrajectory(t)}).`).map(
       (text) => Object.assign(document.createElement('span'), { textContent: text }),
     ),
   );
@@ -1100,19 +1101,26 @@ const quadBoxes = [...document.querySelectorAll<HTMLInputElement>('#quadrants in
 const findBtn = $<HTMLButtonElement>('find');
 const progress = $<HTMLProgressElement>('progress');
 
+/** Set the search controls to a search: where it looks, and how far. */
+function fillSearch(f: Filters): void {
+  searchCentre = f.around ? { x: f.around.x, z: f.around.z } : null;
+  if (f.around) aroundRadius.value = String(f.around.radius);
+  showRadius();
+  minInput.value = String(f.minDist);
+  maxInput.value = String(f.maxDist);
+  diagInput.value = String(f.diagonalDeg);
+  angleFromSelect.value = f.angleFrom ?? 'diagonal';
+  for (const b of quadBoxes) b.checked = f.quadrants.includes(b.value as Quadrant);
+  showDiag();
+  showQuickSpawn();
+}
+
 function fillForm(): void {
   seedInput.value = state.seed;
   showSeedReset();
-  searchCentre = state.filters.around ? { x: state.filters.around.x, z: state.filters.around.z } : null;
-  if (state.filters.around) aroundRadius.value = String(state.filters.around.radius);
-  showRadius();
-  minInput.value = String(state.filters.minDist);
-  maxInput.value = String(state.filters.maxDist);
-  diagInput.value = String(state.filters.diagonalDeg);
-  angleFromSelect.value = state.filters.angleFrom ?? 'diagonal';
-  for (const b of quadBoxes) b.checked = state.filters.quadrants.includes(b.value as Quadrant);
-  showDiag();
-  showQuickSpawn();
+  fillSearch(state.filters);
+  // The way back to the search before this one, once there has been one.
+  $('searchBack').hidden = !state.lastSearch;
 }
 
 /** The search as currently set in the form, applied or not. */
@@ -1172,6 +1180,10 @@ function applyResult(seed: string, filters: Filters, cities: FoundCity[]): void 
     tracker = new Tracker(seed);
     tracker.setShared(seed === DEFAULT_SEED ? sharedLooted : [], seed === DEFAULT_SEED ? sharedAlready : [], seed === DEFAULT_SEED ? sharedBy : {});
   }
+  // Moving to a search somewhere else (not just adjusting this one) leaves the old one to go back to.
+  const place = (f: Filters) => (f.around ? `${f.around.x},${f.around.z}` : 'band');
+  if (seed !== state.seed) state.lastSearch = undefined;
+  else if (state.found.length && place(filters) !== place(state.filters)) state.lastSearch = state.filters;
   state.seed = seed;
   state.filters = filters;
   showSeedMode();
@@ -1438,6 +1450,12 @@ function nearPosition(): { x: number; z: number } | null {
   nearX.reportValidity();
   return null;
 }
+/** Show a search near a position as the player's own: the marker on the map, and the coordinates in the boxes. */
+function showPosition(pos: { x: number; z: number }): void {
+  you = { x: pos.x, z: pos.z };
+  // A search from the empty boxes was around 0,0, and they stay empty for it.
+  if (pos.x !== 0 || pos.z !== 0 || nearX.value.trim() !== '' || nearZ.value.trim() !== '') setNear(pos);
+}
 /** Put a position in those boxes, to stay there until the player changes it. */
 function setNear(pos: { x: number; z: number }): void {
   nearX.value = String(pos.x);
@@ -1513,7 +1531,7 @@ function searchAround(pos: { x: number; z: number }): void {
 // far out that is, since the default leaves out the picked-over first 10,000 blocks.
 function showQuickSpawn(): void {
   const [from, to] = [Number(minInput.value), Number(maxInput.value)];
-  const range = Number.isFinite(from) && Number.isFinite(to) && to > from ? `${fmt(from)}–${fmt(to)} blocks from End Spawn` : '';
+  const range = Number.isFinite(from) && Number.isFinite(to) && to > from ? `around End Spawn, ${fmt(from)}–${fmt(to)} blocks` : 'around End Spawn';
   $('quickSpawn').replaceChildren('Find cities', Object.assign(document.createElement('small'), { textContent: range }));
 }
 for (const el of [minInput, maxInput]) {
@@ -1524,6 +1542,8 @@ showQuickSpawn();
 $('quickSpawn').addEventListener('click', () => {
   searchCentre = null;
   showSearchFold();
+  // Whatever the map last said was about the search this one replaces.
+  mapNote.textContent = '';
   renderMap();
   form.requestSubmit();
 });
@@ -1534,13 +1554,20 @@ $<HTMLFormElement>('nearMe').addEventListener('submit', (e) => {
   e.preventDefault();
   const typed = nearPosition();
   if (!typed) return;
-  // Inside the area already searched, the nearest route is among the ones on screen.
-  if (passes(typed.x, typed.z, state.filters)) {
-    you = typed;
-    if (openNearest(you)) return;
-  }
-  // Otherwise the current search does not cover where the player is: search around them instead.
   searchAround(typed);
+});
+
+// Back to the search before this one. That search then becomes the one to come back to, so the link
+// goes to and fro between the two.
+$('searchBack').addEventListener('click', () => {
+  const back = state.lastSearch;
+  if (worker || !back) return;
+  // A search near a position only remembers where it was: the Find cities settings stay as they are now.
+  fillSearch(back.around ? { ...formFilters(), around: back.around } : back);
+  if (back.around) showPosition(back.around);
+  showSearchFold();
+  mapNote.textContent = '';
+  form.requestSubmit();
 });
 
 // Look at a place without searching there: the map jumps to the coordinates in the boxes and marks them,
@@ -1552,6 +1579,13 @@ $('showOnMap').addEventListener('click', () => {
   mapNote.textContent = '';
   renderMap();
   map.goTo(pos.x, pos.z);
+});
+
+// The other way round: the coordinates at the map's crosshair go into the boxes, once. They do not follow
+// the map afterwards.
+$('useCentre').addEventListener('click', () => {
+  setNear(viewCentre);
+  nearX.setCustomValidity('');
 });
 
 // Clear the boxes and the markers those two leave, and put the view back at 0,0.
@@ -1725,7 +1759,7 @@ $('searchReset').addEventListener('click', () => {
   if (worker) return;
   if (
     !confirm(
-      'Reset all settings to their defaults? Your looted marks are kept. Custom routes are kept too, unless the world seed had been changed.',
+      'Restore the default settings? Your looted marks are kept. Custom routes are kept too, unless the world seed had been changed.',
     )
   ) {
     return;
@@ -2848,6 +2882,8 @@ if (!drawsEmoji('🪿')) {
 
 fillForm();
 showSearchFold();
+// A search near a position comes back after a reload with its position still on show.
+if (state.filters.around) showPosition(state.filters.around);
 rebuild();
 render();
 fitSearch(state.filters);

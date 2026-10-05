@@ -7,13 +7,14 @@ Everything the app can do, in more detail than the quick start.
 ## Searching and settings
 
 - **The two search buttons**, above **Settings**. **Find cities** searches a
-  band around End Spawn, and shows its range. **Search near me** opens the
-  route nearest the coordinates in its two boxes. If the current search does
-  not cover them, it searches around them first. Left empty, the boxes count
-  as 0,0 (End Spawn). After a search near you, a number appears
-  under them: how far around the coordinates it looked, which you can change. **Show on map** under them moves the map to those
-  coordinates without searching, and **Reset** clears the boxes and markers
-  and returns the map to 0,0.
+  band around End Spawn, and shows its range. **Search near me** searches
+  around the coordinates in its two boxes and opens the nearest route; left
+  empty, the boxes count as 0,0 (End Spawn). Afterwards a number appears under
+  them: how far around the coordinates it looked, which you can change.
+  **Back** returns to what you had before. **Show on map**
+  moves the map to the coordinates without searching, **Use map centre** fills
+  the boxes with the coordinates at the map's crosshair, and **Clear position** clears
+  the boxes and markers and returns the map to End Spawn.
 
 **Settings**, grouped by what they apply to:
 

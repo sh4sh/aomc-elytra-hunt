@@ -12,10 +12,12 @@ in the same change, so there is still only one way to do each thing.
   bold title; while open, a rule below shows where it ends. No outlines or
   bars. The base `details` and `summary` styles do all of this: do not restyle
   a section by id. A section inside another is
-  indented, with a lighter title, so the levels are told apart.
+  indented, with a lighter title, so the levels are told apart. A folded
+  section may show what it is set to in a `.fold-note` line under its title.
 - **Groups of settings:** each group is its own collapsible section, named
   for what uses it, with a one-line hint saying so. Groups are equals: none is
-  left permanently open above the others.
+  left permanently open above the others, and opening one closes the others
+  (give them the same `name`).
 - **Cards:** a bordered box is for a choice between ways of doing something
   (as in Share progress). The recommended one has the accent border, the
   others a plain one.
@@ -41,6 +43,10 @@ in the same change, so there is still only one way to do each thing.
 - **Hints:** one short sentence under the thing it explains. Say what happens,
   not how it works.
 - **Titles:** a few plain words.
+- **No hint that restates its label.** If the title or the field already
+  says it, leave the hint out.
+- **End Spawn**, not 0,0, for the place. Use 0,0 only where a coordinate is
+  meant.
 - **One name per thing:** a button is called the same in the app, the help and
   the guide.
 

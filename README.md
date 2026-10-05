@@ -12,7 +12,7 @@ you can load into Xaero's Minimap, JourneyMap or another map mod as waypoints.
 
 The same steps are in the app under **How to use**.
 
-1. **Pick a route.** Press **Find cities**. Route 1 takes the least flying.
+1. **Pick a route.** Route 1 takes the least flying.
    Pick one from the list, click a city on the map, or type your x and z and
    press **Search near me**.
 2. **Get the waypoints into your map mod.** Choose your mod and enter your

@@ -18,7 +18,7 @@
 
       <div id="quick">
         <button id="quickSpawn" type="button" class="primary" title="Search the ring around End Spawn set under Settings">Find cities</button>
-        <form id="nearMe" title="Open the route nearest these coordinates, searching around them if the current search does not reach that far. Left empty, they count as 0,0 (End Spawn).">
+        <form id="nearMe" title="Search around these coordinates and open the nearest route. Left empty, they count as 0,0 (End Spawn).">
           <input id="nearX" type="number" step="1" placeholder="x: 0" autocomplete="off" aria-label="Your x coordinate" />
           <input id="nearZ" type="number" step="1" placeholder="z: 0" autocomplete="off" aria-label="Your z coordinate" />
           <button type="submit">Search near me</button>
@@ -26,15 +26,17 @@
         </form>
         <div class="row quiet">
           <button id="showOnMap" type="button" class="textlink" title="Move the map to these coordinates without searching there">Show on map</button>
-          <button id="mapReset" type="button" class="textlink" title="Clear the coordinates and markers, and centre the map on 0,0 (End Spawn)">Reset</button>
+          <button id="useCentre" type="button" class="textlink" title="Fill in the coordinates at the middle of the map, where its crosshair is">Use map centre</button>
+          <button id="mapReset" type="button" class="textlink" title="Clear the coordinates and markers, and centre the map on End Spawn">Clear position</button>
+          <button id="searchBack" type="button" class="textlink" title="Return to the search that was showing before this one" hidden>Back</button>
         </div>
       </div>
 
       <details id="settings">
-        <summary><span class="settings-title">Settings</span> <span id="settingsSummary"></span></summary>
+        <summary><span class="settings-title">Settings</span> <span id="settingsSummary" class="fold-note"></span></summary>
       <form id="search">
-        <details id="routeSettings">
-          <summary>Routes</summary>
+        <details id="routeSettings" name="settings-part">
+          <summary>Routes <span id="routesSummary" class="fold-note"></span></summary>
           <div class="row">
             <label>Cities per route <input id="batchSize" type="number" min="1" step="1" /></label>
             <label>
@@ -45,7 +47,7 @@
               </select>
             </label>
           </div>
-          <p class="hint">27 fills a shulker box. Lines head away from 0,0.</p>
+          <p class="hint">27 fills a shulker box. Lines head away from End Spawn.</p>
           <div id="lineDeviationBox" class="panel" hidden>
             <label>Stray from a straight line, up to <input id="lineDeviation" type="number" min="0" step="250" /></label>
             <p class="hint">In blocks, either side of straight. 0 means no limit. Tight values leave most cities without a route.</p>
@@ -55,14 +57,12 @@
           <label class="check"><input id="skipPossible" type="checkbox" /> Leave out cities that are possibly looted</label>
           <p class="hint">Within 2,000 blocks of a city looted by someone else.</p>
         </details>
-        <details id="bandBox">
+        <details id="bandBox" name="settings-part">
           <summary>Find cities: search area</summary>
-          <p class="hint">Where the Find cities button looks.</p>
           <div class="row" id="distanceBox">
             <label>From <input id="minDist" type="number" min="0" step="500" required /></label>
             <label>To <input id="maxDist" type="number" min="1000" step="500" required /></label>
           </div>
-          <p class="hint">Distance from 0,0, in blocks.</p>
           <fieldset id="quadrants">
             <legend>Quadrants</legend>
             <label><input type="checkbox" value="NW" /> NW <small>−x −z</small></label>
@@ -79,9 +79,8 @@
             </span>
             <input id="diag" type="range" min="5" max="45" step="5" />
           </label>
-          <p class="hint">45° searches every direction.</p>
         </details>
-        <details id="advanced">
+        <details id="advanced" name="settings-part">
           <summary>Advanced</summary>
           <label class="check aomc-only"><input id="includeMapped" type="checkbox" /> Include cities already on the webmap</label>
           <p id="exploredNote" class="hint aomc-only"></p>
@@ -108,7 +107,7 @@
         </details>
         <button id="find" type="submit" class="primary">Find cities</button>
         <div class="row quiet">
-          <button id="searchReset" type="button" class="textlink">Reset settings</button>
+          <button id="searchReset" type="button" class="textlink">Restore default settings</button>
         </div>
         <progress id="progress" max="1" value="0" hidden></progress>
       </form>
@@ -253,7 +252,7 @@
         <h2>How to use</h2>
         <h3>1. Pick a route</h3>
         <p>
-          Press <em>Find cities</em>. Route 1 takes the least flying. Pick one from the
+          Route 1 takes the least flying. Pick one from the
           <button type="button" class="jump" data-target="batches">route list</button>, click a city on the map, or
           type your x and z and press <em>Search near me</em>.
         </p>
@@ -290,10 +289,9 @@
         <details class="more">
           <summary>Possibly looted cities</summary>
           <ul>
-            <li>A city marked <em>looted by someone else</em> turns tan. Someone hunted there before you.</li>
-            <li>Cities within 2,000 blocks of it show as possibly looted: a small grey ring, and a <code>?</code> in the list. It is a guess.</li>
-            <li class="aomc-only">So do all cities within 10,000 blocks of End Spawn: most ships there were emptied long ago. A route with such cities has a <em>why?</em> link explaining each reason.</li>
-            <li>When three or more such cities line up, a dashed line guesses where that hunter flew, and says how confident it is. <span class="aomc-only">One or two cities on the webmap can help to complete a line.</span></li>
+            <li>A city marked <em>looted by someone else</em> turns tan.</li>
+            <li>Cities within 2,000 blocks of it<span class="aomc-only">, or within 10,000 blocks of End Spawn,</span> show as possibly looted: a grey ring, and a <code>?</code> in the list. It is a guess; a route's <em>why?</em> link gives the reason.</li>
+            <li>A dashed line is a guess at where that hunter flew.</li>
             <li><button type="button" class="jump" data-target="skipPossible">Leave out cities that are possibly looted</button> keeps them out of the routes.</li>
           </ul>
         </details>
@@ -308,11 +306,12 @@
           <summary>Good to know</summary>
           <ul>
             <li>For Minecraft Java Edition, not Bedrock.</li>
+            <li>To keep track in game, delete a city's waypoint in your map mod once you have looted it.</li>
             <li class="mouse-only">Map: drag to pan, scroll or use the slider to zoom.</li>
             <li class="touch-only">Map: two fingers to pan, pinch or use the slider to zoom.</li>
             <li>Faint diamonds are cities with a ship that are not in any route.</li>
             <li class="aomc-only">Green shading is terrain already on the community webmap; cities there are left out.</li>
-            <li>Far from 0,0? Type your x and z beside <em>Search near me</em>. <button type="button" class="jump" data-target="settings">Settings</button> sets how far around you it looks.</li>
+            <li>Far from End Spawn? Type your x and z beside <em>Search near me</em>. <button type="button" class="jump" data-target="settings">Settings</button> sets how far around you it looks.</li>
             <li class="wide-only">Drag the dividers either side of the map to resize the panels.</li>
           </ul>
         </details>
@@ -346,12 +345,8 @@
             <strong>Your Minecraft username</strong>
             <input id="chatName" autocomplete="off" spellcheck="false" maxlength="16" placeholder="Type your username here, e.g. Steve_01" />
           </label>
-          <ol class="steps">
-            <li>In the End, press <em>copy</em> beside the first city in the list below, then paste into chat and send.</li>
-            <li id="chatModNote"></li>
-            <li>Do the same for each city, going down the list. A city's <em>copy</em> button stays lit once you have copied it.</li>
-            <li>(Optional) As you loot each city, delete its waypoint in your map mod, so you can keep track in game of where you still need to go.</li>
-          </ol>
+          <p class="hint">In the End, press <em>copy</em> beside each city in the list below, paste into chat and send.</p>
+          <p id="chatModNote" class="hint"></p>
           <p id="chatHint" class="hint"></p>
         </div>
 
@@ -394,22 +389,18 @@
         </div>
         <p id="routeNote" class="hint" role="status" hidden></p>
         <details id="possibleWhy" class="more" hidden>
-          <summary><span id="possibleCount"></span> · <span class="why">why?</span></summary>
+          <summary><span id="possibleCount"></span> <span class="why-link">· <span class="why">why?</span></span></summary>
           <ul id="possibleReasons" class="hint"></ul>
         </details>
         <div class="row quiet">
           <button id="markAll" type="button" class="textlink">Mark all looted</button>
           <button id="markNone" type="button" class="textlink">Clear all</button>
-          <button id="customDelete" type="button" class="textlink" hidden>Delete this custom route</button>
           <span class="undo-redo">
             <button id="addOneUndo" type="button" class="iconbtn" title="Undo your last change to this route: looted marks, a city added, or its order changed" aria-label="Undo your last change to this route" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5 4 10l5 5"/><path d="M4 10h10a5 5 0 0 1 0 10h-3"/></svg></button>
             <button id="routeRedo" type="button" class="iconbtn" title="Redo the change you just undid" aria-label="Redo the change you just undid" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5 5 5-5 5"/><path d="M20 10H10a5 5 0 0 0 0 10h3"/></svg></button>
           </span>
         </div>
-        <p class="hint">
-          <em>Next city</em> ticks off the city you are at (circled on the map). If its elytra was already gone,
-          press <em>Looted by someone else</em> instead. You can also tick any city in the list.
-        </p>
+        <button id="customDelete" type="button" class="textlink" hidden>Delete this custom route</button>
         <ol id="cities"></ol>
         <div class="row actions">
           <button id="addOne" type="button" title="Add the nearest city to this route's last stop that is not in any route, as the new last stop. It may come from just outside the search area">Add +1 city to route</button>
