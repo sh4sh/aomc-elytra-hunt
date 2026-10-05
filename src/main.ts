@@ -1,4 +1,4 @@
-import { lookalike, type Constellation } from './constellations';
+import { lookalike } from './constellations';
 import { $, download, fmt, xzText } from './dom';
 import { Explored } from './explored';
 import { BATCH_SIZE, DEFAULT_MAX_HOP, makeBatchesOrSmaller, passes, route, type BatchJob, type BatchShape } from './filters';
@@ -10,6 +10,7 @@ import { parseCoordinates } from './import';
 import { chatLine, cleanUsername } from './journeymap';
 import { EndMap, type MapCity } from './map';
 import { Precomputed } from './precomputed';
+import { session } from './session';
 import { loadSkyFigures } from './sky-cultures';
 import { DEFAULT_FILTERS, DEFAULT_LINE_DEVIATION, DEFAULT_SEED, onUsername, save, setUsername, state, type RouteEdit, type Saved } from './state';
 import { initDevMode } from './dev-mode';
@@ -32,26 +33,11 @@ const WEBMAP_CHECKS_URL =
 const MAX_SEARCH_CITIES = 25000;
 /** Ship cities per square block, measured over the first 100,000 blocks of the default world. */
 const SHIP_DENSITY = 4.6e-7;
-let tracker = new Tracker(state.seed);
-let batches: City[][] = [];
-let selected: number | null = null;
-let hot: City | null = null;
-let worker: Worker | null = null;
-let explored: Explored | null = null;
-let precomputed: Precomputed | null = null;
-let you: { x: number; z: number } | null = null;
-/** A spot the map was jumped to with "Go to coordinates". It is only a marker: it does not count as the player's position. */
-let pin: { x: number; z: number } | null = null;
-let showStars = false;
-/** Hidden extra, toggled by the goose: show every looted city on the map. */
-let showTrophies = false;
 const lootedCities = (): City[] =>
-  tracker.all().map((id) => {
+  session.tracker.all().map((id) => {
     const [x, z] = id.split(',').map(Number);
     return { x, z, source: 'seed' as const };
   });
-/** Ship cities in areas on the webmap, worked out the first time the hidden view is opened. */
-let webmapCities: City[] | null = null;
 
 /**
  * Find every ship city in terrain the webmap shows, however far out. Only the regions that contain
@@ -73,70 +59,40 @@ async function findWebmapCities(mask: Explored): Promise<City[]> {
   }
   return out;
 }
-/** Whether the instructions are showing in place of the open batch. */
-let helpOpen = false;
-/** Figures from the world's sky cultures, fetched the first time the sketch is opened. */
-let skyFigures: Constellation[] | null = null;
-let starCache: { key: string; match: ReturnType<typeof lookalike> } | null = null;
 /** Batches shown per page of the list. */
 const PAGE_SIZE = 5;
-let page = 0;
-/** Whether routes that are all looted are listed after all. */
-let showFinished = false;
-/** The selection the list last jumped to, so paging by hand isn't undone on the next redraw. */
-let pageFollowed: number | null = null;
-/** Cities left out because they are already on the webmap. */
-let skipped = 0;
-/** Cities left out because they have no ship. */
-let shipless = 0;
 /** Largest batch a player can ask for. Routes much longer than this get slow to work out. */
 const MAX_BATCH_SIZE = 500;
-/** Cities per batch actually used: the setting, or fewer when no batch that large could be made. */
-let usedBatchSize = BATCH_SIZE;
-/**
- * Players' reports, published with the site. `gone` holds cities to keep out of routes, with what was
- * reported: found with no ship, or no End City there at all. `found` holds ships confirmed present.
- */
-let shipReports = { gone: new Map<string, 'missing' | 'no-city'>(), found: new Set<string>() };
 /** What the map and tooltips say about a city reported missing. */
 const MISSING_NOTE = { missing: 'End Ship reported missing', 'no-city': 'End City reported missing' };
-/**
- * Cities whose ship is a tight fit against another part of the city, and so may not have generated.
- * A confirmed report clears the doubt.
- */
-let uncertainShips = new Set<string>();
 /** A city this close (in blocks) to one found already looted counts as possibly looted. */
 const POSSIBLE_RADIUS = 2000;
 const POSSIBLE_NOTE = 'possibly looted: near a ship found already looted';
 const NEAR_SPAWN_NOTE = 'possibly looted: within 10,000 blocks of End Spawn, where most ships were emptied long ago';
 
-/** Guessed flight paths of earlier hunters, worked out again whenever a looted mark changes. */
-let pathsFor: { tracker: Tracker; version: number; mapped: City[]; paths: Trajectory[]; near: string[] } | null = null;
-/** Ship cities of the current search that are on the webmap: another player has been there. Set by each rebuild. */
-let webmapShips: City[] = [];
 function earlierStudy(): { paths: Trajectory[]; near: string[] } {
-  if (pathsFor?.tracker !== tracker || pathsFor.version !== tracker.version || pathsFor.mapped !== webmapShips) {
+  if (session.pathsFor?.tracker !== session.tracker || session.pathsFor.version !== session.tracker.version || session.pathsFor.mapped !== session.webmapShips) {
     const point = (id: string) => {
       const [x, z] = id.split(',').map(Number);
       return { x, z };
     };
-    const already = tracker.alreadyAll().map(point);
+    const already = session.tracker.alreadyAll().map(point);
     // Cities looted the ordinary way had their elytra, so no earlier hunter took it.
-    const intact = tracker.all().map(point).filter((p) => !tracker.isAlready(p));
+    const intact = session.tracker.all().map(point).filter((p) => !session.tracker.isAlready(p));
     // A webmap city the player has marked themselves is counted by that mark, not twice.
-    const mapped = webmapShips.filter((c) => !tracker.has(c));
-    pathsFor = { tracker, version: tracker.version, mapped: webmapShips, ...studyTrajectories(already, intact, mapped) };
+    const mapped = session.webmapShips.filter((c) => !session.tracker.has(c));
+    session.pathsFor = { tracker: session.tracker, version: session.tracker.version, mapped: session.webmapShips, ...studyTrajectories(already, intact, mapped) };
   }
-  return pathsFor;
+  return session.pathsFor;
 }
 const earlierPaths = (): Trajectory[] => earlierStudy().paths;
 
 /** Why a city that nobody has marked looted may be looted all the same, or null if there is no sign of it. */
 function possibleNote(c: City): string | null {
-  if (tracker.has(c)) return null;
+  if (session.tracker.has(c)) return null;
   const path = earlierPaths().find((t) => onTrajectory(t, c));
   if (path) return `possibly looted: on a possible earlier flight path (${describeTrajectory(path)})`;
-  if (tracker.nearAlready(c, POSSIBLE_RADIUS)) return POSSIBLE_NOTE;
+  if (session.tracker.nearAlready(c, POSSIBLE_RADIUS)) return POSSIBLE_NOTE;
   // Close to End Spawn on the server, most ships were emptied long ago by players nobody has a record of.
   if (state.seed === DEFAULT_SEED && Math.max(Math.abs(c.x), Math.abs(c.z)) < NEAR_SPAWN_BLOCKS) return NEAR_SPAWN_NOTE;
   return null;
@@ -148,14 +104,10 @@ const POSSIBLE_WHY: [string, string][] = [
   ['possibly looted: near a ship', 'Within 2,000 blocks of a ship found already looted.'],
   ['possibly looted: on a possible', 'On a guessed flight path of an earlier hunter.'],
 ];
-/** How many of `batches` were generated; the player's custom batches follow them. */
-let generatedCount = 0;
 
-const isCustom = (i: number) => i >= generatedCount;
+const isCustom = (i: number) => i >= session.generatedCount;
 /** Display name of a batch, which players see as a route: "Route 12", or "Custom 1" for one they made. */
-const batchTitle = (i: number) => (isCustom(i) ? `Custom ${i - generatedCount + 1}` : `Route ${i + 1}`);
-/** Cities that could not be fitted into a full batch within the longest-flight limit. */
-let unbatched = 0;
+const batchTitle = (i: number) => (isCustom(i) ? `Custom ${i - session.generatedCount + 1}` : `Route ${i + 1}`);
 const pushEdit = (e: RouteEdit) => {
   state.edits = [...(state.edits ?? []), e].slice(-100);
   // A fresh change leaves nothing to redo.
@@ -163,7 +115,7 @@ const pushEdit = (e: RouteEdit) => {
 };
 /** Call just before changing the looted marks of these cities, so the change can be taken back. */
 function recordMarks(cities: { x: number; z: number }[]): void {
-  pushEdit({ kind: 'marks', before: cities.map((c) => [cityId(c), tracker.isAlready(c) ? 2 : tracker.has(c) ? 1 : 0]) });
+  pushEdit({ kind: 'marks', before: cities.map((c) => [cityId(c), session.tracker.isAlready(c) ? 2 : session.tracker.has(c) ? 1 : 0]) });
   save();
 }
 
@@ -175,43 +127,43 @@ function inOrder(batch: City[], ids: string[]): City[] {
 
 /** What a route's hand-made order is saved under: for a generated route, a city that belongs to it of its own accord. */
 function orderKey(i: number): string | null {
-  if (isCustom(i)) return `custom:${i - generatedCount}`;
-  const own = batches[i].map(cityId).filter((id) => !(id in state.moved));
+  if (isCustom(i)) return `custom:${i - session.generatedCount}`;
+  const own = session.batches[i].map(cityId).filter((id) => !(id in state.moved));
   return own.find((id) => state.orders?.[id]) ?? own[0] ?? null;
 }
 
 /** Give route i a new order, or with null return it to the order it was worked out in. */
 function writeOrder(i: number, key: string, ids: string[] | null): void {
   if (isCustom(i)) {
-    const k = i - generatedCount;
+    const k = i - session.generatedCount;
     // Cities of the custom route that are not on show just now keep their place at the end.
     if (ids) state.custom[k] = [...ids, ...state.custom[k].filter((id) => !ids.includes(id))];
   } else if (ids) (state.orders ??= {})[key] = ids;
   else delete state.orders?.[key];
   save();
   if (!ids) return rebuildKeeping(key);
-  batches[i] = inOrder(batches[i], ids);
+  session.batches[i] = inOrder(session.batches[i], ids);
   render();
 }
 
 /** Move the city at one place in the open route to another. */
 function moveCity(i: number, from: number, to: number): void {
   const key = orderKey(i);
-  if (!key || from === to || to < 0 || to >= batches[i].length) return;
-  const ids = batches[i].map(cityId);
-  pushEdit({ kind: 'order', key, before: isCustom(i) ? [...state.custom[i - generatedCount]] : (state.orders?.[key] ?? null) });
+  if (!key || from === to || to < 0 || to >= session.batches[i].length) return;
+  const ids = session.batches[i].map(cityId);
+  pushEdit({ kind: 'order', key, before: isCustom(i) ? [...state.custom[i - session.generatedCount]] : (state.orders?.[key] ?? null) });
   ids.splice(to, 0, ...ids.splice(from, 1));
   writeOrder(i, key, ids);
 }
 
 /** The latest hand-made change to route i that can still be taken back (or, from the redo list, made again). */
 function lastEdit(i: number, from: RouteEdit[] | undefined = state.edits): RouteEdit | undefined {
-  const here = new Set(batches[i].map(cityId));
+  const here = new Set(session.batches[i].map(cityId));
   const key = orderKey(i);
   return [...(from ?? [])].reverse().find((e) =>
     e.kind === 'order' ? e.key === key
     : e.kind === 'marks' ? e.before.some(([id]) => here.has(id))
-    : e.kind === 'readd' ? (e.custom !== undefined ? isCustom(i) && i - generatedCount === e.custom : !!e.anchor && here.has(e.anchor))
+    : e.kind === 'readd' ? (e.custom !== undefined ? isCustom(i) && i - session.generatedCount === e.custom : !!e.anchor && here.has(e.anchor))
     : here.has(e.id),
   );
 }
@@ -230,7 +182,7 @@ const BEYOND_LIVE_BLOCKS = 2500;
 /** Every End City within a distance of a spot, whatever the search settings say. */
 function citiesAround(at: { x: number; z: number }, radius: number): FoundCity[] {
   const circle: Filters = { ...state.filters, around: { x: at.x, z: at.z, radius } };
-  if (precomputed?.covers(state.seed, circle)) return precomputed.search(circle);
+  if (session.precomputed?.covers(state.seed, circle)) return session.precomputed.search(circle);
   circle.around!.radius = Math.min(radius, BEYOND_LIVE_BLOCKS);
   const seed = BigInt(state.seed);
   return findEndCities(seed, {
@@ -245,8 +197,6 @@ const undrop = (id: string) => {
 };
 /** The place in the open route of the row being dragged, while a drag is under way. */
 let dragFrom: number | null = null;
-/** Cities kept out of the batches but still drawn on the map, with the reason. */
-let outside: { city: City; note: string; missing?: boolean }[] = [];
 
 const map = new EndMap($<HTMLCanvasElement>('map'));
 const tooltip = $('tooltip');
@@ -274,26 +224,26 @@ function showBatching(busy: boolean): void {
  */
 function rebuild(done?: () => void): void {
   // The webmap only describes the default server's world.
-  const mapped = !state.includeMapped && explored && state.seed === DEFAULT_SEED ? explored : null;
+  const mapped = !state.includeMapped && session.explored && state.seed === DEFAULT_SEED ? session.explored : null;
   // Only ships hold elytra, so cities without one are never offered.
   // A city reported in game as having no ship is treated like any other shipless city.
   // A city reported in game as missing its ship, or missing altogether, stays on the map but out of the routes.
   const reports =
-    state.seed === DEFAULT_SEED ? shipReports : { gone: new Map<string, 'missing' | 'no-city'>(), found: new Set<string>() };
+    state.seed === DEFAULT_SEED ? session.shipReports : { gone: new Map<string, 'missing' | 'no-city'>(), found: new Set<string>() };
   const withShip = state.found.filter((c) => c[2]);
   // Whatever the routes do with them, cities on the webmap help to guess where earlier hunters flew.
-  webmapShips =
-    explored && state.seed === DEFAULT_SEED
-      ? withShip.filter((c) => explored!.isMapped(c[0], c[1])).map((c): City => ({ x: c[0], z: c[1], source: 'seed' }))
+  session.webmapShips =
+    session.explored && state.seed === DEFAULT_SEED
+      ? withShip.filter((c) => session.explored!.isMapped(c[0], c[1])).map((c): City => ({ x: c[0], z: c[1], source: 'seed' }))
       : [];
   const extra = state.extra ?? [];
-  uncertainShips = new Set(
+  session.uncertainShips = new Set(
     [...withShip, ...extra]
       .filter((c) => c[2] === 2 && !reports.found.has(`${c[0]},${c[1]}`) && !reports.gone.has(`${c[0]},${c[1]}`))
       .map((c) => `${c[0]},${c[1]}`),
   );
-  shipless = state.found.length - withShip.length;
-  skipped = 0;
+  session.shipless = state.found.length - withShip.length;
+  session.skipped = 0;
 
   // Every city worth showing, with the reason it is kept out of the batches, if any.
   const pool = new Map<string, { city: City; note?: string; missing?: boolean }>();
@@ -312,9 +262,9 @@ function rebuild(done?: () => void): void {
       return;
     }
     // Only while still looted: unticking a city puts it back.
-    if (excluded.has(cityId(city)) && tracker.has(city)) note = 'looted, removed from routes';
+    if (excluded.has(cityId(city)) && session.tracker.has(city)) note = 'looted, removed from routes';
     else if (source === 'seed' && mapped?.isMapped(x, z)) {
-      skipped++;
+      session.skipped++;
       // Ships near mapped terrain may still be unlooted, so keep them visible.
       if (!ship) return;
       note = MAPPED_NOTE;
@@ -331,10 +281,10 @@ function rebuild(done?: () => void): void {
     if (entry && !entry.note) entry.note = EXTRA_NOTE;
   }
 
-  outside = [];
+  session.outside = [];
   const cities: City[] = [];
   for (const entry of pool.values()) {
-    if (entry.note) outside.push({ city: entry.city, note: entry.note, missing: entry.missing });
+    if (entry.note) session.outside.push({ city: entry.city, note: entry.note, missing: entry.missing });
     else cities.push(entry.city);
   }
   const job: BatchJob = {
@@ -392,16 +342,16 @@ function finishRebuild(
 ): void {
   // Cities taken out by hand leave after batching, so removing one never reshuffles the other routes.
   const dropped = new Set(state.dropped ?? []);
-  batches = dropped.size ? made.batches.map((b) => b.filter((c) => !dropped.has(cityId(c)))) : made.batches;
+  session.batches = dropped.size ? made.batches.map((b) => b.filter((c) => !dropped.has(cityId(c)))) : made.batches;
   // Route 1 is the least flying in all: from the point of origin to the route's first city, then along the route.
   const origin = startPoint();
-  const cost = new Map(batches.map((b) => [b, (b.length ? Math.hypot(b[0].x - origin.x, b[0].z - origin.z) : 0) + routeLength(b)]));
-  batches = [...batches].sort((p, q) => cost.get(p)! - cost.get(q)!);
-  usedBatchSize = made.size;
+  const cost = new Map(session.batches.map((b) => [b, (b.length ? Math.hypot(b[0].x - origin.x, b[0].z - origin.z) : 0) + routeLength(b)]));
+  session.batches = [...session.batches].sort((p, q) => cost.get(p)! - cost.get(q)!);
+  session.usedBatchSize = made.size;
   // Hand-made moves are applied after batching, so adding a city to a batch never reshuffles the others.
   // A move holds while both cities still exist and its target is in a batch of its own accord.
   const batchOf = new Map<string, number>();
-  batches.forEach((batch, b) => batch.forEach((c) => batchOf.set(cityId(c), b)));
+  session.batches.forEach((batch, b) => batch.forEach((c) => batchOf.set(cityId(c), b)));
   const moved = new Set<string>();
   const appended = state.appended ?? [];
   const tails = new Map<number, string[]>();
@@ -410,23 +360,23 @@ function finishRebuild(
     if (!pool.has(id) || to === undefined || anchor in state.moved) continue;
     const from = batchOf.get(id);
     if (from === to) continue;
-    if (from !== undefined) batches[from] = batches[from].filter((c) => cityId(c) !== id);
+    if (from !== undefined) session.batches[from] = session.batches[from].filter((c) => cityId(c) !== id);
     moved.add(id);
     // Cities added by hand go on the end, in the order they were added.
     tails.set(to, [...(tails.get(to) ?? []), id]);
   }
   for (const [b, ids] of tails) {
     ids.sort((p, q) => appended.indexOf(p) - appended.indexOf(q));
-    batches[b] = [...batches[b], ...ids.map((id) => pool.get(id)!.city)];
+    session.batches[b] = [...session.batches[b], ...ids.map((id) => pool.get(id)!.city)];
   }
   // Then any order given by hand. One that no longer fits its route (the routes were regrouped) is forgotten.
   for (const [key, ids] of Object.entries(state.orders ?? {})) {
     const b = batchOf.get(key);
     if (b === undefined || key in state.moved) continue;
     const known = new Set(ids);
-    const own = batches[b].filter((c) => !moved.has(cityId(c)));
+    const own = session.batches[b].filter((c) => !moved.has(cityId(c)));
     if (own.filter((c) => known.has(cityId(c))).length * 2 < own.length) delete state.orders![key];
-    else batches[b] = inOrder(batches[b], ids);
+    else session.batches[b] = inOrder(session.batches[b], ids);
   }
 
   // Custom batches take their cities out of wherever they were and are listed after the generated ones.
@@ -437,29 +387,29 @@ function finishRebuild(
     members.forEach((id) => inCustom.add(id));
     customs.push(members.map((id) => pool.get(id)!.city));
   }
-  if (inCustom.size) batches = batches.map((b) => b.filter((c) => !inCustom.has(cityId(c))));
-  batches = batches.filter((b) => b.length);
-  generatedCount = batches.length;
+  if (inCustom.size) session.batches = session.batches.map((b) => b.filter((c) => !inCustom.has(cityId(c))));
+  session.batches = session.batches.filter((b) => b.length);
+  session.generatedCount = session.batches.length;
   // An emptied custom batch is kept, so its number does not shift while the player is still building it.
-  batches.push(...customs.map((b) => (b.length > 1 ? route(b, startPoint()) : b)));
-  setBatchTags(batches.map((_, i) => (isCustom(i) ? `C${i - generatedCount + 1}` : String(i + 1))));
+  session.batches.push(...customs.map((b) => (b.length > 1 ? route(b, startPoint()) : b)));
+  setBatchTags(session.batches.map((_, i) => (isCustom(i) ? `C${i - session.generatedCount + 1}` : String(i + 1))));
 
-  const inBatch = new Set(batches.flat().map(cityId));
-  outside = outside.filter((o) => !moved.has(cityId(o.city)) && !inCustom.has(cityId(o.city)));
-  unbatched = 0;
+  const inBatch = new Set(session.batches.flat().map(cityId));
+  session.outside = session.outside.filter((o) => !moved.has(cityId(o.city)) && !inCustom.has(cityId(o.city)));
+  session.unbatched = 0;
   for (const c of cities) {
     if (inBatch.has(cityId(c))) continue;
     if (dropped.has(cityId(c))) {
-      outside.push({ city: c, note: REMOVED_NOTE });
+      session.outside.push({ city: c, note: REMOVED_NOTE });
       continue;
     }
-    unbatched++;
-    outside.push({ city: c, note: `no route to it with flights under ${fmt(state.maxHop)} blocks` });
+    session.unbatched++;
+    session.outside.push({ city: c, note: `no route to it with flights under ${fmt(state.maxHop)} blocks` });
   }
-  if (selected !== null && selected >= batches.length) selected = null;
+  if (session.selected !== null && session.selected >= session.batches.length) session.selected = null;
 }
 
-const looted = (batch: City[]) => batch.filter((c) => tracker.has(c)).length;
+const looted = (batch: City[]) => batch.filter((c) => session.tracker.has(c)).length;
 const color = (i: number) => XAERO_COLORS[batchColor(i)];
 // ---------- rendering ----------
 
@@ -474,11 +424,9 @@ function previewFilters(): Filters {
   return usable ? f : state.filters;
 }
 
-/** The cities last handed to the map, for the legend to look through. */
-let shownCities: MapCity[] = [];
 /** The legend only explains marks that are in view on the map just now. */
 function renderLegend(): void {
-  const seen = shownCities.filter((c) => map.inView(c.city.x, c.city.z));
+  const seen = session.shownCities.filter((c) => map.inView(c.city.x, c.city.z));
   const legend = {
     route: seen.some((c) => c.batch >= 0 && !c.visited && !(c.possible && map.detailed)),
     looted: seen.some((c) => c.visited && !c.already),
@@ -495,32 +443,32 @@ function renderLegend(): void {
 
 function renderMap(): void {
   const cities: MapCity[] = [];
-  batches.forEach((batch, b) =>
+  session.batches.forEach((batch, b) =>
     batch.forEach((city, order) =>
       cities.push({
         city,
         batch: b,
         order,
         color: color(b),
-        visited: tracker.has(city),
-        already: tracker.showsAlready(city),
+        visited: session.tracker.has(city),
+        already: session.tracker.showsAlready(city),
         possible: possible(city),
       }),
     ),
   );
-  for (const o of outside) {
+  for (const o of session.outside) {
     cities.push({
       city: o.city,
       batch: -1,
       order: 0,
       color: OUTSIDE_COLOR,
-      visited: tracker.has(o.city),
-      already: tracker.showsAlready(o.city),
+      visited: session.tracker.has(o.city),
+      already: session.tracker.showsAlready(o.city),
       note: o.note,
       missing: o.missing,
     });
   }
-  if (showTrophies) {
+  if (session.showTrophies) {
     // Hidden extra: every looted city there is, wherever the current search happens to be looking.
     const drawn = new Map(cities.map((c) => [cityId(c.city), c]));
     const mark = (city: City, trophy: 'looted' | 'mapped', note: string) => {
@@ -535,20 +483,20 @@ function renderMap(): void {
         drawn.set(cityId(city), entry);
       }
     };
-    if (state.seed === DEFAULT_SEED) for (const city of webmapCities ?? []) mark(city, 'mapped', 'in an area on the webmap');
+    if (state.seed === DEFAULT_SEED) for (const city of session.webmapCities ?? []) mark(city, 'mapped', 'in an area on the webmap');
     for (const city of lootedCities()) mark(city, 'looted', 'looted');
   }
-  shownCities = cities;
+  session.shownCities = cities;
   map.setScene({
     cities,
-    selectedBatch: selected,
-    hot,
+    selectedBatch: session.selected,
+    hot: session.hot,
     filters: state.filters,
     searchArea: previewFilters(),
-    explored: state.seed === DEFAULT_SEED ? explored : null,
+    explored: state.seed === DEFAULT_SEED ? session.explored : null,
     paths: earlierPaths(),
-    you,
-    pin,
+    you: session.you,
+    pin: session.pin,
   });
 }
 
@@ -569,9 +517,9 @@ function renderSettingsSummary(): void {
 
 function renderBatches(): void {
   renderSettingsSummary();
-  const total = batches.reduce((n, b) => n + b.length, 0);
-  const done = batches.reduce((n, b) => n + looted(b), 0);
-  const maybeCount = batches.flat().filter(possible).length;
+  const total = session.batches.reduce((n, b) => n + b.length, 0);
+  const done = session.batches.reduce((n, b) => n + looted(b), 0);
+  const maybeCount = session.batches.flat().filter(possible).length;
   // Earlier flight paths get a line of their own, and only when one is drawn. Reports that nearly made
   // a path are not listed: they are the app's working, and came and went as the map was zoomed.
   const study = earlierStudy();
@@ -586,10 +534,10 @@ function renderBatches(): void {
   // The line itself says what a player acts on; the rest of the tally is there on hover.
   $('stats').title = total
     ? [
-        shipless ? `${fmt(shipless)} End Cities without a ship left out` : '',
-        skipped ? `${fmt(skipped)} left out as already on the webmap` : '',
-        unbatched ? `${fmt(unbatched)} without a route (faint diamonds)` : '',
-        uncertainShips.size ? `${fmt(uncertainShips.size)} with an uncertain ship (marked ?)` : '',
+        session.shipless ? `${fmt(session.shipless)} End Cities without a ship left out` : '',
+        session.skipped ? `${fmt(session.skipped)} left out as already on the webmap` : '',
+        session.unbatched ? `${fmt(session.unbatched)} without a route (faint diamonds)` : '',
+        session.uncertainShips.size ? `${fmt(session.uncertainShips.size)} with an uncertain ship (marked ?)` : '',
         maybeCount ? `${fmt(maybeCount)} possibly looted (marked ?)` : '',
         state.excluded.length ? `${fmt(state.excluded.length)} looted removed from routes` : '',
       ]
@@ -597,38 +545,38 @@ function renderBatches(): void {
         .join(' · ')
     : '';
   $('stats').textContent = total
-    ? `${fmt(total)} ships · ${fmt(batches.length)} routes · ${fmt(done)} looted` +
-      (usedBatchSize < state.batchSize && generatedCount
-        ? ` · no route of ${state.batchSize} fits here, so routes of ${usedBatchSize} were made`
+    ? `${fmt(total)} ships · ${fmt(session.batches.length)} routes · ${fmt(done)} looted` +
+      (session.usedBatchSize < state.batchSize && session.generatedCount
+        ? ` · no route of ${state.batchSize} fits here, so routes of ${session.usedBatchSize} were made`
         : '')
-    : unbatched
-      ? `No routes: ${fmt(unbatched)} ships, but no two are within the longest flight of each other. Raise the longest flight.`
+    : session.unbatched
+      ? `No routes: ${fmt(session.unbatched)} ships, but no two are within the longest flight of each other. Raise the longest flight.`
       : 'No ships yet. Set a range and press Find ships.';
 
 
   // Finished routes drop out of the list, so what is left is what there is still to fly. The open
   // route stays while it is open, finished or not. Route numbers do not change: waypoints already in
   // the player's map mod keep matching.
-  const finished = (b: City[]) => b.length > 0 && b.every((c) => tracker.has(c));
+  const finished = (b: City[]) => b.length > 0 && b.every((c) => session.tracker.has(c));
   const live: number[] = [];
   let hiddenCount = 0;
-  for (let i = 0; i < generatedCount; i++) {
-    if (finished(batches[i])) hiddenCount++;
-    if (showFinished || i === selected || !finished(batches[i])) live.push(i);
+  for (let i = 0; i < session.generatedCount; i++) {
+    if (finished(session.batches[i])) hiddenCount++;
+    if (session.showFinished || i === session.selected || !finished(session.batches[i])) live.push(i);
   }
   const finishedNote = $('finishedNote');
   finishedNote.hidden = hiddenCount === 0;
-  $('finishedCount').textContent = `${fmt(hiddenCount)} finished ${hiddenCount === 1 ? 'route' : 'routes'} ${showFinished ? 'shown' : 'hidden'}`;
-  $('finishedToggle').textContent = showFinished ? 'hide' : 'show';
+  $('finishedCount').textContent = `${fmt(hiddenCount)} finished ${hiddenCount === 1 ? 'route' : 'routes'} ${session.showFinished ? 'shown' : 'hidden'}`;
+  $('finishedToggle').textContent = session.showFinished ? 'hide' : 'show';
 
   const pages = Math.max(1, Math.ceil(live.length / PAGE_SIZE));
   // Jump to the selected batch's page when the selection changes, e.g. after clicking a city on the map.
-  if (selected !== pageFollowed) {
-    pageFollowed = selected;
-    if (selected !== null && !isCustom(selected)) page = Math.floor(live.indexOf(selected) / PAGE_SIZE);
+  if (session.selected !== session.pageFollowed) {
+    session.pageFollowed = session.selected;
+    if (session.selected !== null && !isCustom(session.selected)) session.page = Math.floor(live.indexOf(session.selected) / PAGE_SIZE);
   }
-  page = Math.max(0, Math.min(page, pages - 1));
-  const onPage = live.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  session.page = Math.max(0, Math.min(session.page, pages - 1));
+  const onPage = live.slice(session.page * PAGE_SIZE, (session.page + 1) * PAGE_SIZE);
   $('pager').hidden = pages === 1;
   // One entry per page, named by the batches on it, so any page is one pick away.
   const pageSelect = $<HTMLSelectElement>('pageSelect');
@@ -639,27 +587,27 @@ function renderBatches(): void {
       return new Option(`${from + 1}–${to + 1}`, String(p));
     }),
   );
-  pageSelect.value = String(page);
-  $<HTMLButtonElement>('pagePrev').disabled = page === 0;
-  $<HTMLButtonElement>('pageNext').disabled = page === pages - 1;
-  $<HTMLInputElement>('gotoBatch').max = String(generatedCount);
+  pageSelect.value = String(session.page);
+  $<HTMLButtonElement>('pagePrev').disabled = session.page === 0;
+  $<HTMLButtonElement>('pageNext').disabled = session.page === pages - 1;
+  $<HTMLInputElement>('gotoBatch').max = String(session.generatedCount);
 
   // Custom batches stay pinned above whichever page of generated batches is showing.
   const shown: number[] = [];
-  for (let i = generatedCount; i < batches.length; i++) shown.push(i);
+  for (let i = session.generatedCount; i < session.batches.length; i++) shown.push(i);
   shown.push(...onPage);
 
   const list = $('batches');
   list.replaceChildren(
     ...shown.map((i) => {
-      const batch = batches[i];
+      const batch = session.batches[i];
       const li = document.createElement('li');
       li.classList.toggle('custom', isCustom(i));
       const n = looted(batch);
       li.classList.toggle('done', batch.length > 0 && n === batch.length);
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.setAttribute('aria-current', String(i === selected));
+      btn.setAttribute('aria-current', String(i === session.selected));
       const sw = document.createElement('span');
       sw.className = 'swatch';
       sw.style.background = color(i);
@@ -693,16 +641,16 @@ function renderBatches(): void {
 
 function renderDetail(): void {
   // Help sits over the batch without closing it, so the batch is still there to go back to.
-  const showBatch = selected !== null && !helpOpen;
+  const showBatch = session.selected !== null && !session.helpOpen;
   $('detailEmpty').hidden = showBatch;
   $('detailBody').hidden = !showBatch;
   const back = $('helpBack');
-  back.hidden = selected === null;
-  if (selected !== null) back.textContent = `← Back to ${batchTitle(selected).toLowerCase()}`;
-  $('help').textContent = selected !== null && helpOpen ? 'Close help' : 'How to use';
-  if (selected === null) return;
-  const batch = batches[selected];
-  const i = selected;
+  back.hidden = session.selected === null;
+  if (session.selected !== null) back.textContent = `← Back to ${batchTitle(session.selected).toLowerCase()}`;
+  $('help').textContent = session.selected !== null && session.helpOpen ? 'Close help' : 'How to use';
+  if (session.selected === null) return;
+  const batch = session.batches[session.selected];
+  const i = session.selected;
 
   let length = 0;
   batch.forEach((c, k) => {
@@ -726,11 +674,11 @@ function renderDetail(): void {
   $<HTMLButtonElement>('addOneUndo').disabled = !lastEdit(i);
   $<HTMLButtonElement>('routeRedo').disabled = !lastEdit(i, state.redo);
   // Nothing left to export from a route that is all looted: say so in place of the map-mod section.
-  const complete = batch.length > 0 && batch.every((c) => tracker.has(c));
+  const complete = batch.length > 0 && batch.every((c) => session.tracker.has(c));
   $('routeDone').hidden = !complete;
   $('exportBox').hidden = complete;
   // Which city the two buttons below act on: the first one not looted yet.
-  const at = batch.findIndex((c) => !tracker.has(c));
+  const at = batch.findIndex((c) => !session.tracker.has(c));
   const currentCity = $('currentCity');
   currentCity.hidden = at < 0;
   if (at >= 0) {
@@ -739,8 +687,8 @@ function renderDetail(): void {
       Object.assign(document.createElement('span'), { textContent: `${at + 1} of ${batch.length} · ${xzText(batch[at])}` }),
     );
   }
-  ($('nextCity') as HTMLButtonElement).disabled = batch.every((c) => tracker.has(c));
-  ($('nextCityAlready') as HTMLButtonElement).disabled = batch.every((c) => tracker.has(c));
+  ($('nextCity') as HTMLButtonElement).disabled = batch.every((c) => session.tracker.has(c));
+  ($('nextCityAlready') as HTMLButtonElement).disabled = batch.every((c) => session.tracker.has(c));
   const orderedKey = orderKey(i);
   $('orderReset').hidden = isCustom(i) || !orderedKey || !state.orders?.[orderedKey];
   renderStars(batch, color(i));
@@ -753,7 +701,7 @@ function renderDetail(): void {
   const hundreds = (blocks: number) => fmt(Math.round(blocks / 100) * 100);
   $('detailMeta').textContent =
     `${batch.length} ships · ${looted(batch)} looted · about ${hundreds(length + reach)} blocks` +
-    (!isCustom(i) && batch.length < usedBatchSize ? ' · short route' : '') +
+    (!isCustom(i) && batch.length < session.usedBatchSize ? ' · short route' : '') +
     (isCustom(i) && !batch.length ? ' · right-click a ship on the map to add it' : '');
   $('detailMeta').title = batch.length
     ? `${hundreds(reach)} blocks to reach the first ship, then ${hundreds(length)} along the route. Longest flight between ships: ${fmt(Math.round(longest))}.`
@@ -762,31 +710,31 @@ function renderDetail(): void {
   $('cities').replaceChildren(
     ...batch.map((c, k) => {
       const li = document.createElement('li');
-      li.classList.toggle('looted', tracker.has(c));
-      li.classList.toggle('hot', c === hot);
+      li.classList.toggle('looted', session.tracker.has(c));
+      li.classList.toggle('hot', c === session.hot);
       // The first city not looted yet is where the player is up to: the "current city" circle on the map.
-      li.classList.toggle('current', c === batch.find((x) => !tracker.has(x)));
+      li.classList.toggle('current', c === batch.find((x) => !session.tracker.has(x)));
       const label = document.createElement('label');
       label.title = waypointName(i, k);
-      const unsure = uncertainShips.has(cityId(c));
+      const unsure = session.uncertainShips.has(cityId(c));
       if (unsure) label.title += ' · ship uncertain: it is a tight fit in this city and may not have generated';
       const box = document.createElement('input');
       box.type = 'checkbox';
-      box.checked = tracker.has(c);
+      box.checked = session.tracker.has(c);
       const maybeNote = possibleNote(c);
       const maybe = maybeNote !== null;
       if (maybeNote) label.title += ` · ${maybeNote}`;
-      const already = tracker.showsAlready(c);
+      const already = session.tracker.showsAlready(c);
       li.classList.toggle('already', already);
       if (already) label.title += ' · looted by someone else';
-      if (tracker.isShared(c)) {
+      if (session.tracker.isShared(c)) {
         // On the shared list: looted for everyone, so it can't be unticked here.
         box.disabled = true;
         label.title += ' · on the shared looted list';
       }
       box.addEventListener('change', () => {
         recordMarks([c]);
-        tracker.set(c, box.checked);
+        session.tracker.set(c, box.checked);
         render();
       });
       const n = document.createElement('span');
@@ -860,7 +808,7 @@ function renderDetail(): void {
       label.append(box, n, xz, hop, chat);
       // The same menu as right-clicking the city's dot on the map.
       const menuAt = (x: number, y: number) => {
-        const city: MapCity = { city: c, batch: i, order: k, color: color(i), visited: tracker.has(c), possible: possible(c) };
+        const city: MapCity = { city: c, batch: i, order: k, color: color(i), visited: session.tracker.has(c), possible: possible(c) };
         openMenu(city, x, y, c, label);
       };
       label.addEventListener('contextmenu', (e) => {
@@ -893,8 +841,8 @@ function renderDetail(): void {
 function renderStars(batch: City[], batchColor: string): void {
   // Matching against a few hundred figures takes a moment, so reuse the answer while the batch is unchanged.
   const key = batch.map(cityId).join(';');
-  if (showStars && starCache?.key !== key) starCache = { key, match: lookalike(batch, skyFigures ?? []) };
-  const match = showStars ? starCache!.match : null;
+  if (session.showStars && session.starCache?.key !== key) session.starCache = { key, match: lookalike(batch, session.skyFigures ?? []) };
+  const match = session.showStars ? session.starCache!.match : null;
   $('stars').hidden = !match;
   if (!match) return;
   const source = document.createElement('a');
@@ -951,42 +899,40 @@ function render(): void {
 }
 
 function setHot(c: City | null): void {
-  if (hot === c) return;
-  hot = c;
+  if (session.hot === c) return;
+  session.hot = c;
   renderMap();
 }
 
 function select(i: number | null, zoom = false): void {
   // Opening a batch, from the list or the map, puts the help away.
-  if (i !== null) helpOpen = false;
+  if (i !== null) session.helpOpen = false;
   // Leaving a finished route is the moment to regroup what is left. The routes are numbered afresh,
   // so the one being opened is found again by one of its cities.
-  if (i !== selected && retireFinished(i)) {
-    const target = i !== null && batches[i].length ? cityId(batches[i][0]) : null;
+  if (i !== session.selected && retireFinished(i)) {
+    const target = i !== null && session.batches[i].length ? cityId(session.batches[i][0]) : null;
     rebuild(() => {
-      const at = target === null ? -1 : batches.findIndex((b) => b.some((c) => cityId(c) === target));
-      selected = at < 0 ? null : at;
-      if (zoom && selected !== null) map.fit(batches[selected], state.filters.maxDist);
+      const at = target === null ? -1 : session.batches.findIndex((b) => b.some((c) => cityId(c) === target));
+      session.selected = at < 0 ? null : at;
+      if (zoom && session.selected !== null) map.fit(session.batches[session.selected], state.filters.maxDist);
     });
     render();
     return;
   }
-  selected = i;
+  session.selected = i;
   render();
-  if (zoom && i !== null) map.fit(batches[i], state.filters.maxDist);
+  if (zoom && i !== null) map.fit(session.batches[i], state.filters.maxDist);
 }
 
 // ---------- search ----------
 
 const form = $<HTMLFormElement>('search');
 const seedInput = $<HTMLInputElement>('seed');
-/** Where the search set in the form is centred: a position, for a search around the player, or null for the band around End Spawn. */
-let searchCentre: { x: number; z: number } | null = null;
 const nearX = $<HTMLInputElement>('nearX');
 const nearZ = $<HTMLInputElement>('nearZ');
 const aroundRadius = $<HTMLInputElement>('aroundRadius');
 /** Whether the form is set to search around a position rather than outward from 0,0. */
-const aroundMode = () => searchCentre !== null;
+const aroundMode = () => session.searchCentre !== null;
 /** How far "Search near me" looks is only shown once it is the search in use: until then it is one thing less to read. */
 function showRadius(): void {
   $('aroundBox').hidden = !aroundMode();
@@ -1001,7 +947,7 @@ const progress = $<HTMLProgressElement>('progress');
 
 /** Set the search controls to a search: where it looks, and how far. */
 function fillSearch(f: Filters): void {
-  searchCentre = f.around ? { x: f.around.x, z: f.around.z } : null;
+  session.searchCentre = f.around ? { x: f.around.x, z: f.around.z } : null;
   if (f.around) aroundRadius.value = String(f.around.radius);
   showRadius();
   minInput.value = String(f.minDist);
@@ -1025,7 +971,7 @@ function fillForm(): void {
 function formFilters(): Filters {
   const radius = Number(aroundRadius.value);
   return {
-    around: searchCentre && radius > 0 ? { ...searchCentre, radius } : undefined,
+    around: session.searchCentre && radius > 0 ? { ...session.searchCentre, radius } : undefined,
     minDist: Number(minInput.value),
     maxDist: Number(maxInput.value),
     diagonalDeg: Number(diagInput.value),
@@ -1053,8 +999,6 @@ function fitSearch(f: Filters): void {
   map.fit([{ x: b.x0, z: b.z0 }, { x: b.x1, z: b.z1 }], f.maxDist);
 }
 
-/** A custom route to open once the search under way has its routes: the survey's. */
-let openCustomAfterSearch: number | null = null;
 
 /** Take a finished search as the new state. Nothing changes until this runs, so a cancelled search leaves no trace. */
 function applyResult(seed: string, filters: Filters, cities: FoundCity[]): void {
@@ -1075,8 +1019,8 @@ function applyResult(seed: string, filters: Filters, cities: FoundCity[]): void 
     state.edits = [];
     state.redo = [];
     state.custom = [];
-    tracker = new Tracker(seed);
-    tracker.setShared(seed === DEFAULT_SEED ? sharedLooted : [], seed === DEFAULT_SEED ? sharedAlready : [], seed === DEFAULT_SEED ? sharedBy : {});
+    session.tracker = new Tracker(seed);
+    session.tracker.setShared(seed === DEFAULT_SEED ? session.sharedLooted : [], seed === DEFAULT_SEED ? session.sharedAlready : [], seed === DEFAULT_SEED ? session.sharedBy : {});
   }
   // Moving to a search somewhere else (not just adjusting this one) leaves the old one to go back to.
   const place = (f: Filters) => (f.around ? `${f.around.x},${f.around.z}` : 'band');
@@ -1087,20 +1031,20 @@ function applyResult(seed: string, filters: Filters, cities: FoundCity[]): void 
   showSeedMode();
   state.found = cities;
   save();
-  selected = null;
+  session.selected = null;
   fillForm();
   showExploredNote();
   if (refit) fitSearch(filters);
   if (foldWhenDone && cities.length) settings.open = false;
   foldWhenDone = false;
   rebuild(() => {
-    if (openCustomAfterSearch !== null) {
-      selected = generatedCount + openCustomAfterSearch < batches.length ? generatedCount + openCustomAfterSearch : null;
-      openCustomAfterSearch = null;
+    if (session.openCustomAfterSearch !== null) {
+      session.selected = session.generatedCount + session.openCustomAfterSearch < session.batches.length ? session.generatedCount + session.openCustomAfterSearch : null;
+      session.openCustomAfterSearch = null;
     }
-    if (!locateAfterSearch) return;
-    const pos = locateAfterSearch;
-    locateAfterSearch = null;
+    if (!session.locateAfterSearch) return;
+    const pos = session.locateAfterSearch;
+    session.locateAfterSearch = null;
     if (!openNearest(pos, 'Searched around your position. ')) {
       mapNote.textContent = 'No route near your position. Try a larger radius or a longer flight limit.';
       renderMap();
@@ -1140,8 +1084,8 @@ function tooBig(ships: number): boolean {
 }
 
 function endSearch(): void {
-  worker?.terminate();
-  worker = null;
+  session.worker?.terminate();
+  session.worker = null;
   findBtn.textContent = 'Find ships';
   findBtn.classList.remove('busy');
   progress.hidden = true;
@@ -1160,10 +1104,10 @@ let foldWhenDone = false;
 form.addEventListener('submit', (e) => {
   e.preventDefault();
   // While a search is running the button cancels it; the previous results stay as they were.
-  if (worker) {
+  if (session.worker) {
     if (confirm('Cancel the search? The ships already shown will stay as they are.')) {
       endSearch();
-      locateAfterSearch = null;
+      session.locateAfterSearch = null;
     }
     return;
   }
@@ -1201,8 +1145,8 @@ form.addEventListener('submit', (e) => {
   }
 
   // Within the pre-generated range a search is just a filter.
-  if (precomputed?.covers(seed, filters)) {
-    const found = precomputed.search(filters);
+  if (session.precomputed?.covers(seed, filters)) {
+    const found = session.precomputed.search(filters);
     if (!tooBig(found.filter((c) => c[2]).length)) applyResult(seed, filters, found);
     return;
   }
@@ -1210,7 +1154,7 @@ form.addEventListener('submit', (e) => {
   if (tooBig(estimateShips(filters))) return;
 
   // The built worker is a plain script, which every browser can start. Only the dev server serves it as a module.
-  worker = import.meta.env.DEV
+  session.worker = import.meta.env.DEV
     ? new Worker(new URL('./generation/worker.ts', import.meta.url), { type: 'module' })
     : new Worker(new URL('./generation/worker.ts', import.meta.url));
   findBtn.textContent = 'Cancel search';
@@ -1218,7 +1162,7 @@ form.addEventListener('submit', (e) => {
   progress.hidden = false;
   progress.value = 0;
   const finish = endSearch;
-  worker.addEventListener('message', (ev: MessageEvent<FindResponse>) => {
+  session.worker.addEventListener('message', (ev: MessageEvent<FindResponse>) => {
     if (ev.data.type === 'progress') {
       progress.value = ev.data.fraction;
       return;
@@ -1226,11 +1170,11 @@ form.addEventListener('submit', (e) => {
     finish();
     if (!tooBig(ev.data.cities.filter((c) => c[2]).length)) applyResult(seed, filters, ev.data.cities);
   });
-  worker.addEventListener('error', (ev) => {
+  session.worker.addEventListener('error', (ev) => {
     finish();
     $('stats').textContent = `Search failed: ${ev.message}`;
   });
-  worker.postMessage({ seed, filters } satisfies FindRequest);
+  session.worker.postMessage({ seed, filters } satisfies FindRequest);
 });
 for (const el of [seedInput, maxInput, ...quadBoxes]) el.addEventListener('input', () => el.setCustomValidity(''));
 
@@ -1269,7 +1213,7 @@ aroundRadius.addEventListener('input', () => aroundRadius.setCustomValidity(''))
 
 // Instant searches are applied as the controls change; slow ones wait for the button.
 function formCovered(): boolean {
-  return !!precomputed && !worker && precomputed.covers(seedInput.value.trim(), previewFilters());
+  return !!session.precomputed && !session.worker && session.precomputed.covers(seedInput.value.trim(), previewFilters());
 }
 for (const el of [minInput, maxInput, diagInput, angleFromSelect, aroundRadius, ...quadBoxes]) {
   el.addEventListener('change', () => {
@@ -1283,32 +1227,32 @@ gotoBatch.addEventListener('change', () => {
   const n = Math.round(Number(gotoBatch.value));
   gotoBatch.value = '';
   // Out-of-range numbers go to the nearest end of the list.
-  if (Number.isFinite(n) && generatedCount) select(Math.min(generatedCount, Math.max(1, n)) - 1, true);
+  if (Number.isFinite(n) && session.generatedCount) select(Math.min(session.generatedCount, Math.max(1, n)) - 1, true);
 });
 
 $('finishedToggle').addEventListener('click', () => {
-  showFinished = !showFinished;
+  session.showFinished = !session.showFinished;
   renderBatches();
 });
 $<HTMLSelectElement>('pageSelect').addEventListener('change', (e) => {
-  page = Number((e.target as HTMLSelectElement).value);
+  session.page = Number((e.target as HTMLSelectElement).value);
   renderBatches();
 });
 
 $('pagePrev').addEventListener('click', () => {
-  page--;
+  session.page--;
   renderBatches();
 });
 $('pageNext').addEventListener('click', () => {
-  page++;
+  session.page++;
   renderBatches();
 });
 
 $('starBtn').addEventListener('click', async () => {
-  showStars = !showStars;
-  if (showStars && !skyFigures) {
-    skyFigures = await loadSkyFigures();
-    starCache = null;
+  session.showStars = !session.showStars;
+  if (session.showStars && !session.skyFigures) {
+    session.skyFigures = await loadSkyFigures();
+    session.starCache = null;
   }
   renderDetail();
 });
@@ -1322,11 +1266,11 @@ $('starBtn').addEventListener('click', async () => {
  * Returns whether there is anything to rebuild.
  */
 function retireFinished(keep: number | null): boolean {
-  const routes = batches.slice(0, generatedCount);
-  const done = (b: City[]) => b.length > 0 && b.every((c) => tracker.has(c));
+  const routes = session.batches.slice(0, session.generatedCount);
+  const done = (b: City[]) => b.length > 0 && b.every((c) => session.tracker.has(c));
   const finished = routes.filter((b, i) => i !== keep && done(b));
   if (!finished.length) return false;
-  if (routes.some((b) => !done(b) && b.some((c) => tracker.has(c)))) return false;
+  if (routes.some((b) => !done(b) && b.some((c) => session.tracker.has(c)))) return false;
   state.excluded = [...new Set([...state.excluded, ...finished.flat().map(cityId)])];
   save();
   return true;
@@ -1350,7 +1294,7 @@ function nearPosition(): { x: number; z: number } | null {
 }
 /** Show a search near a position as the player's own: the marker on the map, and the coordinates in the boxes. */
 function showPosition(pos: { x: number; z: number }): void {
-  you = { x: pos.x, z: pos.z };
+  session.you = { x: pos.x, z: pos.z };
   // A search from the empty boxes was around 0,0, and they stay empty for it.
   if (pos.x !== 0 || pos.z !== 0 || nearX.value.trim() !== '' || nearZ.value.trim() !== '') setNear(pos);
 }
@@ -1388,9 +1332,9 @@ function openNearest(pos: { x: number; z: number }, prefix = ''): boolean {
   // Prefer a city that is not looted; fall back to any city if everything is.
   let best: { batch: number; order: number; d: number } | null = null;
   for (const onlyFresh of [true, false]) {
-    batches.forEach((batch, b) =>
+    session.batches.forEach((batch, b) =>
       batch.forEach((c, k) => {
-        if (onlyFresh && tracker.has(c)) return;
+        if (onlyFresh && session.tracker.has(c)) return;
         const d = Math.hypot(c.x - pos.x, c.z - pos.z);
         if (!best || d < best.d) best = { batch: b, order: k, d };
       }),
@@ -1401,25 +1345,23 @@ function openNearest(pos: { x: number; z: number }, prefix = ''): boolean {
   if (!hit) return false;
   mapNote.textContent = `${prefix}Nearest: ${waypointName(hit.batch, hit.order)}, ${fmt(Math.round(hit.d))} blocks away.`;
   select(hit.batch);
-  map.fit([...batches[hit.batch], pos], state.filters.maxDist);
+  map.fit([...session.batches[hit.batch], pos], state.filters.maxDist);
   return true;
 }
 
-/** Set while a search around the player's position is running, so the nearest batch is opened once it lands. */
-let locateAfterSearch: { x: number; z: number } | null = null;
 
 /** Search around a position and open the route nearest it, whatever the search was showing before. */
 function searchAround(pos: { x: number; z: number }): void {
-  you = { x: pos.x, z: pos.z };
-  searchCentre = you;
+  session.you = { x: pos.x, z: pos.z };
+  session.searchCentre = session.you;
   showSearchFold();
   if (!(Number(aroundRadius.value) > 0)) aroundRadius.value = '10000';
   mapNote.textContent = 'Searching around your position…';
-  locateAfterSearch = you;
+  session.locateAfterSearch = session.you;
   form.requestSubmit();
   // A refused or invalid search never reports back, so don't leave the request hanging.
-  if (!worker && locateAfterSearch) {
-    locateAfterSearch = null;
+  if (!session.worker && session.locateAfterSearch) {
+    session.locateAfterSearch = null;
     mapNote.textContent = 'Could not search around that position. Check the settings.';
     renderMap();
   }
@@ -1438,7 +1380,7 @@ for (const el of [minInput, maxInput]) {
 }
 showQuickSpawn();
 $('quickSpawn').addEventListener('click', () => {
-  searchCentre = null;
+  session.searchCentre = null;
   showSearchFold();
   // Whatever the map last said was about the search this one replaces.
   mapNote.textContent = '';
@@ -1459,7 +1401,7 @@ $<HTMLFormElement>('nearMe').addEventListener('submit', (e) => {
 // goes to and fro between the two.
 $('searchBack').addEventListener('click', () => {
   const back = state.lastSearch;
-  if (worker || !back) return;
+  if (session.worker || !back) return;
   // A search near a position only remembers where it was: the Find cities settings stay as they are now.
   fillSearch(back.around ? { ...formFilters(), around: back.around } : back);
   if (back.around) showPosition(back.around);
@@ -1473,7 +1415,7 @@ $('searchBack').addEventListener('click', () => {
 $('showOnMap').addEventListener('click', () => {
   const pos = nearPosition();
   if (!pos) return;
-  pin = pos;
+  session.pin = pos;
   mapNote.textContent = '';
   renderMap();
   map.goTo(pos.x, pos.z);
@@ -1482,14 +1424,14 @@ $('showOnMap').addEventListener('click', () => {
 // The other way round: the coordinates at the map's crosshair go into the boxes, once. They do not follow
 // the map afterwards.
 $('useCentre').addEventListener('click', () => {
-  setNear(viewCentre);
+  setNear(session.viewCentre);
   nearX.setCustomValidity('');
 });
 
 // Clear the boxes and the markers those two leave, and put the view back at 0,0.
 $('mapReset').addEventListener('click', () => {
-  you = null;
-  pin = null;
+  session.you = null;
+  session.pin = null;
   nearX.value = '';
   nearZ.value = '';
   nearX.setCustomValidity('');
@@ -1508,7 +1450,7 @@ sizeInput.addEventListener('change', () => {
   state.batchSize = Math.min(MAX_BATCH_SIZE, Math.max(1, Number.isFinite(n) ? n : BATCH_SIZE));
   sizeInput.value = String(state.batchSize);
   save();
-  selected = null;
+  session.selected = null;
   rebuild();
   render();
 });
@@ -1520,7 +1462,7 @@ hopInput.addEventListener('change', () => {
   state.maxHop = Number.isFinite(n) && n > 0 ? n : 0;
   hopInput.value = String(state.maxHop);
   save();
-  selected = null;
+  session.selected = null;
   rebuild();
   render();
 });
@@ -1536,7 +1478,7 @@ deviationInput.addEventListener('change', () => {
   state.lineDeviation = Number.isFinite(n) && n > 0 ? n : 0;
   deviationInput.value = String(state.lineDeviation);
   save();
-  selected = null;
+  session.selected = null;
   rebuild();
   render();
 });
@@ -1548,7 +1490,7 @@ shapeSelect.addEventListener('change', () => {
   state.batchShape = shapeSelect.value as BatchShape;
   showDeviation();
   save();
-  selected = null;
+  session.selected = null;
   rebuild();
   render();
 });
@@ -1568,7 +1510,7 @@ mappedBox.checked = !!state.includeMapped;
 mappedBox.addEventListener('change', () => {
   state.includeMapped = mappedBox.checked;
   save();
-  selected = null;
+  session.selected = null;
   rebuild();
   render();
   showExploredNote();
@@ -1579,7 +1521,7 @@ possibleBox.checked = !!state.skipPossible;
 possibleBox.addEventListener('change', () => {
   state.skipPossible = possibleBox.checked;
   save();
-  selected = null;
+  session.selected = null;
   rebuild();
   render();
 });
@@ -1587,20 +1529,20 @@ possibleBox.addEventListener('change', () => {
 // ---------- dev mode: the survey ----------
 
 const { showSurvey } = initDevMode({
-  tracker: () => tracker,
-  searching: () => worker !== null,
-  precomputed: () => precomputed,
-  isMapped: (x, z) => !!explored?.isMapped(x, z),
-  reportedGone: (id) => shipReports.gone.has(id),
+  tracker: () => session.tracker,
+  searching: () => session.worker !== null,
+  precomputed: () => session.precomputed,
+  isMapped: (x, z) => !!session.explored?.isMapped(x, z),
+  reportedGone: (id) => session.shipReports.gone.has(id),
   showSearch: (filters, found, openCustom) => {
-    openCustomAfterSearch = openCustom;
+    session.openCustomAfterSearch = openCustom;
     applyResult(DEFAULT_SEED, filters, found);
   },
 });
 
 // Put every search setting back to how a first-time visitor finds it, and search again.
 $('searchReset').addEventListener('click', () => {
-  if (worker) return;
+  if (session.worker) return;
   if (
     !confirm(
       'Restore the default settings? Your looted marks are kept. Custom routes are kept too, unless the world seed had been changed.',
@@ -1633,20 +1575,20 @@ $('searchReset').addEventListener('click', () => {
   save();
   form.requestSubmit();
   // If the search itself was already the default one, nothing re-ran, so regroup with the reset batch settings.
-  selected = null;
+  session.selected = null;
   rebuild();
   render();
 });
 
 function showExploredNote(): void {
   const note = $('exploredNote');
-  if (!explored) {
+  if (!session.explored) {
     note.textContent = 'No webmap data loaded, so ships already on the webmap could not be left out.';
     return;
   }
   // The data's own date only moves when the webmap changes. Where the time of the last check is known,
   // that is the one to show: the data was still right then.
-  const changed = Date.parse(explored.fetchedAt);
+  const changed = Date.parse(session.explored.fetchedAt);
   const when = (t: number) => new Date(t).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
   note.textContent =
     `Ships already on the webmap are ${state.includeMapped ? 'included in' : 'left out of'} the routes. ` +
@@ -1671,10 +1613,10 @@ if (!import.meta.env.DEV) {
 // ---------- export ----------
 
 const selectedLines = (): string[] =>
-  selected === null ? [] : waypointLines(batches[selected], selected, (c) => tracker.has(c));
+  session.selected === null ? [] : waypointLines(session.batches[session.selected], session.selected, (c) => session.tracker.has(c));
 
 $('download').addEventListener('click', () => {
-  if (selected !== null) download(`end-cities-route-${selected + 1}.txt`, waypointFile(selectedLines()));
+  if (session.selected !== null) download(`end-cities-route-${session.selected + 1}.txt`, waypointFile(selectedLines()));
 });
 
 async function copyText(text: string): Promise<boolean> {
@@ -1785,17 +1727,17 @@ exportBox.addEventListener('toggle', () => {
 showChatHint();
 
 function markAll(v: boolean): void {
-  if (selected === null) return;
-  recordMarks(batches[selected]);
-  for (const c of batches[selected]) tracker.set(c, v);
+  if (session.selected === null) return;
+  recordMarks(session.batches[session.selected]);
+  for (const c of session.batches[session.selected]) session.tracker.set(c, v);
   render();
 }
 $('customDelete').addEventListener('click', () => {
-  if (selected === null || !isCustom(selected)) return;
-  if (!confirm(`Delete ${batchTitle(selected).toLowerCase()}? Its ships go back to where they were. Looted marks are kept.`)) return;
-  state.custom.splice(selected - generatedCount, 1);
+  if (session.selected === null || !isCustom(session.selected)) return;
+  if (!confirm(`Delete ${batchTitle(session.selected).toLowerCase()}? Its ships go back to where they were. Looted marks are kept.`)) return;
+  state.custom.splice(session.selected - session.generatedCount, 1);
   save();
-  selected = null;
+  session.selected = null;
   rebuild();
   render();
 });
@@ -1806,16 +1748,16 @@ $('markAll').addEventListener('click', () => markAll(true));
 // Marks the city the player is at as looted, which moves "current city" on to the next one.
 // With `already`, as looted by someone else before the player got there.
 function nextCity(already: boolean): void {
-  if (selected === null) return;
-  const batch = batches[selected];
-  const at = batch.findIndex((c) => !tracker.has(c));
+  if (session.selected === null) return;
+  const batch = session.batches[session.selected];
+  const at = batch.findIndex((c) => !session.tracker.has(c));
   if (at < 0) return;
   recordMarks([batch[at]]);
-  if (already) tracker.setAlready(batch[at], true);
-  else tracker.set(batch[at], true);
+  if (already) session.tracker.setAlready(batch[at], true);
+  else session.tracker.set(batch[at], true);
   render();
   // Bring the new current city into view in the list.
-  const next = batch.findIndex((c) => !tracker.has(c));
+  const next = batch.findIndex((c) => !session.tracker.has(c));
   document.querySelectorAll('#cities li')[next < 0 ? at : next]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 $('nextCity').addEventListener('click', () => nextCity(false));
@@ -1828,13 +1770,13 @@ if (state.redo) state.redo = state.redo.filter((e) => ['add', 'order', 'marks', 
 if (!state.edits && state.appended?.length) state.edits = state.appended.map((id) => ({ kind: 'add', id }));
 const addOneBtn = $('addOne');
 addOneBtn.addEventListener('click', () => {
-  if (selected === null) return;
-  const batch = batches[selected];
+  if (session.selected === null) return;
+  const batch = session.batches[session.selected];
   let best: City | null = null;
   let bestDist = Infinity;
   let beyond: FoundCity | null = null;
-  for (const o of outside) {
-    if (o.missing || tracker.has(o.city)) continue;
+  for (const o of session.outside) {
+    if (o.missing || session.tracker.has(o.city)) continue;
     // Left out on purpose as probably looted: not what an extra stop should be.
     if (o.note === MAPPED_NOTE || o.note.startsWith('possibly looted')) continue;
     const last = batch[batch.length - 1];
@@ -1845,13 +1787,13 @@ addOneBtn.addEventListener('click', () => {
   // A city just beyond the search area is taken when it is closer than anything inside it.
   const last = batch[batch.length - 1];
   if (last) {
-    const known = new Set([...batches.flat(), ...outside.map((o) => o.city)].map(cityId));
+    const known = new Set([...session.batches.flat(), ...session.outside.map((o) => o.city)].map(cityId));
     const aomc = state.seed === DEFAULT_SEED;
     for (const found of citiesAround(last, Math.min(bestDist, BEYOND_BLOCKS))) {
       const city: City = { x: found[0], z: found[1], source: 'seed' };
       const id = cityId(city);
-      if (!found[2] || known.has(id) || tracker.has(city)) continue;
-      if (aomc && (shipReports.gone.has(id) || (!state.includeMapped && explored?.isMapped(city.x, city.z)))) continue;
+      if (!found[2] || known.has(id) || session.tracker.has(city)) continue;
+      if (aomc && (session.shipReports.gone.has(id) || (!state.includeMapped && session.explored?.isMapped(city.x, city.z)))) continue;
       if (state.skipPossible && possible(city)) continue;
       const d = Math.hypot(last.x - city.x, last.z - city.z);
       if (d < bestDist) {
@@ -1870,13 +1812,13 @@ addOneBtn.addEventListener('click', () => {
   undrop(id);
   state.appended = [...(state.appended ?? []).filter((x) => x !== id), id];
   pushEdit({ kind: 'add', id });
-  if (isCustom(selected)) {
-    const k = selected - generatedCount;
+  if (isCustom(session.selected)) {
+    const k = session.selected - session.generatedCount;
     state.custom[k].push(id);
     delete state.moved[id];
     save();
     rebuild(() => {
-      selected = generatedCount + k < batches.length ? generatedCount + k : null;
+      session.selected = session.generatedCount + k < session.batches.length ? session.generatedCount + k : null;
     });
     render();
     return;
@@ -1897,12 +1839,12 @@ function applyEdit(i: number, edit: RouteEdit): RouteEdit {
   const reopenCustom = (k: number) => {
     save();
     rebuild(() => {
-      selected = generatedCount + k < batches.length ? generatedCount + k : null;
+      session.selected = session.generatedCount + k < session.batches.length ? session.generatedCount + k : null;
     });
     render();
   };
   if (edit.kind === 'order') {
-    const now = isCustom(i) ? [...state.custom[i - generatedCount]] : (state.orders?.[edit.key] ?? null);
+    const now = isCustom(i) ? [...state.custom[i - session.generatedCount]] : (state.orders?.[edit.key] ?? null);
     writeOrder(i, edit.key, edit.before);
     return { kind: 'order', key: edit.key, before: now };
   }
@@ -1911,20 +1853,20 @@ function applyEdit(i: number, edit: RouteEdit): RouteEdit {
       const [x, z] = id.split(',').map(Number);
       return { x, z };
     });
-    const now: RouteEdit = { kind: 'marks', before: cities.map((c) => [cityId(c), tracker.isAlready(c) ? 2 : tracker.has(c) ? 1 : 0]) };
+    const now: RouteEdit = { kind: 'marks', before: cities.map((c) => [cityId(c), session.tracker.isAlready(c) ? 2 : session.tracker.has(c) ? 1 : 0]) };
     // Each city goes back to the mark it had. Marks on the shared list are not the player's to remove.
     edit.before.forEach(([, was], n) => {
-      if (was === 2) tracker.setAlready(cities[n], true);
+      if (was === 2) session.tracker.setAlready(cities[n], true);
       else {
-        tracker.set(cities[n], was === 1);
-        if (was === 1) tracker.setAlready(cities[n], false);
+        session.tracker.set(cities[n], was === 1);
+        if (was === 1) session.tracker.setAlready(cities[n], false);
       }
     });
     // Possibly-looted cities may be in or out of the routes again.
-    if (state.skipPossible) rebuildKeeping(batches[i].length ? cityId(batches[i][0]) : null);
+    if (state.skipPossible) rebuildKeeping(session.batches[i].length ? cityId(session.batches[i][0]) : null);
     else render();
     // Say so when a city could not go back to not looted.
-    const stuck = edit.before.filter(([, was], n) => was === 0 && tracker.isShared(cities[n])).length;
+    const stuck = edit.before.filter(([, was], n) => was === 0 && session.tracker.isShared(cities[n])).length;
     if (stuck) {
       const note = $('routeNote');
       note.textContent = `${stuck === 1 ? '1 ship stays' : `${stuck} ships stay`} looted: on the shared looted list, which is the same for everyone.`;
@@ -1936,14 +1878,14 @@ function applyEdit(i: number, edit: RouteEdit): RouteEdit {
   const id = edit.id;
   if (edit.kind === 'add') {
     // Take the added city back out, noting how it was held so it can be put back.
-    const batch = batches[i];
+    const batch = session.batches[i];
     const extra = state.extra?.find((c) => `${c[0]},${c[1]}` === id);
-    const back: RouteEdit = { kind: 'readd', id, anchor: state.moved[id], custom: isCustom(i) ? i - generatedCount : undefined, extra };
+    const back: RouteEdit = { kind: 'readd', id, anchor: state.moved[id], custom: isCustom(i) ? i - session.generatedCount : undefined, extra };
     state.appended = (state.appended ?? []).filter((x) => x !== id);
     // One brought in from beyond the search goes back out of sight.
     if (state.extra) state.extra = state.extra.filter((c) => c !== extra);
     if (isCustom(i)) {
-      const k = i - generatedCount;
+      const k = i - session.generatedCount;
       state.custom[k] = state.custom[k].filter((x) => x !== id);
       reopenCustom(k);
       return back;
@@ -1972,63 +1914,63 @@ function applyEdit(i: number, edit: RouteEdit): RouteEdit {
 
 // Undo takes back the latest change made by hand to the open route; redo makes it again.
 $('addOneUndo').addEventListener('click', () => {
-  if (selected === null) return;
-  const edit = lastEdit(selected);
+  if (session.selected === null) return;
+  const edit = lastEdit(session.selected);
   if (!edit) return;
   state.edits = state.edits!.filter((e) => e !== edit);
-  state.redo = [...(state.redo ?? []), applyEdit(selected, edit)].slice(-100);
+  state.redo = [...(state.redo ?? []), applyEdit(session.selected, edit)].slice(-100);
   save();
   renderDetail();
 });
 $('routeRedo').addEventListener('click', () => {
-  if (selected === null) return;
-  const edit = lastEdit(selected, state.redo);
+  if (session.selected === null) return;
+  const edit = lastEdit(session.selected, state.redo);
   if (!edit) return;
   state.redo = state.redo!.filter((e) => e !== edit);
   // Straight onto the list of changes: a redo must not wipe the redos still waiting behind it.
-  state.edits = [...(state.edits ?? []), applyEdit(selected, edit)].slice(-100);
+  state.edits = [...(state.edits ?? []), applyEdit(session.selected, edit)].slice(-100);
   save();
   renderDetail();
 });
 
 // Back to the order the route was worked out in. Cities added by hand stay, at the end.
 $('orderReset').addEventListener('click', () => {
-  if (selected === null) return;
-  const key = orderKey(selected);
+  if (session.selected === null) return;
+  const key = orderKey(session.selected);
   const before = key ? state.orders?.[key] : undefined;
   if (!key || !before) return;
   pushEdit({ kind: 'order', key, before });
-  writeOrder(selected, key, null);
+  writeOrder(session.selected, key, null);
 });
 $('markNone').addEventListener('click', () => markAll(false));
 
 $('citiesExport').addEventListener('click', () => {
-  const rows = batches.flatMap((batch, b) =>
-    batch.map((c, k) => `${c.x},${c.z},${b + 1},${k + 1},${tracker.has(c) ? 'yes' : 'no'}`),
+  const rows = session.batches.flatMap((batch, b) =>
+    batch.map((c, k) => `${c.x},${c.z},${b + 1},${k + 1},${session.tracker.has(c) ? 'yes' : 'no'}`),
   );
   download('end-cities.csv', ['x,z,route,stop,looted', ...rows].join('\n') + '\n');
 });
 
 $('visitedReset').addEventListener('click', () => {
-  if (!tracker.count || !confirm(`Clear all ${tracker.count} of your looted marks? This cannot be undone: press Export looted first to keep a copy.`)) return;
-  tracker.clear();
+  if (!session.tracker.count || !confirm(`Clear all ${session.tracker.count} of your looted marks? This cannot be undone: press Export looted first to keep a copy.`)) return;
+  session.tracker.clear();
   state.excluded = [];
   save();
-  selected = null;
+  session.selected = null;
   rebuild();
   render();
 });
 
 function showSharedNote(): void {
-  $('sharedNote').textContent = tracker.sharedCount
-    ? `${fmt(tracker.sharedCount)} ships on the shared list so far.`
+  $('sharedNote').textContent = session.tracker.sharedCount
+    ? `${fmt(session.tracker.sharedCount)} ships on the shared list so far.`
     : 'The shared list is empty so far.';
 }
 showSharedNote();
 
 // ---------- ship reports and looted submissions ----------
 
-const { openReport } = initSubmissions({ tracker: () => tracker });
+const { openReport } = initSubmissions({ tracker: () => session.tracker });
 
 // Names of other parts of the page in the help text bring that part into view, wherever the layout has put it.
 for (const link of document.querySelectorAll<HTMLElement>('.jump')) {
@@ -2047,23 +1989,23 @@ for (const link of document.querySelectorAll<HTMLElement>('.jump')) {
 }
 
 $('help').addEventListener('click', () => {
-  helpOpen = selected !== null && !helpOpen;
+  session.helpOpen = session.selected !== null && !session.helpOpen;
   renderDetail();
   $('detail').scrollIntoView({ block: 'start', behavior: 'smooth' });
 });
 $('helpBack').addEventListener('click', () => {
-  helpOpen = false;
+  session.helpOpen = false;
   renderDetail();
 });
 
-$('visitedExport').addEventListener('click', () => download('end-cities-looted.csv', tracker.toCsv()));
+$('visitedExport').addEventListener('click', () => download('end-cities-looted.csv', session.tracker.toCsv()));
 
 const visitedFile = $<HTMLInputElement>('visitedFile');
 $('visitedImport').addEventListener('click', () => visitedFile.click());
 visitedFile.addEventListener('change', async () => {
   const file = visitedFile.files?.[0];
   if (!file) return;
-  tracker.mergeCsv(await file.text());
+  session.tracker.mergeCsv(await file.text());
   visitedFile.value = '';
   render();
 });
@@ -2072,9 +2014,9 @@ visitedFile.addEventListener('change', async () => {
 
 map.onHover = (c, px, py) => {
   setHot(c?.city ?? null);
-  if (selected !== null) {
+  if (session.selected !== null) {
     document.querySelectorAll('#cities li').forEach((li, k) => {
-      li.classList.toggle('hot', c?.batch === selected && c?.order === k);
+      li.classList.toggle('hot', c?.batch === session.selected && c?.order === k);
     });
   }
   tooltip.hidden = !c;
@@ -2109,10 +2051,10 @@ map.onHover = (c, px, py) => {
 /** Who took a looted city's elytra, as far as is known. */
 function lootedText(c: City): string {
   // Found empty on arrival: the looter is unknown, whoever it was that found it so.
-  if (tracker.isAlready(c)) return 'Looted by an unknown hunter';
-  const who = tracker.lootedBy(c);
+  if (session.tracker.isAlready(c)) return 'Looted by an unknown hunter';
+  const who = session.tracker.lootedBy(c);
   if (who) return `Looted by ${who}`;
-  return tracker.isShared(c) ? 'Looted' : 'Looted by you';
+  return session.tracker.isShared(c) ? 'Looted' : 'Looted by you';
 }
 
 /** One line about a city on the map: its name, where it is and anything known about it. */
@@ -2121,9 +2063,9 @@ const cityLine = (c: MapCity): string =>
     ? c.missing
       ? `${xzText(c.city)} · ${c.note}`
       : `${xzText(c.city)} · not in a route: ${c.note}`
-    : `${waypointName(c.batch, c.order)} · ${xzText(c.city)}${c.visited ? (tracker.showsAlready(c.city) ? ' · looted by someone else' : ' · looted') : ''}` +
+    : `${waypointName(c.batch, c.order)} · ${xzText(c.city)}${c.visited ? (session.tracker.showsAlready(c.city) ? ' · looted by someone else' : ' · looted') : ''}` +
       (c.possible ? ` · ${possibleNote(c.city) ?? POSSIBLE_NOTE}` : '') +
-      (uncertainShips.has(cityId(c.city)) ? ' · ship uncertain' : '');
+      (session.uncertainShips.has(cityId(c.city)) ? ' · ship uncertain' : '');
 
 // The city last clicked stays described under the map, where a hover tip cannot (there is no hover under a finger).
 let picked: City | null = null;
@@ -2133,11 +2075,11 @@ function showPicked(c: MapCity): void {
   pickedOn = c;
   const extra: string[] = [];
   if (c.batch >= 0) {
-    extra.push(`stop ${c.order + 1} of ${batches[c.batch].length} in ${batchTitle(c.batch)}`);
-    const prev = batches[c.batch][c.order - 1];
+    extra.push(`stop ${c.order + 1} of ${session.batches[c.batch].length} in ${batchTitle(c.batch)}`);
+    const prev = session.batches[c.batch][c.order - 1];
     if (prev) extra.push(`${fmt(Math.round(Math.hypot(c.city.x - prev.x, c.city.z - prev.z)))} blocks from the stop before`);
   }
-  if (you) extra.push(`${fmt(Math.round(Math.hypot(c.city.x - you.x, c.city.z - you.z)))} blocks from your position`);
+  if (session.you) extra.push(`${fmt(Math.round(Math.hypot(c.city.x - session.you.x, c.city.z - session.you.z)))} blocks from your position`);
   $('pickedText').textContent = [cityLine(c), ...extra].join(' · ');
   $('picked').hidden = false;
 }
@@ -2154,13 +2096,13 @@ $('pickedMore').addEventListener('click', () => {
   // The city as it stands now: it may have been looted, moved or regrouped since it was tapped.
   const id = cityId(pickedOn.city);
   let now: MapCity | null = null;
-  batches.forEach((batch, b) =>
+  session.batches.forEach((batch, b) =>
     batch.forEach((city, order) => {
-      if (cityId(city) === id) now = { city, batch: b, order, color: color(b), visited: tracker.has(city), possible: possible(city) };
+      if (cityId(city) === id) now = { city, batch: b, order, color: color(b), visited: session.tracker.has(city), possible: possible(city) };
     }),
   );
-  const out = outside.find((o) => cityId(o.city) === id);
-  if (!now && out) now = { city: out.city, batch: -1, order: 0, color: OUTSIDE_COLOR, visited: tracker.has(out.city), note: out.note, missing: out.missing };
+  const out = session.outside.find((o) => cityId(o.city) === id);
+  if (!now && out) now = { city: out.city, batch: -1, order: 0, color: OUTSIDE_COLOR, visited: session.tracker.has(out.city), note: out.note, missing: out.missing };
   if (!now) return;
   const at = $('pickedMore').getBoundingClientRect();
   openMenu(now, at.left, at.top, pickedOn.city);
@@ -2170,7 +2112,7 @@ map.onPick = (c) => {
   showPicked(c);
   if (c.batch < 0) return;
   // A city of the route that is already open leaves the map where it is.
-  if (c.batch !== selected) select(c.batch, true);
+  if (c.batch !== session.selected) select(c.batch, true);
   // Light up the city's row in the route's list, without moving the page or the list.
   document.querySelectorAll('#cities li')[c.order]?.classList.add('hot');
 };
@@ -2201,8 +2143,8 @@ document.addEventListener(
 /** Rebuild after a change, keeping the batch that holds this city selected. */
 function rebuildKeeping(id: string | null): void {
   rebuild(() => {
-    selected = id === null ? null : batches.findIndex((b) => b.some((c) => cityId(c) === id));
-    if (selected !== null && selected < 0) selected = null;
+    session.selected = id === null ? null : session.batches.findIndex((b) => b.some((c) => cityId(c) === id));
+    if (session.selected !== null && session.selected < 0) session.selected = null;
   });
   render();
 }
@@ -2216,30 +2158,30 @@ function addCityItems(c: MapCity, items: [string, () => void][]): void {
   }
   const id = cityId(c.city);
   // After a change the batches are rebuilt; keep the same one open afterwards.
-  const openCustom = selected !== null && isCustom(selected) ? selected - generatedCount : -1;
-  const keep = selected !== null && openCustom < 0 && batches[selected].length ? cityId(batches[selected][0]) : null;
+  const openCustom = session.selected !== null && isCustom(session.selected) ? session.selected - session.generatedCount : -1;
+  const keep = session.selected !== null && openCustom < 0 && session.batches[session.selected].length ? cityId(session.batches[session.selected][0]) : null;
   const reselect = (custom = openCustom) => {
     if (custom < 0) return rebuildKeeping(keep);
     rebuild(() => {
-      selected = generatedCount + custom < batches.length ? generatedCount + custom : null;
+      session.selected = session.generatedCount + custom < session.batches.length ? session.generatedCount + custom : null;
     });
     render();
   };
 
-  if (tracker.isShared(c.city)) {
+  if (session.tracker.isShared(c.city)) {
     items.push(['On the shared looted list. Wrong? Report it on GitHub', () => {
       window.open(ISSUES_URL, '_blank', 'noopener');
     }]);
   } else if (c.visited) {
-    if (!tracker.isAlready(c.city)) items.push(['Mark as looted by someone else', () => {
+    if (!session.tracker.isAlready(c.city)) items.push(['Mark as looted by someone else', () => {
       recordMarks([c.city]);
-      tracker.setAlready(c.city, true);
+      session.tracker.setAlready(c.city, true);
       reselect();
     }]);
     items.push(['Mark as not looted', () => {
       if (!confirm(`Mark the ship at ${xzText(c.city)} as not looted?`)) return;
       recordMarks([c.city]);
-      tracker.set(c.city, false);
+      session.tracker.set(c.city, false);
       state.excluded = state.excluded.filter((x) => x !== id);
       save();
       reselect();
@@ -2247,20 +2189,20 @@ function addCityItems(c: MapCity, items: [string, () => void][]): void {
   } else {
     items.push(['Mark as looted', () => {
       recordMarks([c.city]);
-      tracker.set(c.city, true);
+      session.tracker.set(c.city, true);
       render();
     }]);
     // Someone got here first: the cities around it may well be looted too.
     items.push(['Mark as looted by someone else', () => {
       recordMarks([c.city]);
-      tracker.setAlready(c.city, true);
+      session.tracker.setAlready(c.city, true);
       reselect();
     }]);
   }
 
   // Reports go to the maintainer for review; nothing changes for anyone until one is accepted.
   if (state.seed === DEFAULT_SEED) {
-    items.push(['Report incorrect…', () => openReport(c.city, true, uncertainShips.has(id))]);
+    items.push(['Report incorrect…', () => openReport(c.city, true, session.uncertainShips.has(id))]);
   }
 
   const inCustom = state.custom.findIndex((ids) => ids.includes(id));
@@ -2279,10 +2221,10 @@ function addCityItems(c: MapCity, items: [string, () => void][]): void {
   if (!c.visited) {
     if (openCustom >= 0 && inCustom !== openCustom) {
       items.push([`Add to custom ${openCustom + 1}`, () => addToCustom(openCustom)]);
-    } else if (selected !== null && openCustom < 0 && c.batch !== selected && inCustom < 0) {
-      const target = selected;
+    } else if (session.selected !== null && openCustom < 0 && c.batch !== session.selected && inCustom < 0) {
+      const target = session.selected;
       // Anchor the move to a city that belongs to the batch of its own accord, so it survives regrouping.
-      const anchor = batches[target].find((x) => !(cityId(x) in state.moved));
+      const anchor = session.batches[target].find((x) => !(cityId(x) in state.moved));
       if (anchor) {
         items.push([`Add to route ${target + 1}`, () => {
           undrop(id);
@@ -2298,10 +2240,10 @@ function addCityItems(c: MapCity, items: [string, () => void][]): void {
   }
   // Its place in the open route.
   // With a mouse the rows can be dragged; these are for fingers.
-  if (selected !== null && c.batch === selected && matchMedia('(pointer: coarse)').matches) {
-    const open = selected;
+  if (session.selected !== null && c.batch === session.selected && matchMedia('(pointer: coarse)').matches) {
+    const open = session.selected;
     if (c.order > 0) items.push(['Move up', () => moveCity(open, c.order, c.order - 1)]);
-    if (c.order < batches[open].length - 1) items.push(['Move down', () => moveCity(open, c.order, c.order + 1)]);
+    if (c.order < session.batches[open].length - 1) items.push(['Move down', () => moveCity(open, c.order, c.order + 1)]);
   }
   // Cities moved in by hand, or in a custom route, have their own way out below.
   if (c.batch >= 0 && inCustom < 0 && !(id in state.moved)) {
@@ -2309,8 +2251,8 @@ function addCityItems(c: MapCity, items: [string, () => void][]): void {
       state.dropped = [...(state.dropped ?? []), id];
       save();
       // Stay on the route it was taken from, unless that was its last city.
-      const stay = batches[c.batch].find((x) => cityId(x) !== id && !(cityId(x) in state.moved));
-      rebuildKeeping(selected === c.batch ? (stay ? cityId(stay) : null) : keep);
+      const stay = session.batches[c.batch].find((x) => cityId(x) !== id && !(cityId(x) in state.moved));
+      rebuildKeeping(session.selected === c.batch ? (stay ? cityId(stay) : null) : keep);
     }]);
   }
   if (state.dropped?.includes(id) && c.batch < 0) {
@@ -2360,7 +2302,7 @@ function openMenu(c: MapCity | null, px: number, py: number, pos: { x: number; z
     }
   }]);
   items.push(['Set my position here', () => {
-    you = here;
+    session.you = here;
     setNear(here);
     mapNote.textContent = '';
     renderMap();
@@ -2472,16 +2414,15 @@ const cursor = $('cursor');
 // The readout never goes blank, so the bar under the map keeps its shape: it shows the block under
 // the pointer, or the centre of the view (the faint crosshair) when the pointer is not on the map.
 let pointerAt: { x: number; z: number } | null = null;
-let viewCentre = { x: 0, z: 0 };
 const showCoords = () => {
-  cursor.textContent = pointerAt ? xzText(pointerAt) : `centre ${xzText(viewCentre)}`;
+  cursor.textContent = pointerAt ? xzText(pointerAt) : `centre ${xzText(session.viewCentre)}`;
 };
 map.onCursor = (pos) => {
   pointerAt = pos;
   showCoords();
 };
 map.onView = (centre) => {
-  viewCentre = centre;
+  session.viewCentre = centre;
   showCoords();
   renderLegend();
 };
@@ -2492,30 +2433,30 @@ map.onView = (centre) => {
 const gooseCredit = $('gooseCredit');
 const gooseTally = $('gooseTally');
 const showTally = () => {
-  if (!showTrophies) return (gooseTally.textContent = '');
+  if (!session.showTrophies) return (gooseTally.textContent = '');
   const looted = lootedCities().length;
   const parts = [looted ? `${fmt(looted)} ${looted === 1 ? 'ship' : 'ships'} looted so far (gold)` : 'nothing looted yet'];
-  if (state.seed === DEFAULT_SEED && explored) {
-    parts.push(webmapCities ? `${fmt(webmapCities.length)} more in areas on the webmap (green)` : 'counting the ones on the webmap…');
+  if (state.seed === DEFAULT_SEED && session.explored) {
+    parts.push(session.webmapCities ? `${fmt(session.webmapCities.length)} more in areas on the webmap (green)` : 'counting the ones on the webmap…');
   }
   gooseTally.textContent = `Honk! ${parts.join(', ')}.`;
 };
 gooseCredit.addEventListener('click', async () => {
-  showTrophies = !showTrophies;
+  session.showTrophies = !session.showTrophies;
   showTally();
   renderMap();
-  if (!showTrophies) return;
+  if (!session.showTrophies) return;
   const fitAll = () => {
-    const all = [...lootedCities(), ...(webmapCities ?? [])];
+    const all = [...lootedCities(), ...(session.webmapCities ?? [])];
     if (all.length) map.fit(all, state.filters.maxDist);
   };
   fitAll();
   // The webmap's cities take a moment to work out the first time; they join the view when ready.
-  if (!webmapCities && explored && state.seed === DEFAULT_SEED) {
-    webmapCities = await findWebmapCities(explored);
+  if (!session.webmapCities && session.explored && state.seed === DEFAULT_SEED) {
+    session.webmapCities = await findWebmapCities(session.explored);
     showTally();
     renderMap();
-    if (showTrophies) fitAll();
+    if (session.showTrophies) fitAll();
   }
 });
 
@@ -2529,14 +2470,6 @@ if (state.filters.around) showPosition(state.filters.around);
 rebuild();
 render();
 fitSearch(state.filters);
-// With results from last time, start with the settings folded so the batches are in view.
-
-/** Looted cities published with the site, for the default server's world only. */
-let sharedLooted: string[] = [];
-/** The ones among them that a player found already looted on arrival. */
-let sharedAlready: string[] = [];
-/** And who sent each one in, where a username was given. */
-let sharedBy: Record<string, string[]> = {};
 async function loadSharedLooted(): Promise<{ cities: string[]; already: string[]; by: Record<string, string[]> }> {
   try {
     const res = await fetch('./looted.json');
@@ -2548,7 +2481,7 @@ async function loadSharedLooted(): Promise<{ cities: string[]; already: string[]
 }
 
 Promise.all([Explored.load(), Precomputed.load(), loadSharedLooted(), loadShipReports()]).then(([e, p, looted, ships]) => {
-  shipReports = {
+  session.shipReports = {
     gone: new Map([
       ...(ships.missing ?? []).map((id): [string, 'missing'] => [id, 'missing']),
       ...(ships.noCity ?? []).map((id): [string, 'no-city'] => [id, 'no-city']),
@@ -2561,12 +2494,12 @@ Promise.all([Explored.load(), Precomputed.load(), loadSharedLooted(), loadShipRe
     state.found = p.search(state.filters);
     save();
   }
-  explored = e;
-  precomputed = p;
-  sharedLooted = looted.cities;
-  sharedAlready = looted.already;
-  sharedBy = looted.by;
-  if (state.seed === DEFAULT_SEED) tracker.setShared(sharedLooted, sharedAlready, sharedBy);
+  session.explored = e;
+  session.precomputed = p;
+  session.sharedLooted = looted.cities;
+  session.sharedAlready = looted.already;
+  session.sharedBy = looted.by;
+  if (state.seed === DEFAULT_SEED) session.tracker.setShared(session.sharedLooted, session.sharedAlready, session.sharedBy);
   showSharedNote();
   showExploredNote();
   // Routes finished on an earlier visit are regrouped away once the routes are first worked out.
