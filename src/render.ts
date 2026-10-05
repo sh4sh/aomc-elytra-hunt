@@ -8,7 +8,7 @@ import { openMenu } from './map-actions';
 import { map } from './map-view';
 import { cityChatLine, copiedKey, copiedLines, copyText } from './route-panel';
 import { batchTitle, batchWorker, color, earlierPaths, earlierStudy, isCustom, lastEdit, looted, lootedCities, moveCity, orderKey, possible, possibleNote, rebuild, recordMarks, routeLength, startPoint } from './routes';
-import { aroundMode, formFilters, retireFinished } from './search';
+import { aroundMode, formFilters, retireFinished, showClearPosition } from './search';
 import { session } from './session';
 import { showSurvey } from './settings';
 import { DEFAULT_SEED, save, state } from './state';
@@ -59,6 +59,7 @@ export function renderLegend(): void {
 }
 
 export function renderMap(): void {
+  showClearPosition();
   const cities: MapCity[] = [];
   session.batches.forEach((batch, b) =>
     batch.forEach((city, order) =>
@@ -272,7 +273,10 @@ export function renderDetail(): void {
   const back = $('helpBack');
   back.hidden = session.selected === null;
   if (session.selected !== null) back.textContent = `← Back to ${batchTitle(session.selected).toLowerCase()}`;
-  $('help').textContent = session.selected !== null && session.helpOpen ? 'Close help' : 'How to use';
+  // The help opens in the other panel, which the button says while there is something to open.
+  const closing = session.selected !== null && session.helpOpen;
+  $('helpLabel').textContent = closing ? 'Close help' : 'How to use';
+  $('helpWhere').hidden = closing;
   if (session.selected === null) return;
   const batch = session.batches[session.selected];
   const i = session.selected;

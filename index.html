@@ -13,7 +13,7 @@
       <header>
         <h1>AOMC Elytra Hunt</h1>
         <p>Find Elytra on the About Oliver Minecraft Server.</p>
-        <button id="help" type="button">How to use</button>
+        <button id="help" type="button"><span id="helpLabel">How to use</span> <small id="helpWhere"><span class="wide-only">opens on the right</span><span class="narrow-only">opens below the map</span></small></button>
       </header>
 
       <div id="quick">
@@ -29,10 +29,12 @@
           <div class="row quiet">
             <button id="showOnMap" type="button" class="textlink" title="Move the map to these coordinates without searching there">Show on map</button>
             <button id="useCentre" type="button" class="textlink" title="Fill in the coordinates at the middle of the map, where its crosshair is">Use map centre</button>
-            <button id="mapReset" type="button" class="textlink" title="Clear the coordinates and markers, and centre the map on End Spawn">Clear position</button>
           </div>
         </div>
-        <button id="searchBack" type="button" class="textlink" title="Return to the search that was showing before this one" hidden>Back to last search</button>
+        <div id="searchLinks" class="row quiet">
+          <button id="mapReset" type="button" class="textlink" title="Clear the coordinates and markers, and centre the map on End Spawn" hidden>Clear position</button>
+          <button id="searchBack" type="button" class="textlink" title="Return to the search that was showing before this one" hidden>Back to last search</button>
+        </div>
       </div>
 
       <details id="settings">
@@ -87,8 +89,8 @@
           <summary>Advanced</summary>
           <label class="check aomc-only"><input id="includeMapped" type="checkbox" /> Include ships already on the webmap</label>
           <p id="exploredNote" class="hint aomc-only"></p>
-          <label class="check"><input id="oneFingerMap" type="checkbox" /> Move the map with one finger</label>
-          <p class="hint">For touch screens. Normally two fingers move the map and one scrolls the page; with this on, scroll the page from outside the map.</p>
+          <label class="check touch-only"><input id="oneFingerMap" type="checkbox" /> Move the map with one finger</label>
+          <p class="hint touch-only">Normally two fingers move the map and one scrolls the page; with this on, scroll the page from outside the map.</p>
           <label>World seed <input id="seed" inputmode="numeric" autocomplete="off" spellcheck="false" /></label>
           <div class="row">
             <button id="seedReset" type="button">About Oliver Minecraft Seed</button>

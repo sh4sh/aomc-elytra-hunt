@@ -432,11 +432,16 @@ export function showPosition(pos: { x: number; z: number }): void {
   nearX.value = '';
   nearZ.value = '';
 }
+/** "Clear position" is offered whenever there is one to clear: a marker on the map, or coordinates in the boxes. */
+export function showClearPosition(): void {
+  $('mapReset').hidden = !session.you && !session.pin && nearX.value.trim() === '' && nearZ.value.trim() === '';
+}
 /** Put a position in those boxes, to stay there until the player changes it. */
 export function setNear(pos: { x: number; z: number }): void {
   showNearPanel(true);
   nearX.value = String(pos.x);
   nearZ.value = String(pos.z);
+  showClearPosition();
 }
 
 /**
@@ -535,7 +540,12 @@ $('quickSpawn').addEventListener('click', () => {
 });
 
 // "Search near me", above the settings.
-for (const el of [nearX, nearZ]) el.addEventListener('input', () => nearX.setCustomValidity(''));
+for (const el of [nearX, nearZ]) {
+  el.addEventListener('input', () => {
+    nearX.setCustomValidity('');
+    showClearPosition();
+  });
+}
 $<HTMLFormElement>('nearMe').addEventListener('submit', (e) => {
   e.preventDefault();
   const typed = nearPosition();

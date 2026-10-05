@@ -398,7 +398,13 @@ for (const link of document.querySelectorAll<HTMLElement>('.jump')) {
 $('help').addEventListener('click', () => {
   session.helpOpen = session.selected !== null && !session.helpOpen;
   renderDetail();
-  $('detail').scrollIntoView({ block: 'start', behavior: 'smooth' });
+  const panel = $('detail');
+  panel.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  // The button is in one panel and the help in another: outline the other for a moment so the eye finds it.
+  if (!$('detailEmpty').hidden) {
+    panel.classList.add('flash');
+    setTimeout(() => panel.classList.remove('flash'), 1200);
+  }
 });
 $('helpBack').addEventListener('click', () => {
   session.helpOpen = false;

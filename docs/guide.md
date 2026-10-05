@@ -14,7 +14,8 @@ Everything the app can do, in more detail than the quick start.
   around the coordinates it looked, which you can change. **Show on map**
   moves the map to the coordinates without searching, **Use map centre** fills
   the boxes with the coordinates at the map's crosshair, and **Clear
-  position** clears the boxes and markers and returns the map to End Spawn.
+  position**, under the two buttons whenever there is a position to clear,
+  clears the boxes and markers and returns the map to End Spawn.
 - **Back to last search** returns to what you had before.
 
 **Settings**, grouped by what they apply to:
@@ -40,8 +41,8 @@ Everything the app can do, in more detail than the quick start.
 
 - **Include ships already on the webmap:** normally left out, since someone
   has been there.
-- **Move the map with one finger:** for touch screens. Normally two fingers
-  move the map and one scrolls the page.
+- **Move the map with one finger:** shown on touch screens only. Normally two
+  fingers move the map and one scrolls the page.
 - **World seed:** for another world. Everything specific to the About Oliver
   server (webmap, shared looted list) is hidden for other seeds.
 
