@@ -58,7 +58,16 @@ export class Tracker {
     return this.shared.has(cityId(c));
   }
 
-  setShared(ids: string[], already: string[] = []): void {
+  /** Who sent each shared city in, where they gave a username. */
+  private sharedBy = new Map<string, string>();
+
+  /** The username of the player who sent this city in to the shared list, if they gave one. */
+  lootedBy(c: { x: number; z: number }): string | null {
+    return this.sharedBy.get(cityId(c)) ?? null;
+  }
+
+  setShared(ids: string[], already: string[] = [], by: Record<string, string[]> = {}): void {
+    this.sharedBy = new Map(Object.entries(by).flatMap(([name, cities]) => cities.map((id): [string, string] => [id, name])));
     this.shared = new Set(ids);
     this.sharedAlready = new Set(already);
     this.priorPoints = null;
@@ -69,6 +78,15 @@ export class Tracker {
   /** Found already looted on arrival, by this visitor or according to the shared list. */
   isAlready(c: { x: number; z: number }): boolean {
     return this.already.has(cityId(c)) || this.sharedAlready.has(cityId(c));
+  }
+
+  /**
+   * Whether to show the city as "looted by someone else": only for this visitor's own such mark, and
+   * only until the city is on the shared list. From then on it is shown as plainly looted. The shared
+   * list still records which cities were found already looted, and the guesswork still uses it.
+   */
+  showsAlready(c: { x: number; z: number }): boolean {
+    return this.already.has(cityId(c)) && !this.shared.has(cityId(c));
   }
 
   /** Mark a city as found already looted (which also marks it looted), or take that back and leave it looted. */

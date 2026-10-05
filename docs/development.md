@@ -20,7 +20,9 @@ npm run looted -- file.csv   # add a player's exported looted cities to public/l
 
 `public/looted.json` is the shared looted list every visitor gets. Submissions
 from the app arrive as GitHub issues; replying `/merge` on one adds it to the
-list and republishes the site. For a file a player sends you directly, run
+list and republishes the site. The submitter's username, if they gave one, is
+kept with their cities and shown on the map; reply `/merge anonymous` to leave
+it off. For a file a player sends you directly, run
 `npm run looted` on it, then commit and push.
 
 `relay/` is a small Cloudflare Worker that lets players send things from the

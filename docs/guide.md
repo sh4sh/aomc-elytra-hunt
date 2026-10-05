@@ -6,10 +6,14 @@ Everything the app can do, in more detail than the quick start.
 
 ## Search settings
 
-- **Near End Spawn / Near my coordinates:** search a band around 0,0, or a
-  circle around coordinates you enter.
+- **The two search buttons**, above the search settings. **Search near me**
+  searches around the coordinates in its two boxes and opens the nearest
+  route; the boxes start at the map's crosshair and follow it until you type
+  your own. **Search near End Spawn** searches a band around 0,0, and shows its
+  range. The settings below hold the numbers each one uses.
 - **From / To:** how far from 0,0 to look, measured along the longer axis. A
   search covering more than 25,000 cities is refused with a prompt to narrow it.
+- **Radius:** how far around your coordinates **Search near me** looks.
 
 **Fine tuning (optional)**, applied straight away:
 
@@ -19,7 +23,7 @@ Everything the app can do, in more detail than the quick start.
 - **Longest flight between cities:** no hop in a route is longer than this.
   Cities that can't be reached in a full route are left without a route. If no
   route of the chosen size fits, smaller ones are made, down to 2 cities.
-- **Quadrants:** which quarters of the map to search (Near End Spawn only).
+- **Quadrants:** which quarters of the map to search (Search near End Spawn only).
 - **Leave out cities that are possibly looted.**
 
 **Advanced:**
@@ -79,10 +83,16 @@ near them) to the route's first city, plus the route itself.
 ## Looted by someone else, and possibly looted
 
 Mark a city **looted by someone else** when its elytra was gone before you got
-there. These marks are sent with **Share progress**.
+there. These marks are sent with **Share progress**. Your own show as a tan ×
+until they are on the shared list; from then on the city is just a looted
+city on the map, for you and everyone else. The shared list still records
+which cities were found that way, and the guesses below still use it.
 
 A city is **possibly looted** (a small grey ring on the map) when it is within
-2,000 blocks of one of those. The flag is lifted if a city between the two (within 500 blocks of the line
+2,000 blocks of one of those, or within 10,000 blocks of End Spawn, where most
+ships were emptied long ago. An open route with such cities has a **why?**
+link that explains the reasons that apply. For the first kind, the flag is
+lifted if a city between the two (within 500 blocks of the line
 joining them) was looted the ordinary way: the earlier hunter did not come that
 way.
 
@@ -111,7 +121,9 @@ end. Cities within 1,000 blocks of it count as possibly looted.
 - **Webmap:** areas on the [community webmap](https://map.diorite.xyz/?dim=the_end)
   are left out of the routes once the app's copy of it refreshes (hourly).
 - **Looted list:** **Submit looted for everyone** sends your marks for review;
-  once accepted they show as looted for all players. **Export looted** and
+  once accepted they show as looted for all players. The username is
+  optional: give one and the map shows it beside your cities ("Looted by
+  Steve_01"); leave it empty and they just say "Looted". **Export looted** and
   **Import looted** move them between browsers or friends.
 - **Reports:** right-click a city and choose **Report incorrect…** if it has no
   ship, there is no city, or a doubtful ship was there after all. Accepted

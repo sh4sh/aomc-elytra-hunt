@@ -1,3 +1,4 @@
+/* The rules these styles follow are in docs/design.md. Reuse a pattern from there before adding one. */
 :root {
   --bg: #0f0c17;
   --panel: #191524;
@@ -7,6 +8,7 @@
   --muted: #9d94b3;
   --accent: #c58bff;
   --accent-ink: #1a0f2b;
+  --danger: #ff7b7b;
   color-scheme: dark;
   font: 14px/1.45 system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
@@ -49,7 +51,6 @@ code { font-size: 12px; background: var(--panel-2); padding: 1px 4px; border-rad
 .empty h3 { margin: 6px 0 0; font-size: 13px; }
 .empty p, .empty li { color: var(--muted); font-size: 13px; }
 .empty em { font-style: normal; color: var(--text); }
-.empty details.more > summary { font-size: 13px; font-weight: 600; color: var(--text); }
 .empty ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
 #helpBack { align-self: flex-start; }
 .warning { border: 1px solid #e0a84a; border-radius: 6px; padding: 8px 10px; font-size: 13px; background: rgba(224, 168, 74, 0.08); }
@@ -61,7 +62,9 @@ header button { margin-top: 8px; padding: 3px 10px; font-size: 12px; }
 
 form { display: flex; flex-direction: column; gap: 8px; }
 /* A field's title is in the text colour, so it cannot be mistaken for the note under the field before it. */
-label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--text); flex: 1; min-width: 0; }
+label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--text); min-width: 0; }
+/* Side by side, fields share the row evenly. Stacked, a field keeps its own height: left to flex, it can be squeezed under what follows. */
+.row > label { flex: 1; }
 /* In a form, a note belongs to the field above it: close under that, with room before the next title. */
 form .hint { margin: -3px 0 6px; }
 .row { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -99,31 +102,38 @@ button.primary { background: var(--accent); color: var(--accent-ink); border-col
 button:disabled { opacity: 0.5; cursor: default; }
 progress { width: 100%; accent-color: var(--accent); }
 
+/* Every collapsible section looks the same: a rule above and a bold title; while open, a rule below as
+   well, to show where it ends. No outlines, so a section inside a section does not pile boxes up. */
 details { border-top: 1px solid var(--line); padding-top: 10px; }
-details[open] { display: flex; flex-direction: column; gap: 8px; }
+details[open] { display: flex; flex-direction: column; gap: 8px; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
 details[hidden] { display: none; }
-/* A fold inside a panel: no rule above it, its heading in the text colour. */
+summary { cursor: pointer; color: var(--text); font-size: 13px; font-weight: 600; }
+summary:hover { color: var(--accent); }
+/* One rule, not two, between an open section and what is ruled off after it, and where a section ends with its parent. */
+details[open]:not([hidden]) + details, details[open] + .feedback { border-top: 0; padding-top: 0; }
+#xaeroPanel[open], #journeymapPanel[open], #share details[open] { border-bottom: 0; padding-bottom: 0; }
+/* The first thing in its panel needs no rule above it. */
 details.fold { border-top: 0; padding-top: 0; }
-details.fold > summary { color: var(--text); }
+/* Not a section: a note that unfolds its reasons. */
+#possibleWhy, #possibleWhy[open] { border: 0; padding: 0; }
+#possibleWhy > summary, #possibleWhy > summary:hover { color: var(--muted); font-size: 12px; font-weight: 400; }
 label.field[hidden] { display: none; }
-summary { cursor: pointer; color: var(--muted); }
-#settings { border-top: 0; padding-top: 0; }
-#settings summary { color: var(--text); }
-#share summary { color: var(--text); font-weight: 600; }
-#settings .settings-title { font-weight: 600; }
+/* In the older layout the settings come first in the sidebar, with nothing to rule them off from. */
+body:not(.simple-search) #settings { border-top: 0; padding-top: 0; }
+/* The quick search under the folded settings: your position and one button, on a single line. */
+#quick { display: flex; flex-direction: column; gap: 6px; }
+#quickSpawn { text-align: left; }
+/* The range on a line of its own, so it never breaks in the middle. */
+#quickSpawn small { display: block; }
+#nearMe { flex-direction: row; align-items: center; gap: 6px; }
+#nearMe input { flex: 1; min-width: 0; }
+#nearMe button { white-space: nowrap; }
+#tooltip .why { margin-top: 3px; color: var(--muted); }
+#possibleWhy .why { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+#possibleReasons { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
 /* Small headings that part one kind of setting from another. */
 .group-label { margin-top: 4px; color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
-/* Folded by default, but not to be missed: a full-width bar in the accent colour. */
-#fineTuning { border-top: 0; padding-top: 0; }
-#fineTuning > summary {
-  padding: 8px 10px;
-  border: 1px solid var(--accent);
-  border-radius: 8px;
-  background: var(--panel-2);
-  color: var(--text);
-}
-#fineTuning[open] > summary { margin-bottom: 2px; }
-#settingsSummary { display: block; margin: 2px 0 0 16px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+#settingsSummary { display: block; margin: 2px 0 0 16px; color: var(--muted); font-size: 12px; font-weight: 400; font-variant-numeric: tabular-nums; }
 #settings[open] #settingsSummary { display: none; }
 
 ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
@@ -220,19 +230,13 @@ ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: col
 #cities .hop { color: var(--muted); font-size: 12px; }
 #cities .hop.start { color: var(--accent); font-weight: 600; }
 .segmented { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--accent); border-radius: 8px; overflow: hidden; margin: 6px 0 8px; }
-.segmented label { flex-direction: row; justify-content: center; padding: 8px; font-size: 13px; color: var(--muted); cursor: pointer; }
+.segmented label { flex-direction: row; justify-content: center; align-items: center; text-align: center; padding: 8px; font-size: 13px; color: var(--muted); cursor: pointer; }
 .segmented label:hover { color: var(--text); }
 .segmented label.on { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
 .segmented label:focus-within { outline: 2px solid var(--text); outline-offset: -2px; }
 .segmented input { position: absolute; opacity: 0; pointer-events: none; }
 .panel { display: flex; flex-direction: column; gap: 8px; }
 .panel[hidden] { display: none; }
-/* Second-choice ways of doing something, folded away under a quiet heading. */
-details.more { display: flex; flex-direction: column; gap: 8px; }
-details.more[hidden] { display: none; }
-details.more > summary { cursor: pointer; color: var(--muted); font-size: 12px; }
-details.more[open] > summary { margin-bottom: 8px; color: var(--text); }
-details.more > * + * { margin-top: 8px; }
 label.field strong { color: var(--text); font-size: 13px; }
 label.field input { border-color: var(--accent); }
 
@@ -271,6 +275,9 @@ main { position: relative; min-width: 0; min-height: 0; display: flex; flex-dire
 #zoom { position: absolute; top: 10px; right: 10px; display: flex; align-items: center; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 2px 4px; }
 #zoom button { border: 0; background: none; padding: 0 6px; font-size: 16px; line-height: 1.2; }
 #zoom input { width: 110px; }
+/* Reset: small and muted, at the end of the coordinates row. */
+#locate #locateClear { font-size: 11px; color: var(--muted); padding: 3px 6px; }
+#locate #locateClear:hover { color: var(--text); }
 #locate input { width: 96px; padding: 3px 6px; font-size: 12px; background: var(--panel); }
 #locate button { padding: 3px 8px; font-size: 12px; white-space: nowrap; background: var(--panel); }
 #locateNote { white-space: nowrap; background: var(--panel); border-radius: 6px; padding: 3px 8px; }
@@ -316,10 +323,36 @@ main { position: relative; min-width: 0; min-height: 0; display: flex; flex-dire
 /* Around a position has its own Search button up top; the one at the bottom only shows there to cancel a running search. */
 body.around-mode #find:not(.busy) { display: none; }
 /* Controls for one kind of search are hidden while the other is chosen. */
-body.around-mode .band-only { display: none; }
-body:not(.around-mode) .around-only { display: none; }
+body.around-mode:not(.simple-search) .band-only { display: none; }
+body:not(.around-mode):not(.simple-search) .around-only { display: none; }
+/* Simplified search (the class on <body>): the two quick-search buttons at the top are the only way to
+   search, and the settings fold just holds their numbers. Without the class, the older layout with its
+   two tabs and its own search buttons comes back. */
+body:not(.simple-search) .simple-only { display: none; }
+.simple-search #quick .group-label,
+.simple-search .segmented,
+.simple-search #aroundPosBox,
+.simple-search #aroundSearch,
+.simple-search #aroundBox .row.quiet,
+.simple-search #find:not(.busy) { display: none; }
+.simple-search #bandBox { order: -1; }
+.simple-search #quick button { padding-top: 8px; padding-bottom: 8px; }
+#quickSpawn.primary small { color: inherit; opacity: 0.75; font-weight: 400; }
 #narrowAround[hidden], #narrowBand[hidden] { display: none; }
 .webmap-first { border: 1px solid var(--accent); border-radius: 6px; padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+/* The second way to share, as a plainer card under the recommended one. */
+.share-option { border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; display: flex; flex-direction: column; gap: 8px; }
+.share-option .hint strong { color: var(--text); font-size: 13px; }
+/* Only the recommended card is outlined in the accent colour: the username box keeps a plain edge until it is typed in. */
+#share label.field input:not(:focus) { border-color: var(--line); }
+#submitLooted { flex: 1; }
+#submitNote:empty { display: none; }
+/* The file buttons in two even columns. */
+#share details.more .row { display: grid; grid-template-columns: 1fr 1fr; }
+/* The one button here that throws work away: on its own under a rule, in a warning red. */
+.reset-zone { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding-top: 10px; border-top: 1px solid var(--line); }
+button.danger { color: var(--danger); border-color: var(--danger); }
+button.danger:hover { background: var(--danger); border-color: var(--danger); color: var(--bg); }
 /* Parts that only make sense for the About Oliver server's world. */
 .other-seed .aomc-only { display: none !important; }
 body:not(.other-seed) .other-only { display: none; }

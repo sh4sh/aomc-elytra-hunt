@@ -13,7 +13,7 @@ you can load into Xaero's Minimap, JourneyMap or another map mod as waypoints.
 The same steps are in the app under **How to use**.
 
 1. **Pick a route.** Route 1 takes the least flying. Pick one from the list,
-   click a city on the map, or enter your position and press **Nearest route**.
+   click a city on the map, or type your x and z and press **Search near me**.
 2. **Get the waypoints into your map mod.** Choose your mod and enter your
    username. Then, in the End, go down the route's list: press **copy** beside
    a city, paste into chat, send, and add the waypoint that appears.
@@ -30,7 +30,7 @@ The same steps are in the app under **How to use**.
 | Filled dot | A city in a route, coloured by route |
 | White circle | The city you are up to in the open route |
 | Green × | Looted |
-| Tan ×, `!` in the list | Looted by someone else before you got there |
+| Tan ×, `!` in the list | One you marked as looted by someone else. Once it is on the shared list it shows as a plain green × |
 | Small grey ring, `?` in the list | Possibly looted: near a city someone else looted, or on a guessed flight path. A guess |
 | Dashed tan line | A guess at where an earlier hunter flew |
 | Grey × | Ship or city reported missing |
@@ -63,6 +63,7 @@ details under the map.
   ship predictions depart from cubiomes, and what is already reported there.
 - [Development](docs/development.md): running it locally, the data files and
   the submission relay.
+- [Design rules](docs/design.md): the patterns the interface sticks to.
 
 ## Credits
 

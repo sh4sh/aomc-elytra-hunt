@@ -8,13 +8,23 @@
     <meta name="description" content="Find Elytra on the About Oliver Minecraft Server." />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
-  <body>
+  <body class="simple-search">
     <aside id="sidebar">
       <header>
         <h1>AOMC Elytra Hunt</h1>
         <p>Find Elytra on the About Oliver Minecraft Server.</p>
         <button id="help" type="button">How to use</button>
       </header>
+
+      <div id="quick">
+        <div class="group-label">Quick search</div>
+        <form id="nearMe" title="Search around these coordinates and open the nearest route. They start at the map's crosshair: type your own to search around yourself.">
+          <input id="nearX" type="number" step="1" placeholder="x" autocomplete="off" aria-label="Your x coordinate" />
+          <input id="nearZ" type="number" step="1" placeholder="z" autocomplete="off" aria-label="Your z coordinate" />
+          <button type="submit">Search near me</button>
+        </form>
+        <button id="quickSpawn" type="button" title="Search the band around End Spawn set under Search settings">Search near End Spawn</button>
+      </div>
 
       <details id="settings" open>
         <summary><span class="settings-title">Search settings</span> <span id="settingsSummary"></span></summary>
@@ -24,6 +34,7 @@
           <label><input type="radio" name="searchMode" value="around" /> Near my coordinates</label>
         </div>
         <div id="aroundBox" class="panel around-only">
+          <div class="group-label simple-only">Search near me</div>
           <div class="row" id="aroundPosBox">
             <label>x <input id="aroundX" type="number" step="1" placeholder="100000" aria-label="Position x" /></label>
             <label>z <input id="aroundZ" type="number" step="1" placeholder="200000" aria-label="Position z" /></label>
@@ -35,6 +46,7 @@
           </div>
         </div>
         <div id="bandBox" class="panel band-only">
+        <div class="group-label simple-only">Search near End Spawn</div>
         <div class="row" id="distanceBox">
           <label>From <input id="minDist" type="number" min="0" step="500" required /></label>
           <label>To <input id="maxDist" type="number" min="1000" step="500" required /></label>
@@ -94,6 +106,19 @@
             <button id="seedReset" type="button">About Oliver Minecraft Seed</button>
           </div>
           <p class="hint">Other seeds search more slowly, and hide the server's webmap and shared looted list.</p>
+          <label class="check aomc-only"><input id="devMode" type="checkbox" /> Dev mode</label>
+          <div id="devTools" class="panel aomc-only" hidden>
+            <div class="group-label">Survey</div>
+            <p class="hint">
+              A random, spread-out sample of the ships within 10,000 blocks of End Spawn, to estimate how many were
+              looted long ago. Visit each one: mark it <em>looted</em> if you took its elytra, or
+              <em>looted by someone else</em> if it was gone.
+            </p>
+            <div class="row">
+              <button id="surveyMake" type="button">Make a survey route</button>
+            </div>
+            <p id="surveyNote" class="hint" role="status"></p>
+          </div>
         </details>
         <button id="find" type="submit" class="primary">Find cities</button>
         <div class="row quiet">
@@ -137,42 +162,43 @@
         <div class="aomc-only webmap-first">
           <strong>Best way: update the webmap</strong>
           <p class="hint">
-            After a trip, upload your map of the End to the
-            <a href="https://map.diorite.xyz/?dim=the_end" target="_blank" rel="noopener">community webmap</a> using
-            its upload button. Everything you explored then shows there for everyone, and this app leaves
-            cities in mapped areas out of the routes the next time its webmap data is refreshed.
+            Upload your map of the End to the
+            <a href="https://map.diorite.xyz/?dim=the_end" target="_blank" rel="noopener">community webmap</a>.
+            Mapped areas are left out of the routes.
           </p>
         </div>
-        <p class="hint aomc-only">
-          <strong>Or send your looted list:</strong> the cities you mark as looted are saved in this browser only. Send
-          them in and, once accepted, they show as looted for all players.
-        </p>
-        <p class="hint other-only">
-          The cities you mark as looted are saved in this browser only. Sending them in for everyone is only available
-          for the About Oliver server's world.
-        </p>
-        <div id="submitBox" class="panel aomc-only" hidden>
-          <label class="field">
-            <strong>Your Minecraft username</strong>
-            <input id="submitName" autocomplete="off" spellcheck="false" maxlength="16" placeholder="Optional" />
-          </label>
-          <div class="row">
-            <button id="submitLooted" type="button">Submit looted for everyone</button>
+        <div class="share-option aomc-only">
+          <p class="hint"><strong>Or send your looted list</strong>, to show those cities as looted for everyone.</p>
+          <div id="submitBox" class="panel aomc-only" hidden>
+            <label class="field">
+              <strong>Your Minecraft username</strong>
+              <input id="submitName" autocomplete="off" spellcheck="false" maxlength="16" placeholder="Optional" />
+            </label>
+            <div class="row">
+              <button id="submitLooted" type="button">Submit looted for everyone</button>
+            </div>
+            <p id="submitNote" class="hint"></p>
           </div>
-          <p id="submitNote" class="hint"></p>
+          <p id="submitFallback" class="hint aomc-only">
+            Press <em>Export looted</em> and attach the file to
+            <a href="https://github.com/sh4sh/aomc-elytra-hunt/issues/new?title=Looted%20cities&amp;body=Attach%20your%20exported%20end-cities-looted.csv%20file%20here." target="_blank" rel="noopener">a new GitHub issue</a>.
+          </p>
+          <p id="sharedNote" class="hint aomc-only"></p>
         </div>
-        <p id="submitFallback" class="hint aomc-only">
-          To send them in, press <em>Export looted</em> and attach the file to
-          <a href="https://github.com/sh4sh/aomc-elytra-hunt/issues/new?title=Looted%20cities&amp;body=Attach%20your%20exported%20end-cities-looted.csv%20file%20here." target="_blank" rel="noopener">a new GitHub issue</a>.
-        </p>
-        <p id="sharedNote" class="hint aomc-only"></p>
-        <p class="hint">You can also send the file to a friend, or move it to another device: <em>Import looted</em> merges it in.</p>
-        <div class="row">
-          <button id="visitedExport" type="button">Export looted</button>
-          <button id="visitedImport" type="button">Import looted</button>
-          <button id="citiesExport" type="button">All cities CSV</button>
-          <button id="visitedReset" type="button">Reset all looted</button>
-        </div>
+        <p class="hint other-only">Looted marks are saved in this browser. Sharing them is only for the About Oliver server.</p>
+        <details class="more">
+          <summary>Files: export, import, reset</summary>
+          <p class="hint"><em>Export looted</em> saves your marks to a file; <em>Import looted</em> merges one in, from a friend or another device.</p>
+          <div class="row">
+            <button id="visitedExport" type="button">Export looted</button>
+            <button id="visitedImport" type="button">Import looted</button>
+            <button id="citiesExport" type="button">All cities CSV</button>
+          </div>
+          <div class="reset-zone">
+            <button id="visitedReset" type="button" class="danger">Reset all looted</button>
+            <p class="hint">Clears your own marks, and cannot be undone. Cities on the shared list stay looted.</p>
+          </div>
+        </details>
         <input id="visitedFile" type="file" accept=".csv,text/csv,text/plain" hidden />
       </details>
 
@@ -192,7 +218,7 @@
         <input id="locateZ" type="number" step="1" placeholder="z" autocomplete="off" aria-label="z coordinate" />
         <button type="submit">Nearest route</button>
         <button id="locateGo" type="button" title="Move the map to these coordinates without opening a route">Go to coordinates</button>
-        <button id="locateClear" type="button" aria-label="Clear the coordinates and markers">×</button>
+        <button id="locateClear" type="button" title="Clear the coordinates and markers, and centre the map on 0,0 (End Spawn)">reset</button>
         <span id="locateNote"></span>
       </form>
       <div id="zoom">
@@ -250,7 +276,7 @@
         <p>
           Route 1 takes the least flying. Pick one from the
           <button type="button" class="jump" data-target="batches">route list</button>, click a city on the map, or
-          enter your position on the map and press <em>Nearest route</em>.
+          type your x and z and press <em>Search near me</em>.
         </p>
         <h3>2. Get the waypoints into your map mod</h3>
         <p>
@@ -287,6 +313,7 @@
           <ul>
             <li>A city marked <em>looted by someone else</em> turns tan. Someone hunted there before you.</li>
             <li>Cities within 2,000 blocks of it show as possibly looted: a small grey ring, and a <code>?</code> in the list. It is a guess.</li>
+            <li class="aomc-only">So do all cities within 10,000 blocks of End Spawn: most ships there were emptied long ago. A route with such cities has a <em>why?</em> link explaining each reason.</li>
             <li>When three or more such cities line up, a dashed line guesses where that hunter flew, and says how confident it is. <span class="aomc-only">One or two cities on the webmap can help to complete a line.</span></li>
             <li><button type="button" class="jump" data-target="skipPossible">Leave out cities that are possibly looted</button> keeps them out of the routes.</li>
           </ul>
@@ -306,7 +333,7 @@
             <li class="touch-only">Map: two fingers to pan, pinch or use the slider to zoom.</li>
             <li>Faint diamonds are cities with a ship that are not in any route.</li>
             <li class="aomc-only">Green shading is terrain already on the community webmap; cities there are left out.</li>
-            <li>Far from 0,0? In <button type="button" class="jump" data-target="settings">Search settings</button>, choose <em>Near my coordinates</em>.</li>
+            <li>Far from 0,0? Type your x and z beside <em>Search near me</em>. <button type="button" class="jump" data-target="settings">Search settings</button> sets how far around you it looks.</li>
             <li class="wide-only">Drag the dividers either side of the map to resize the panels.</li>
           </ul>
         </details>
@@ -387,6 +414,10 @@
           <button id="nextCityAlready" type="button" title="The current city's elytra was already gone: mark it as looted by someone else and move on to the next one">Looted by someone else</button>
         </div>
         <p id="routeNote" class="hint" role="status" hidden></p>
+        <details id="possibleWhy" class="more" hidden>
+          <summary><span id="possibleCount"></span> · <span class="why">why?</span></summary>
+          <ul id="possibleReasons" class="hint"></ul>
+        </details>
         <div class="row quiet">
           <button id="markAll" type="button" class="textlink">Mark all looted</button>
           <button id="markNone" type="button" class="textlink">Clear all</button>

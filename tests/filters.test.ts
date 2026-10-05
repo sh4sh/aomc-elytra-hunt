@@ -455,6 +455,13 @@ describe('found already looted', async () => {
     t.setShared(['0,0'], ['0,0']);
     expect(t.nearAlready({ x: 100, z: 100 }, 2000)).toBe(true);
     expect(t.ownAlready()).toEqual([]);
+    // Shown as "looted by someone else" only while it is the visitor's own mark, off the shared list.
+    t.setAlready({ x: 5000, z: 5000 }, true);
+    expect(t.showsAlready({ x: 5000, z: 5000 })).toBe(true);
+    expect(t.showsAlready({ x: 0, z: 0 })).toBe(false);
+    t.setShared(['0,0', '5000,5000'], ['0,0', '5000,5000']);
+    expect(t.showsAlready({ x: 5000, z: 5000 })).toBe(false);
+    expect(t.isAlready({ x: 5000, z: 5000 })).toBe(true);
   });
 
   it('travels in a submission as marked rows', () => {
@@ -555,5 +562,63 @@ describe('relay cap on issues filed', async () => {
     const others = Array.from({ length: 80 }, () => issue(5, 'bug'));
     const old = Array.from({ length: 100 }, () => issue(60 * 30));
     expect(overCap([...others, ...old, { created_at: new Date(now).toISOString(), labels: [] }], now)).toBeNull();
+  });
+});
+
+describe('who looted a shared city', async () => {
+  const { Tracker } = await import('../src/tracker');
+
+  it('knows the player who sent a city in, where they gave a name', () => {
+    const t = new Tracker('test-by');
+    t.setShared(['1,2', '3,4'], [], { Steve_01: ['1,2'] });
+    expect(t.lootedBy({ x: 1, z: 2 })).toBe('Steve_01');
+    expect(t.lootedBy({ x: 3, z: 4 })).toBeNull();
+    t.setShared(['1,2']);
+    expect(t.lootedBy({ x: 1, z: 2 })).toBeNull();
+  });
+});
+
+describe('survey of the cities near End Spawn', async () => {
+  const { stratum, surveySample, surveyEstimate } = await import('../src/survey');
+  // 400 cities, crowded towards the south-east, as a real ring of cities is uneven.
+  const cities = Array.from({ length: 400 }, (_, k) => ({ x: ((k * 37) % 190) * 100 - 9000, z: ((k * 53) % 170) * 100 - 7000 })).filter(
+    (c) => Math.max(Math.abs(c.x), Math.abs(c.z)) < 10000,
+  );
+  // A fixed sequence in place of chance, so the test picks the same cities every time.
+  const dice = () => {
+    let n = 0;
+    return () => ((n = (n * 1103515245 + 12345) % 2147483648) / 2147483648);
+  };
+
+  it('picks the number asked for, no city twice, each piece of the area giving its share', () => {
+    const picked = surveySample(cities, 40, 10000, dice());
+    expect(picked).toHaveLength(40);
+    expect(new Set(picked).size).toBe(40);
+    const count = (list: typeof cities) => {
+      const by = new Map<string, number>();
+      for (const c of list) by.set(stratum(c, 10000), (by.get(stratum(c, 10000)) ?? 0) + 1);
+      return by;
+    };
+    const all = count(cities);
+    const got = count(picked);
+    for (const [key, size] of all) {
+      const share = (40 * size) / cities.length;
+      expect(Math.abs((got.get(key) ?? 0) - share)).toBeLessThan(1);
+    }
+  });
+
+  it('takes every city when asked for more than there are', () => {
+    expect(surveySample(cities.slice(0, 5), 30, 10000, dice())).toHaveLength(5);
+    expect(surveySample([], 30, 10000)).toEqual([]);
+  });
+
+  it('estimates the share looted, more surely as more are checked', () => {
+    expect(surveyEstimate(0, 0, 150)).toBeNull();
+    const few = surveyEstimate(10, 6, 150)!;
+    const many = surveyEstimate(30, 18, 150)!;
+    expect(few.rate).toBeCloseTo(0.6);
+    expect(many.margin).toBeLessThan(few.margin);
+    // With every city in the area checked there is nothing left to guess.
+    expect(surveyEstimate(150, 90, 150)!.margin).toBe(0);
   });
 });

@@ -103,6 +103,13 @@ export class EndMap {
     this.onZoom(this.zoom);
   }
 
+  /** Put a block at the middle of the view, at the zoom the map already has. */
+  centreOn(x: number, z: number): void {
+    this.cx = x;
+    this.cz = z;
+    this.draw();
+  }
+
   /** Centre the view on a spot, zooming in if the view is too wide for it to be easy to see. */
   goTo(x: number, z: number): void {
     this.cx = x;

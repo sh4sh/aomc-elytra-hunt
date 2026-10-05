@@ -10,6 +10,7 @@ import { chatLine, cleanUsername } from './journeymap';
 import { EndMap, type MapCity } from './map';
 import { Precomputed } from './precomputed';
 import { loadSkyFigures } from './sky-cultures';
+import { surveyEstimate, surveySample } from './survey';
 import { Tracker } from './tracker';
 import { describeTrajectory, onTrajectory, studyTrajectories, type Trajectory } from './trajectory';
 import { cityId, searchBounds, type City, type Filters, type Quadrant } from './types';
@@ -17,6 +18,9 @@ import { OUTSIDE_COLOR, XAERO_COLORS, batchColor, setBatchTags, shareLine, waypo
 
 const DEFAULT_SEED = '856461443495910397';
 const ISSUES_URL = 'https://github.com/sh4sh/aomc-elytra-hunt/issues';
+/** The latest finished runs of the job that checks the webmap for changes, as GitHub reports them to anyone. */
+const WEBMAP_CHECKS_URL =
+  'https://api.github.com/repos/sh4sh/aomc-elytra-hunt/actions/workflows/update-webmap.yml/runs?status=success&per_page=1';
 /**
  * Address of the relay that files looted-city submissions as GitHub issues (see relay/README.md).
  * While empty, the Submit button is hidden and players are pointed at GitHub instead.
@@ -74,6 +78,10 @@ interface Saved {
   redo?: RouteEdit[];
   /** Keep cities near one found already looted out of the routes. */
   skipPossible?: boolean;
+  /** Whether the tools for working on the app are shown. */
+  devMode?: boolean;
+  /** The latest survey of the cities near End Spawn: the cities picked, and how many they were picked from. */
+  survey?: { ids: string[]; frame: number };
   /** Minecraft username to whisper JourneyMap chat lines to, or empty to write them for public chat. */
   /** Batches the player put together by hand, each a list of city ids. */
   custom: string[][];
@@ -178,6 +186,9 @@ let uncertainShips = new Set<string>();
 /** A city this close (in blocks) to one found already looted counts as possibly looted. */
 const POSSIBLE_RADIUS = 2000;
 const POSSIBLE_NOTE = 'possibly looted: near a city found already looted';
+/** Ships closer to End Spawn than this (along the longer axis, as the search measures) count as possibly looted. */
+const NEAR_SPAWN_BLOCKS = 10000;
+const NEAR_SPAWN_NOTE = 'possibly looted: within 10,000 blocks of End Spawn, where most ships were emptied long ago';
 
 /** Guessed flight paths of earlier hunters, worked out again whenever a looted mark changes. */
 let pathsFor: { tracker: Tracker; version: number; mapped: City[]; paths: Trajectory[]; near: string[] } | null = null;
@@ -205,9 +216,18 @@ function possibleNote(c: City): string | null {
   if (tracker.has(c)) return null;
   const path = earlierPaths().find((t) => onTrajectory(t, c));
   if (path) return `possibly looted: on a possible earlier flight path (${describeTrajectory(path)})`;
-  return tracker.nearAlready(c, POSSIBLE_RADIUS) ? POSSIBLE_NOTE : null;
+  if (tracker.nearAlready(c, POSSIBLE_RADIUS)) return POSSIBLE_NOTE;
+  // Close to End Spawn on the server, most ships were emptied long ago by players nobody has a record of.
+  if (state.seed === DEFAULT_SEED && Math.max(Math.abs(c.x), Math.abs(c.z)) < NEAR_SPAWN_BLOCKS) return NEAR_SPAWN_NOTE;
+  return null;
 }
 const possible = (c: City): boolean => possibleNote(c) !== null;
+/** Why each kind of "possibly looted" is said, in a sentence a player can read, keyed by how its note starts. */
+const POSSIBLE_WHY: [string, string][] = [
+  ['possibly looted: within', 'Within 10,000 blocks of End Spawn, where most ships were emptied long ago.'],
+  ['possibly looted: near a city', 'Within 2,000 blocks of a city found already looted.'],
+  ['possibly looted: on a possible', 'On a guessed flight path of an earlier hunter.'],
+];
 /** How many of `batches` were generated; the player's custom batches follow them. */
 let generatedCount = 0;
 
@@ -583,7 +603,7 @@ function renderMap(): void {
         order,
         color: color(b),
         visited: tracker.has(city),
-        already: tracker.isAlready(city),
+        already: tracker.showsAlready(city),
         possible: possible(city),
       }),
     ),
@@ -595,7 +615,7 @@ function renderMap(): void {
       order: 0,
       color: OUTSIDE_COLOR,
       visited: tracker.has(o.city),
-      already: tracker.isAlready(o.city),
+      already: tracker.showsAlready(o.city),
       note: o.note,
       missing: o.missing,
     });
@@ -723,7 +743,7 @@ function renderBatches(): void {
     ...Array.from({ length: pages }, (_, p) => {
       const from = live[p * PAGE_SIZE];
       const to = live[Math.min((p + 1) * PAGE_SIZE, live.length) - 1];
-      return new Option(`Routes ${from + 1}–${to + 1} of ${generatedCount}`, String(p));
+      return new Option(`${from + 1}–${to + 1}`, String(p));
     }),
   );
   pageSelect.value = String(page);
@@ -798,6 +818,18 @@ function renderDetail(): void {
   $('detailTitle').textContent = batchTitle(i);
   $('customDelete').hidden = !isCustom(i);
   // Always there, faded when there is nothing to undo or redo, so they do not jump in and out.
+  // Which of the route's cities are in doubt, and a "why?" that unfolds the reasons that apply.
+  const doubts = batch.map(possibleNote).filter((n): n is string => n !== null);
+  const why = $('possibleWhy');
+  why.hidden = !doubts.length;
+  if (doubts.length) {
+    $('possibleCount').textContent = `${doubts.length} possibly looted ${doubts.length === 1 ? 'city' : 'cities'} in this route (marked ?)`;
+    $('possibleReasons').replaceChildren(
+      ...POSSIBLE_WHY.filter(([start]) => doubts.some((n) => n.startsWith(start))).map(([, text]) =>
+        Object.assign(document.createElement('li'), { textContent: text }),
+      ),
+    );
+  }
   $<HTMLButtonElement>('addOneUndo').disabled = !lastEdit(i);
   $<HTMLButtonElement>('routeRedo').disabled = !lastEdit(i, state.redo);
   // Nothing left to export from a route that is all looted: say so in place of the map-mod section.
@@ -851,7 +883,7 @@ function renderDetail(): void {
       const maybeNote = possibleNote(c);
       const maybe = maybeNote !== null;
       if (maybeNote) label.title += ` · ${maybeNote}`;
-      const already = tracker.isAlready(c);
+      const already = tracker.showsAlready(c);
       li.classList.toggle('already', already);
       if (already) label.title += ' · looted by someone else';
       if (tracker.isShared(c)) {
@@ -1022,6 +1054,7 @@ function render(): void {
   renderBatches();
   renderDetail();
   renderMap();
+  showSurvey();
 }
 
 function setHot(c: City | null): void {
@@ -1068,6 +1101,8 @@ function setAroundPosition(pos: { x: number; z: number }): void {
   aroundZ.value = String(pos.z);
   aroundX.setCustomValidity('');
 }
+const nearX = $<HTMLInputElement>('nearX');
+const nearZ = $<HTMLInputElement>('nearZ');
 const aroundRadius = $<HTMLInputElement>('aroundRadius');
 /** Whether the form is set to search around a position rather than outward from 0,0. */
 const aroundMode = () => modeRadios.some((r) => r.checked && r.value === 'around');
@@ -1098,6 +1133,7 @@ function fillForm(): void {
   angleFromSelect.value = state.filters.angleFrom ?? 'diagonal';
   for (const b of quadBoxes) b.checked = state.filters.quadrants.includes(b.value as Quadrant);
   showDiag();
+  showQuickSpawn();
 }
 
 /** The search as currently set in the form, applied or not. */
@@ -1133,6 +1169,9 @@ function fitSearch(f: Filters): void {
   map.fit([{ x: b.x0, z: b.z0 }, { x: b.x1, z: b.z1 }], f.maxDist);
 }
 
+/** A custom route to open once the search under way has its routes: the survey's. */
+let openCustomAfterSearch: number | null = null;
+
 /** Take a finished search as the new state. Nothing changes until this runs, so a cancelled search leaves no trace. */
 function applyResult(seed: string, filters: Filters, cities: FoundCity[]): void {
   const refit =
@@ -1153,7 +1192,7 @@ function applyResult(seed: string, filters: Filters, cities: FoundCity[]): void 
     state.redo = [];
     state.custom = [];
     tracker = new Tracker(seed);
-    tracker.setShared(seed === DEFAULT_SEED ? sharedLooted : [], seed === DEFAULT_SEED ? sharedAlready : []);
+    tracker.setShared(seed === DEFAULT_SEED ? sharedLooted : [], seed === DEFAULT_SEED ? sharedAlready : [], seed === DEFAULT_SEED ? sharedBy : {});
   }
   state.seed = seed;
   state.filters = filters;
@@ -1167,6 +1206,10 @@ function applyResult(seed: string, filters: Filters, cities: FoundCity[]): void 
   if (foldWhenDone && cities.length) settings.open = false;
   foldWhenDone = false;
   rebuild(() => {
+    if (openCustomAfterSearch !== null) {
+      selected = generatedCount + openCustomAfterSearch < batches.length ? generatedCount + openCustomAfterSearch : null;
+      openCustomAfterSearch = null;
+    }
     if (!locateAfterSearch) return;
     const pos = locateAfterSearch;
     locateAfterSearch = null;
@@ -1490,6 +1533,13 @@ locateForm.addEventListener('submit', (e) => {
   if (passes(pos.x, pos.z, state.filters) && openNearest(you)) return;
 
   // Otherwise the current search does not cover where the player is: search around them instead.
+  searchAround(you);
+});
+
+/** Search around a position and open the route nearest it, whatever the search was showing before. */
+function searchAround(pos: { x: number; z: number }): void {
+  you = { x: pos.x, z: pos.z };
+  setLocate(you);
   for (const r of modeRadios) r.checked = r.value === 'around';
   showSearchMode();
   setAroundPosition(you);
@@ -1503,6 +1553,59 @@ locateForm.addEventListener('submit', (e) => {
     locateNote.textContent = 'Could not search around that position. Check the search settings.';
     renderMap();
   }
+}
+
+// The other quick search: the band around End Spawn, as set under Search settings. Its label says how
+// far out that is, since the default leaves out the picked-over first 10,000 blocks.
+function showQuickSpawn(): void {
+  const [from, to] = [Number(minInput.value), Number(maxInput.value)];
+  const range = Number.isFinite(from) && Number.isFinite(to) && to > from ? `${fmt(from)}–${fmt(to)} blocks out` : '';
+  $('quickSpawn').replaceChildren('Search near End Spawn', Object.assign(document.createElement('small'), { textContent: range }));
+  // The obvious first thing to press, until there are routes to work through.
+  $('quickSpawn').classList.toggle('primary', state.found.length === 0);
+}
+for (const el of [minInput, maxInput]) {
+  el.addEventListener('input', showQuickSpawn);
+  el.addEventListener('change', showQuickSpawn);
+}
+showQuickSpawn();
+$('quickSpawn').addEventListener('click', () => {
+  for (const r of modeRadios) r.checked = r.value === 'band';
+  showSearchMode();
+  renderMap();
+  form.requestSubmit();
+});
+
+// "Search near me", always in reach under the search settings even while they are folded away.
+// Its boxes show where the map's crosshair is and follow it as the map moves, until the player types
+// coordinates of their own; emptying the boxes hands them back to the crosshair.
+let nearTyped = false;
+function showNearDefault(): void {
+  if (nearTyped) return;
+  nearX.value = String(viewCentre.x);
+  nearZ.value = String(viewCentre.z);
+}
+for (const el of [nearX, nearZ]) {
+  el.addEventListener('input', () => {
+    nearX.setCustomValidity('');
+    nearTyped = nearX.value.trim() !== '' || nearZ.value.trim() !== '';
+    if (!nearTyped) showNearDefault();
+  });
+}
+$<HTMLFormElement>('nearMe').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const typed =
+    nearX.value.trim() !== '' && nearZ.value.trim() !== '' && Number.isFinite(Number(nearX.value)) && Number.isFinite(Number(nearZ.value))
+      ? { x: Math.round(Number(nearX.value)), z: Math.round(Number(nearZ.value)) }
+      : null;
+  if (!typed) {
+    nearX.setCustomValidity('Enter an x and a z.');
+    nearX.reportValidity();
+    return;
+  }
+  // The search recentres the map, and the boxes go back to following the crosshair from there.
+  nearTyped = false;
+  searchAround(typed);
 });
 
 // Jump the map to typed coordinates, leaving the open route and the player's position as they are.
@@ -1518,12 +1621,14 @@ $('locateGo').addEventListener('click', () => {
   map.goTo(pos.x, pos.z);
 });
 
+// One reset for the map's coordinates row: the boxes, the markers they left, and the view back to 0,0.
 $('locateClear').addEventListener('click', () => {
   you = null;
   pin = null;
   setLocate(null);
   locateNote.textContent = '';
   renderMap();
+  map.centreOn(0, 0);
 });
 
 // ---------- webmap ----------
@@ -1612,6 +1717,77 @@ possibleBox.addEventListener('change', () => {
   render();
 });
 
+// ---------- dev mode: the survey ----------
+// Tools for working on the app, out of the way under Advanced. The survey picks a spread-out random
+// sample of the ships near End Spawn and makes a custom route of them; what the hunter finds there
+// says how many of the rest were looted before anyone kept a record.
+
+/** How many cities a survey visits. */
+const SURVEY_SIZE = 30;
+const devBox = $<HTMLInputElement>('devMode');
+devBox.checked = !!state.devMode;
+$('devTools').hidden = !devBox.checked;
+devBox.addEventListener('change', () => {
+  state.devMode = devBox.checked;
+  $('devTools').hidden = !devBox.checked;
+  save();
+  showSurvey();
+});
+
+/** How the survey stands: how many of its cities are checked, and what that says so far. */
+function showSurvey(): void {
+  const note = $('surveyNote');
+  const survey = state.seed === DEFAULT_SEED ? state.survey : undefined;
+  if (!survey?.ids.length) {
+    note.textContent = '';
+    return;
+  }
+  const at = survey.ids.map((id) => {
+    const [x, z] = id.split(',').map(Number);
+    return { x, z };
+  });
+  const checked = at.filter((c) => tracker.has(c));
+  const already = checked.filter((c) => tracker.isAlready(c)).length;
+  const est = surveyEstimate(checked.length, already, survey.frame);
+  note.textContent =
+    `${checked.length} of ${survey.ids.length} checked, picked from ${fmt(survey.frame)} ships.` +
+    (est
+      ? ` ${already} looted by someone else: ${Math.round(est.rate * 100)}%, give or take ${Math.round(est.margin * 100)}.`
+      : '');
+}
+
+$('surveyMake').addEventListener('click', () => {
+  const note = $('surveyNote');
+  if (worker) return;
+  const filters: Filters = { minDist: 0, maxDist: NEAR_SPAWN_BLOCKS, diagonalDeg: 45, quadrants: ['NE', 'NW', 'SE', 'SW'] };
+  if (!precomputed?.covers(DEFAULT_SEED, filters)) {
+    note.textContent = 'The list of cities has not loaded. Try again in a moment.';
+    return;
+  }
+  if (state.survey?.ids.length && !confirm('Replace the current survey with a new one? Your looted marks are kept.')) return;
+  const found = precomputed.search(filters);
+  // Only ships nobody has an answer for yet: certain ones, off the webmap, not looted and not reported missing.
+  const open = found
+    .filter((c) => c[2] === 1)
+    .map((c) => ({ x: c[0], z: c[1] }))
+    .filter((c) => !tracker.has(c) && !shipReports.gone.has(cityId(c)) && !explored?.isMapped(c.x, c.z));
+  const ids = surveySample(open, SURVEY_SIZE, NEAR_SPAWN_BLOCKS).map(cityId);
+  if (!ids.length) {
+    note.textContent = 'There are no unchecked ships left within 10,000 blocks of End Spawn.';
+    return;
+  }
+  // The survey before this one gives up its route.
+  const old = new Set(state.survey?.ids ?? []);
+  state.custom = state.custom.filter((route) => !route.length || !route.every((id) => old.has(id)));
+  state.custom.push(ids);
+  state.survey = { ids, frame: open.length };
+  openCustomAfterSearch = state.custom.length - 1;
+  for (const r of modeRadios) r.checked = r.value === 'band';
+  seedInput.value = DEFAULT_SEED;
+  applyResult(DEFAULT_SEED, filters, found);
+  showSearchMode();
+});
+
 // Put every search setting back to how a first-time visitor finds it, and search again.
 $('searchReset').addEventListener('click', () => {
   if (worker) return;
@@ -1658,7 +1834,28 @@ function showExploredNote(): void {
     note.textContent = 'No webmap data loaded, so cities already on the webmap could not be left out.';
     return;
   }
-  note.textContent = `Cities already on the webmap are ${state.includeMapped ? 'included in' : 'left out of'} the routes. Webmap data from ${new Date(explored.fetchedAt).toLocaleDateString()}.`;
+  // The data's own date only moves when the webmap changes. Where the time of the last check is known,
+  // that is the one to show: the data was still right then.
+  const changed = Date.parse(explored.fetchedAt);
+  const when = (t: number) => new Date(t).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  note.textContent =
+    `Cities already on the webmap are ${state.includeMapped ? 'included in' : 'left out of'} the routes. ` +
+    (webmapChecked !== null ? `Webmap last checked ${when(Math.max(webmapChecked, changed))}.` : `Webmap data from ${when(changed)}.`);
+}
+
+/** When the webmap was last checked for changes, once that has been looked up. */
+let webmapChecked: number | null = null;
+// Asked of the published site only: a copy run from a checkout may hold older data than the last check saw.
+if (!import.meta.env.DEV) {
+  fetch(WEBMAP_CHECKS_URL)
+    .then((res) => (res.ok ? res.json() : null))
+    .then((list) => {
+      const t = Date.parse(list?.workflow_runs?.[0]?.run_started_at ?? '');
+      if (!Number.isFinite(t)) return;
+      webmapChecked = t;
+      showExploredNote();
+    })
+    .catch(() => {});
 }
 
 // ---------- export ----------
@@ -2005,7 +2202,7 @@ $('citiesExport').addEventListener('click', () => {
 });
 
 $('visitedReset').addEventListener('click', () => {
-  if (!tracker.count || !confirm(`Mark all ${tracker.count} looted cities as not looted?`)) return;
+  if (!tracker.count || !confirm(`Clear all ${tracker.count} of your looted marks? This cannot be undone: press Export looted first to keep a copy.`)) return;
   tracker.clear();
   state.excluded = [];
   save();
@@ -2016,7 +2213,7 @@ $('visitedReset').addEventListener('click', () => {
 
 function showSharedNote(): void {
   $('sharedNote').textContent = tracker.sharedCount
-    ? `${fmt(tracker.sharedCount)} cities are on the shared list and show as looted for everyone.`
+    ? `${fmt(tracker.sharedCount)} cities on the shared list so far.`
     : 'The shared list is empty so far.';
 }
 showSharedNote();
@@ -2199,7 +2396,23 @@ map.onHover = (c, px, py) => {
   }
   tooltip.hidden = !c;
   if (!c) return;
-  tooltip.textContent = cityLine(c);
+  // Every tip is laid out the same: the city on the first line, and anything to know about it, muted, on a second.
+  const doubt = c.possible ? possibleNote(c.city) : null;
+  const why = doubt ? POSSIBLE_WHY.find(([start]) => doubt.startsWith(start))?.[1] : undefined;
+  const sentence = (text: string) => `${text[0].toUpperCase()}${text.slice(1)}`;
+  const status = c.missing
+    ? sentence(c.note ?? 'reported missing')
+    : c.visited
+      ? lootedText(c.city)
+      : why
+        ? `Possibly looted. ${why}`
+        : c.batch < 0 && c.note
+          ? `Not in a route: ${c.note}`
+          : '';
+  tooltip.replaceChildren(
+    `${c.batch >= 0 ? `${waypointName(c.batch, c.order)} · ` : ''}${xzText(c.city)}`,
+    ...(status ? [Object.assign(document.createElement('div'), { className: 'why', textContent: status })] : []),
+  );
   // Kept inside the map: a tip hanging over its edge makes a scroll bar flicker in and out.
   const room = $('map').getBoundingClientRect();
   // Measured from the corner, where nothing squeezes it.
@@ -2210,13 +2423,22 @@ map.onHover = (c, px, py) => {
   tooltip.style.left = `${Math.max(4, left)}px`;
   tooltip.style.top = `${Math.max(4, top)}px`;
 };
+/** Who took a looted city's elytra, as far as is known. */
+function lootedText(c: City): string {
+  // Found empty on arrival: the looter is unknown, whoever it was that found it so.
+  if (tracker.isAlready(c)) return 'Looted by an unknown hunter';
+  const who = tracker.lootedBy(c);
+  if (who) return `Looted by ${who}`;
+  return tracker.isShared(c) ? 'Looted' : 'Looted by you';
+}
+
 /** One line about a city on the map: its name, where it is and anything known about it. */
 const cityLine = (c: MapCity): string =>
   c.batch < 0
     ? c.missing
       ? `${xzText(c.city)} · ${c.note}`
       : `${xzText(c.city)} · not in a route: ${c.note}`
-    : `${waypointName(c.batch, c.order)} · ${xzText(c.city)}${c.visited ? (tracker.isAlready(c.city) ? ' · looted by someone else' : ' · looted') : ''}` +
+    : `${waypointName(c.batch, c.order)} · ${xzText(c.city)}${c.visited ? (tracker.showsAlready(c.city) ? ' · looted by someone else' : ' · looted') : ''}` +
       (c.possible ? ` · ${possibleNote(c.city) ?? POSSIBLE_NOTE}` : '') +
       (uncertainShips.has(cityId(c.city)) ? ' · ship uncertain' : '');
 
@@ -2569,6 +2791,7 @@ map.onView = (centre) => {
   viewCentre = centre;
   showCoords();
   renderLegend();
+  showNearDefault();
 };
 
 // ---------- resizable panels ----------
@@ -2697,19 +2920,22 @@ rebuild();
 render();
 fitSearch(state.filters);
 // With results from last time, start with the settings folded so the batches are in view.
-settings.open = state.found.length === 0;
+// In the simplified layout the search buttons are outside the fold, so it starts closed.
+settings.open = state.found.length === 0 && !document.body.classList.contains('simple-search');
 
 /** Looted cities published with the site, for the default server's world only. */
 let sharedLooted: string[] = [];
 /** The ones among them that a player found already looted on arrival. */
 let sharedAlready: string[] = [];
-async function loadSharedLooted(): Promise<{ cities: string[]; already: string[] }> {
+/** And who sent each one in, where a username was given. */
+let sharedBy: Record<string, string[]> = {};
+async function loadSharedLooted(): Promise<{ cities: string[]; already: string[]; by: Record<string, string[]> }> {
   try {
     const res = await fetch('./looted.json');
     const list = res.ok ? await res.json() : {};
-    return { cities: list.cities ?? [], already: list.alreadyLooted ?? [] };
+    return { cities: list.cities ?? [], already: list.alreadyLooted ?? [], by: list.by ?? {} };
   } catch {
-    return { cities: [], already: [] };
+    return { cities: [], already: [], by: {} };
   }
 }
 
@@ -2731,7 +2957,8 @@ Promise.all([Explored.load(), Precomputed.load(), loadSharedLooted(), loadShipRe
   precomputed = p;
   sharedLooted = looted.cities;
   sharedAlready = looted.already;
-  if (state.seed === DEFAULT_SEED) tracker.setShared(sharedLooted, sharedAlready);
+  sharedBy = looted.by;
+  if (state.seed === DEFAULT_SEED) tracker.setShared(sharedLooted, sharedAlready, sharedBy);
   showSharedNote();
   showExploredNote();
   // Routes finished on an earlier visit are regrouped away once the routes are first worked out.
