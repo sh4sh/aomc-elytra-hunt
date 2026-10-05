@@ -60,6 +60,12 @@ in the same change, so there is still only one way to do each thing.
 
 ## Features
 
+- **Undo or confirm, never both, never neither.** Something done all the time
+  that the app can fully take back (ticking a ship off, reordering, adding a
+  ship) has no confirmation and is covered by the undo arrows. Something rare
+  that the app cannot fully take back, or that reaches outside it (resetting
+  looted marks, deleting a custom route, ending a route, changing the seed,
+  sending something in), asks first and has no undo.
 - **One way to do each thing.** If a new control repeats an existing one,
   remove the old one or do not add the new one.
 - **Rare settings** go under Advanced. Tools for working on the app go under

@@ -1,6 +1,6 @@
 // Acting on the map: hovering and clicking ships, the line about the one picked, and the right-click menu.
 
-import { MAP_HINT_KEY, POSSIBLE_NOTE, POSSIBLE_WHY } from './constants';
+import { MAP_HINT_KEY, POSSIBLE_NOTE, POSSIBLE_WHY, RENUMBERED_NOTE } from './constants';
 import { $, fmt, xzText } from './dom';
 import type { MapCity } from './map';
 import { map } from './map-view';
@@ -183,12 +183,15 @@ function addCityItems(c: MapCity, items: [string, () => void][]): void {
       reselect();
     }]);
     items.push(['Mark as not looted', () => {
-      if (!confirm(`Mark the ship at ${xzText(c.city)} as not looted?`)) return;
+      // Like unticking its box: no question asked, and undo takes it back.
       recordMarks([c.city]);
       session.tracker.set(c.city, false);
+      // A looted ship that had been taken out of the routes goes back in, which regroups them.
+      const regroups = state.excluded.includes(id);
       state.excluded = state.excluded.filter((x) => x !== id);
       save();
       reselect();
+      if (regroups) $('mapNote').textContent = RENUMBERED_NOTE;
     }]);
   } else {
     items.push(['Mark as looted', () => {
