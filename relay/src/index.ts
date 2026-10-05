@@ -7,7 +7,7 @@
 // The GitHub token lives here as a secret and is never sent
 // to the browser. Setup steps are in relay/README.md.
 
-import { issueFor, issueForShip, parseShipReport, parseSubmission } from './validate';
+import { issueFor, issueForShip, overCap, parseShipReport, parseSubmission } from './validate';
 
 interface Env {
   /**
@@ -92,6 +92,30 @@ export default {
     const marker = new Request(`https://cooldown.invalid/${isShipReport ? 'ship' : 'looted'}/${encodeURIComponent(ip)}`);
     if (await cache.match(marker)) {
       return reply(429, { error: isShipReport ? 'Please wait a few seconds before reporting again.' : 'Please wait a minute before submitting again.' });
+    }
+
+    // A cap on everything the relay files, whoever sends it, so that many addresses at once cannot
+    // flood the repository either. The count comes from GitHub itself: the issues are the record.
+    const github = {
+      Authorization: `Bearer ${env.GITHUB_TOKEN}`,
+      Accept: 'application/vnd.github+json',
+      'User-Agent': 'aomc-looted-relay',
+    };
+    const recent = await fetch(
+      `https://api.github.com/repos/${env.REPO}/issues?state=all&sort=created&direction=desc&per_page=100`,
+      { headers: github },
+    );
+    // If the count cannot be had, nothing is filed: better to turn a player away than to lose the cap.
+    if (!recent.ok) return reply(502, { error: 'Could not file the submission. Please try again later.' });
+    const capped = overCap((await recent.json()) as Parameters<typeof overCap>[0], Date.now());
+    if (capped) {
+      console.log(`Over the ${capped} cap: turned a submission away`);
+      return reply(429, {
+        error:
+          capped === 'hour'
+            ? 'A lot has been sent in lately. Please try again in an hour.'
+            : 'A lot has been sent in today. Please try again tomorrow.',
+      });
     }
 
     const res = await fetch(`https://api.github.com/repos/${env.REPO}/issues`, {

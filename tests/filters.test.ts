@@ -531,3 +531,29 @@ describe('earlier flight paths with webmap cities', async () => {
     expect(near[0]).toContain('a third in line with them would make a path');
   });
 });
+
+describe('relay cap on issues filed', async () => {
+  const { overCap, MAX_PER_HOUR, MAX_PER_DAY } = await import('../relay/src/validate');
+  const now = Date.parse('2026-10-05T12:00:00Z');
+  const issue = (minutesAgo: number, label = 'map-submission') => ({
+    created_at: new Date(now - minutesAgo * 60_000).toISOString(),
+    labels: [{ name: label }],
+  });
+
+  it('lets submissions through below the caps', () => {
+    expect(overCap([], now)).toBeNull();
+    expect(overCap(Array.from({ length: MAX_PER_HOUR - 1 }, () => issue(5)), now)).toBeNull();
+  });
+
+  it('stops at the hourly and daily caps, counting both kinds of submission', () => {
+    const lastHour = [...Array.from({ length: MAX_PER_HOUR - 1 }, () => issue(5)), issue(10, 'ship-report')];
+    expect(overCap(lastHour, now)).toBe('hour');
+    expect(overCap(Array.from({ length: MAX_PER_DAY }, (_, k) => issue(90 + k)), now)).toBe('day');
+  });
+
+  it('ignores other issues and old ones', () => {
+    const others = Array.from({ length: 80 }, () => issue(5, 'bug'));
+    const old = Array.from({ length: 100 }, () => issue(60 * 30));
+    expect(overCap([...others, ...old, { created_at: new Date(now).toISOString(), labels: [] }], now)).toBeNull();
+  });
+});

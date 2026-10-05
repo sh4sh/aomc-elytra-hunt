@@ -116,4 +116,9 @@ the repository. List them with
 
 - Only the app's own site (`ALLOWED_ORIGIN` in `wrangler.toml`) may call it.
 - One submission per visitor address per minute, at most 4,000 cities each.
+- At most 30 issues an hour and 100 a day in total, whoever sends them
+  (`MAX_PER_HOUR` and `MAX_PER_DAY` in `src/validate.ts`). The relay counts
+  its own recent issues on GitHub before filing another, so the cap holds
+  across all of Cloudflare's locations and needs no extra storage. Once it is
+  reached, players are asked to try again later.
 - Only coordinates and a username-like name are accepted; no free text.

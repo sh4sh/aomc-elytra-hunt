@@ -108,3 +108,21 @@ export function issueForShip(r: ShipReport): { title: string; body: string; labe
     ].join('\n'),
   };
 }
+
+/** The most issues the relay will file in an hour and in a day, whoever sends them. */
+export const MAX_PER_HOUR = 30;
+export const MAX_PER_DAY = 100;
+
+/**
+ * Whether the relay has filed as many issues as it will for now. `issues` are the repository's most
+ * recently created issues, as GitHub lists them; only the relay's own (by label) are counted.
+ */
+export function overCap(issues: { created_at: string; labels: ({ name?: string } | string)[] }[], now: number): 'hour' | 'day' | null {
+  const ours = issues.filter((i) =>
+    i.labels.some((l) => [LABEL, SHIP_LABEL].includes(typeof l === 'string' ? l : (l.name ?? ''))),
+  );
+  const within = (ms: number) => ours.filter((i) => now - Date.parse(i.created_at) < ms).length;
+  if (within(60 * 60 * 1000) >= MAX_PER_HOUR) return 'hour';
+  if (within(24 * 60 * 60 * 1000) >= MAX_PER_DAY) return 'day';
+  return null;
+}
