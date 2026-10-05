@@ -155,7 +155,7 @@ $('endRoute').addEventListener('click', () => {
   const left = session.batches[i].length - done.length;
   if (
     !confirm(
-      `End ${batchTitle(i).toLowerCase()} here? The ${done.length === 1 ? 'ship you looted is' : `${done.length} ships you looted are`} put away, and the ${left === 1 ? 'one' : left} you did not reach ${left === 1 ? 'goes' : 'go'} back to be grouped into new routes. Nothing else is marked as looted.\n\nThe routes are then numbered afresh, so waypoints already in your map mod will no longer match their route numbers.`,
+      `End ${batchTitle(i).toLowerCase()} here?\n\nYour ${done.length} looted ${done.length === 1 ? 'ship is' : 'ships are'} put away. The other ${left} ${left === 1 ? 'goes' : 'go'} into new routes.\n\nRoutes get renumbered, so old waypoints won't match.`,
     )
   ) {
     return;

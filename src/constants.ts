@@ -50,4 +50,4 @@ export const BATCH_IN_PLACE_LIMIT = 150_000;
 export const MAP_HINT_KEY = 'end-cities:map-hint-seen';
 
 /** Said on the map whenever routes are regrouped under the player, since their numbers change. */
-export const RENUMBERED_NOTE = 'Routes regrouped and numbered afresh. Waypoints from before no longer match their route numbers.';
+export const RENUMBERED_NOTE = "Routes renumbered. Old waypoints won't match.";
