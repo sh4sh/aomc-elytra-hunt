@@ -88,4 +88,8 @@ export const session = {
   sharedAlready: [] as string[],
   /** And who sent each one in, where a username was given. */
   sharedBy: {} as Record<string, string[]>,
+  /** The place in the open route of the row being dragged, while a drag is under way. */
+  dragFrom: null as number | null,
+  /** True from the start of a visit until the routes have been worked out with everything loaded: until then the route to reopen is still being looked for. */
+  reopening: true,
 };

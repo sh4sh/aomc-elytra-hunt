@@ -195,8 +195,6 @@ function citiesAround(at: { x: number; z: number }, radius: number): FoundCity[]
 const undrop = (id: string) => {
   if (state.dropped) state.dropped = state.dropped.filter((x) => x !== id);
 };
-/** The place in the open route of the row being dragged, while a drag is under way. */
-let dragFrom: number | null = null;
 
 const map = new EndMap($<HTMLCanvasElement>('map'));
 const tooltip = $('tooltip');
@@ -300,7 +298,7 @@ function rebuild(done?: () => void): void {
   batchWorker = null;
   const finish = (made: { batches: City[][]; size: number }) => {
     finishRebuild(made, pool, cities);
-    if (reopening) reopen();
+    if (session.reopening) reopen();
     done?.();
   };
   if (job.maxHop <= 0 || cities.length * job.size <= BATCH_IN_PLACE_LIMIT) {
@@ -788,13 +786,13 @@ function renderDetail(): void {
       // Rows can be dragged into a new order. Nothing is drawn for it until a drag is under way.
       li.draggable = batch.length > 1;
       li.addEventListener('dragstart', (e) => {
-        dragFrom = k;
+        session.dragFrom = k;
         e.dataTransfer?.setData('text/plain', xzText(c));
         if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
       });
       const clearDrop = () => li.classList.remove('drop-before', 'drop-after');
       li.addEventListener('dragover', (e) => {
-        if (dragFrom === null) return;
+        if (session.dragFrom === null) return;
         e.preventDefault();
         const box = li.getBoundingClientRect();
         const after = e.clientY > box.top + box.height / 2;
@@ -802,13 +800,13 @@ function renderDetail(): void {
         li.classList.toggle('drop-after', after);
       });
       li.addEventListener('dragleave', clearDrop);
-      li.addEventListener('dragend', () => (dragFrom = null));
+      li.addEventListener('dragend', () => (session.dragFrom = null));
       li.addEventListener('drop', (e) => {
         e.preventDefault();
         const after = li.classList.contains('drop-after');
         clearDrop();
-        const from = dragFrom;
-        dragFrom = null;
+        const from = session.dragFrom;
+        session.dragFrom = null;
         if (from === null || from === k) return;
         // Taking the row out first shifts everything after it up by one.
         const to = (after ? k + 1 : k) - (from < k ? 1 : 0);
@@ -910,8 +908,6 @@ function openRouteKey(): string | undefined {
   if (isCustom(i)) return `custom:${i - session.generatedCount}`;
   return session.batches[i]?.length ? cityId(session.batches[i][0]) : undefined;
 }
-/** True from the start of a visit until the routes have been worked out with everything loaded: until then the route to reopen is still being looked for. */
-let reopening = true;
 /** Open the route that was open at the end of the last visit, if it is still there. */
 function reopen(): void {
   const key = state.openRoute;
@@ -923,7 +919,7 @@ function reopen(): void {
 }
 
 function render(): void {
-  if (!reopening && openRouteKey() !== state.openRoute) {
+  if (!session.reopening && openRouteKey() !== state.openRoute) {
     state.openRoute = openRouteKey();
     save();
   }
@@ -941,7 +937,7 @@ function setHot(c: City | null): void {
 
 function select(i: number | null, zoom = false): void {
   // The player has chosen for themselves: nothing left to reopen.
-  reopening = false;
+  session.reopening = false;
   // Opening a batch, from the list or the map, puts the help away.
   if (i !== null) session.helpOpen = false;
   // Leaving a finished route is the moment to regroup what is left. The routes are numbered afresh,
@@ -2568,7 +2564,7 @@ Promise.all([Explored.load(), Precomputed.load(), loadSharedLooted(), loadShipRe
   // Routes finished on an earlier visit are regrouped away once the routes are first worked out.
   rebuild(() => {
     const settled = () => {
-      reopening = false;
+      session.reopening = false;
     };
     if (retireFinished(null)) rebuild(settled);
     else settled();
