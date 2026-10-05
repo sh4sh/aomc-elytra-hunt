@@ -403,7 +403,6 @@
         <div class="row quiet">
           <button id="markAll" type="button" class="textlink">Mark all looted</button>
           <button id="markNone" type="button" class="textlink">Clear all</button>
-          <button id="endRoute" type="button" class="textlink" title="Stop this route where it is: the ships you looted are put away, and the ones you did not reach are grouped into new routes" hidden>End route here</button>
           <span class="undo-redo">
             <button id="addOneUndo" type="button" class="iconbtn" title="Undo your last change to this route: looted marks, a ship added, or its order changed" aria-label="Undo your last change to this route" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5 4 10l5 5"/><path d="M4 10h10a5 5 0 0 1 0 10h-3"/></svg></button>
             <button id="routeRedo" type="button" class="iconbtn" title="Redo the change you just undid" aria-label="Redo the change you just undid" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5 5 5-5 5"/><path d="M20 10H10a5 5 0 0 0 0 10h3"/></svg></button>
@@ -414,6 +413,7 @@
         <div class="row actions">
           <button id="addOne" type="button" title="Add the nearest ship to this route's last stop that is not in any route, as the new last stop. It may come from just outside the search area">Add +1 ship to route</button>
           <button id="orderReset" type="button" title="Put this route back in the order it was worked out in. Ships you added stay, at the end" hidden>Original order</button>
+          <button id="endRoute" type="button" title="Stop this route where it is: the ships you looted are put away, and the ones you did not reach are grouped into new routes" hidden>End route here</button>
         </div>
       </div>
     </section>

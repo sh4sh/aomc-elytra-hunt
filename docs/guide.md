@@ -84,7 +84,8 @@ near them) to the route's first ship, plus the route itself.
   possibly looted.
 - Right-click a ship, or press **⋯** on its row, for **Add to route**, **Remove
   from route** and **Put back in its route**.
-- **End route here** stops a route part-way. The ships you looted are put
+- **End route here**, under the list beside **Add +1 ship to route**, stops a
+  route part-way. The ships you looted are put
   away, the ones you did not reach are grouped into new routes, and nothing
   else is marked as looted. The routes are numbered afresh, so waypoints
   already in your map mod stop matching their route numbers; the map says so
