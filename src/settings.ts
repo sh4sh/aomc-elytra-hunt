@@ -9,7 +9,7 @@ import { showBackToMap } from './map-actions';
 import { map } from './map-view';
 import { render } from './render';
 import { rebuild } from './routes';
-import { applyResult, fillForm, form } from './search';
+import { applyResult, fillForm, form, showSearchFold } from './search';
 import { session } from './session';
 import { DEFAULT_FILTERS, DEFAULT_LINE_DEVIATION, DEFAULT_SEED, save, state } from './state';
 
@@ -142,6 +142,8 @@ $('searchReset').addEventListener('click', () => {
   state.seed = DEFAULT_SEED;
   state.filters = { ...DEFAULT_FILTERS, quadrants: [...DEFAULT_FILTERS.quadrants] };
   fillForm();
+  // Back to Find ships: the boxes under Search near me are put away.
+  showSearchFold();
   state.seed = applied.seed;
   state.filters = applied.filters;
   $('searchWarning').hidden = true;
