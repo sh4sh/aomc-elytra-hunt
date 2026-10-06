@@ -135,6 +135,11 @@ details.fold { border-top: 0; padding-top: 0; }
 /* A section that is its panel's main action: its title is that panel's main button, outlined the same way. */
 details.action > summary { padding: 8px 10px; border: 1px solid var(--accent); border-radius: 6px; background: color-mix(in srgb, var(--accent) 14%, var(--panel)); }
 details.action > summary:hover { color: var(--text); background: color-mix(in srgb, var(--accent) 24%, var(--panel)); }
+/* The areas to export for the webmap: one line each, its two corners and a copy button for each corner. */
+#webmapAreas { margin: 0; padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 12px; font-variant-numeric: tabular-nums; }
+#webmapAreas li span { margin-right: 6px; }
+#webmapAreas .chat { padding: 0 4px; margin-left: 4px; font-size: 11px; color: var(--muted); background: none; }
+#webmapAreas .chat:hover { color: var(--text); }
 /* Not a section: a note that unfolds its reasons. */
 #possibleWhy, #possibleWhy[open] { border: 0; padding: 0; }
 #possibleWhy > summary, #possibleWhy > summary:hover { color: var(--muted); font-size: 12px; font-weight: 400; }

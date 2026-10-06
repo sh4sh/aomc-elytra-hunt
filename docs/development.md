@@ -46,6 +46,7 @@ The page is `index.html` and `src/style.css`. The code behind it is in `src/`:
 | `map-actions.ts` | Hovering and clicking the map, and the right-click menu |
 | `settings.ts` | Route options, the webmap, the world seed, restoring defaults |
 | `submissions.ts` | Ship reports and looted lists sent to the relay |
+| `export-areas.ts` | Which rectangles to export from Xaero for the webmap after a route |
 | `dev-mode.ts`, `survey.ts` | Dev mode and its survey |
 | `map.ts`, `map-view.ts` | The map's drawing code, and the one map on the page |
 | `filters.ts`, `trajectory.ts`, `tracker.ts` | Route maths, flight-path guesses, looted marks |

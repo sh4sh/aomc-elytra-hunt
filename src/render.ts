@@ -6,7 +6,7 @@ import { $, fmt, xzText } from './dom';
 import type { MapCity } from './map';
 import { openMenu } from './map-actions';
 import { map } from './map-view';
-import { cityChatLine, copiedKey, copiedLines, copyText } from './route-panel';
+import { cityChatLine, copiedKey, copiedLines, copyText, renderWebmapExport } from './route-panel';
 import { batchTitle, batchWorker, color, earlierPaths, earlierStudy, isCustom, lastEdit, looted, lootedCities, moveCity, orderKey, possible, possibleNote, rebuild, recordMarks, routeLength, startPoint } from './routes';
 import { aroundMode, formFilters, retireFinished, showClearPosition } from './search';
 import { session } from './session';
@@ -319,6 +319,10 @@ export function renderDetail(): void {
   const complete = batch.length > 0 && batch.every((c) => session.tracker.has(c));
   $('routeDone').hidden = !complete;
   $('exportBox').hidden = complete;
+  // What was flown can go on the webmap once there is some of it, for the server's world.
+  const webmapExport = $<HTMLDetailsElement>('webmapExport');
+  webmapExport.hidden = looted(batch) === 0;
+  if (webmapExport.open && !webmapExport.hidden) renderWebmapExport();
   // Which city the two buttons below act on: the first one not looted yet.
   const at = batch.findIndex((c) => !session.tracker.has(c));
   const currentCity = $('currentCity');

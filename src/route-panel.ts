@@ -4,6 +4,7 @@
 import { BEYOND_BLOCKS, MAPPED_NOTE, RENUMBERED_NOTE } from './constants';
 import { $, download, fmt } from './dom';
 import type { FoundCity } from './generation/worker';
+import { exportAreas } from './export-areas';
 import { chatLine, cleanUsername } from './journeymap';
 import { rebuildKeeping } from './map-actions';
 import { render, renderDetail } from './render';
@@ -144,6 +145,56 @@ $('customDelete').addEventListener('click', () => {
   session.selected = null;
   rebuild();
   render();
+});
+
+// ---------- export for the webmap ----------
+
+// The areas to export from Xaero's World Map for the ships looted on the open route, each given as two
+// corners. A corner can be copied as a waypoint, the same way a ship is, so that it shows on Xaero's map
+// to select between. Worked out only while the section is open.
+export function renderWebmapExport(): void {
+  const i = session.selected;
+  if (i === null) return;
+  // The path flown: the route's looted ships, in the order of the route.
+  const flown = session.batches[i].filter((c) => session.tracker.has(c));
+  const { areas, leftOut } = exportAreas(flown, session.explored);
+  const corner = (n: number, letter: 'A' | 'B', x: number, z: number): HTMLButtonElement => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'chat';
+    btn.textContent = `copy ${letter}`;
+    btn.title = `Copy corner ${letter} as a chat line: paste it into Minecraft chat to make its waypoint`;
+    btn.addEventListener('click', async () => {
+      const at: City = { x, z, source: 'seed' };
+      const name = `Export ${n}${letter}`;
+      const line = state.mapMod === 'xaero' ? shareLine(at, name, letter, 15, state.chatName) : chatLine(at, name, state.chatName);
+      btn.textContent = (await copyText(line)) ? 'copied' : 'copy failed';
+      setTimeout(() => (btn.textContent = `copy ${letter}`), 1500);
+    });
+    return btn;
+  };
+  $('webmapAreas').replaceChildren(
+    ...areas.map((a, k) => {
+      const li = document.createElement('li');
+      // The far corner is the last block inside the area, so both corners can be stood on.
+      const text = Object.assign(document.createElement('span'), {
+        textContent: `${areas.length > 1 ? `Area ${k + 1}: ` : ''}A x: ${a.x0}, z: ${a.z0} · B x: ${a.x1 - 1}, z: ${a.z1 - 1}`,
+      });
+      li.append(text, corner(k + 1, 'A', a.x0, a.z0), corner(k + 1, 'B', a.x1 - 1, a.z1 - 1));
+      return li;
+    }),
+  );
+  const checked = session.explored ? new Date(session.explored.fetchedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '';
+  $('webmapAreasNote').textContent = [
+    areas.length ? '' : 'Nothing here can be exported without blanking out terrain the webmap already has.',
+    leftOut ? `About ${fmt(Math.round(leftOut / 100) * 100)} blocks of the flight are left out: they cross terrain already on the webmap, which an export would blank out.` : '',
+    session.explored ? `Checked against the webmap as of ${checked}. If the webmap shows newer terrain in an area, skip that area.` : 'The webmap could not be checked, so look at it before exporting: an export blanks out whatever it covers.',
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+$('webmapExport').addEventListener('toggle', () => {
+  if ($<HTMLDetailsElement>('webmapExport').open) renderWebmapExport();
 });
 
 // Stop a route where it stands. The ships looted so far are put away for good and the ones not reached

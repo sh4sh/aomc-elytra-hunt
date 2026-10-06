@@ -140,6 +140,14 @@ end. Ships within 1,000 blocks of it count as possibly looted.
 
 ## Sharing
 
+- **Adding a route to the webmap:** once you have looted some of a route, **Add
+  what you explored to the webmap** in its panel gives the areas to export
+  from Xaero's World Map, each as two corners, A and B, that you can copy as
+  waypoints. An export blanks out whatever it covers that you did not explore,
+  so the areas are cut to avoid terrain the webmap already has; a stretch that
+  crosses someone else's trail is left out. They are worked out from the
+  app's hourly copy of the webmap, so check the webmap itself before
+  exporting.
 - **Webmap:** areas on the [community webmap](https://map.diorite.xyz/?dim=the_end)
   are left out of the routes once the app's copy of it refreshes (hourly).
 - **Looted list:** **Submit looted for everyone** sends your marks for review;

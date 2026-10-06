@@ -87,6 +87,24 @@ export class Explored {
     return out;
   }
 
+  /**
+   * Call `visit` with the middle of each mapped cell inside a rectangle of the world (in blocks),
+   * stopping as soon as it returns true.
+   */
+  eachMapped(area: { x0: number; z0: number; x1: number; z1: number }, visit: (x: number, z: number) => boolean | void): void {
+    const bpp = this.blocksPerPixel;
+    const [px0, px1] = [Math.floor(area.x0 / bpp), Math.ceil(area.x1 / bpp) - 1];
+    for (let row = Math.floor(area.z0 / bpp); row <= Math.ceil(area.z1 / bpp) - 1; row++) {
+      const runs = this.rows.get(row);
+      if (!runs) continue;
+      for (let k = 0; k < runs.length; k += 2) {
+        for (let px = Math.max(px0, runs[k]); px <= Math.min(px1, runs[k] + runs[k + 1] - 1); px++) {
+          if (visit((px + 0.5) * bpp, (row + 0.5) * bpp)) return;
+        }
+      }
+    }
+  }
+
   /** Paint the mapped areas. sx/sy convert block coordinates to canvas pixels. */
   draw(ctx: CanvasRenderingContext2D, sx: (x: number) => number, sy: (z: number) => number, w: number, h: number): void {
     const bpp = this.blocksPerPixel;

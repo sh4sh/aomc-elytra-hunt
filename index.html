@@ -337,9 +337,7 @@
         <p id="detailMeta" class="hint"></p>
         <p id="routeDone" class="route-done" hidden>
           Route complete: every ship in it is looted.
-          <span class="aomc-only">Now add what you explored to the
-          <a href="https://map.diorite.xyz/?dim=the_end" target="_blank" rel="noopener">community webmap</a>:
-          export it from Xaero's World Map with resource packs and shaders off, then press the upload button there.</span>
+          <span class="aomc-only">Now add what you explored to the webmap, below.</span>
         </p>
         <details id="exportBox" class="fold action">
         <summary><strong>Add this route to your map mod</strong></summary>
@@ -392,6 +390,17 @@
           </p>
         </details>
 
+        </details>
+
+        <details id="webmapExport" class="aomc-only" hidden>
+          <summary>Add what you explored to the webmap</summary>
+          <ol class="steps">
+            <li>Turn off resource packs and shaders.</li>
+            <li>In Xaero's World Map, select each area below from corner A to corner B, and export it.</li>
+            <li>Upload the images with the upload button on the <a href="https://map.diorite.xyz/?dim=the_end" target="_blank" rel="noopener">community webmap</a>.</li>
+          </ol>
+          <ol id="webmapAreas"></ol>
+          <p id="webmapAreasNote" class="hint"></p>
         </details>
 
         <p id="currentCity" class="current-city" hidden></p>

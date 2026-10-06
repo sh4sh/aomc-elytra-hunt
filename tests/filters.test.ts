@@ -622,3 +622,64 @@ describe('survey of the cities near End Spawn', async () => {
     expect(surveyEstimate(150, 90, 150)!.margin).toBe(0);
   });
 });
+
+describe('areas to export for the webmap', async () => {
+  const { exportAreas } = await import('../src/export-areas');
+  type Area = { x0: number; z0: number; x1: number; z1: number };
+  /** A webmap with terrain in the given 16-block cells. */
+  const webmap = (cells: [number, number][]) => ({
+    eachMapped(a: Area, visit: (x: number, z: number) => boolean | void) {
+      for (const [x, z] of cells) if (x >= a.x0 && x < a.x1 && z >= a.z0 && z < a.z1 && visit(x, z)) return;
+    },
+  });
+  const within = (a: Area, x: number, z: number) => x >= a.x0 && x < a.x1 && z >= a.z0 && z < a.z1;
+  const fromPath = (path: { x: number; z: number }[], x: number, z: number) =>
+    Math.min(
+      ...path.slice(1).map((b, k) => {
+        const a = path[k];
+        const [dx, dz] = [b.x - a.x, b.z - a.z];
+        const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.z) * dz) / (dx * dx + dz * dz)));
+        return Math.hypot(x - (a.x + t * dx), z - (a.z + t * dz));
+      }),
+    );
+
+  it('is one rectangle around the path, with room for what was explored, when the webmap has nothing there', () => {
+    const { areas, leftOut } = exportAreas([{ x: 1000, z: 1000 }, { x: 5000, z: 1000 }, { x: 5000, z: 4000 }], webmap([]));
+    expect(leftOut).toBe(0);
+    expect(areas).toHaveLength(1);
+    expect(areas[0].x0).toBeLessThanOrEqual(1000 - 168);
+    expect(areas[0].x1).toBeGreaterThanOrEqual(5000 + 168);
+    expect(areas[0].z1).toBeGreaterThanOrEqual(4000 + 168);
+    expect(areas[0].x0 % 16).toBe(0);
+  });
+
+  it('splits round terrain the webmap already has, so that none of it is exported blank', () => {
+    // An L-shaped path, with someone else's terrain in the corner of the L's rectangle that the path never goes near.
+    const path = [{ x: 1000, z: 1000 }, { x: 5000, z: 1000 }, { x: 5000, z: 5000 }];
+    const cells: [number, number][] = [];
+    for (let x = 1500; x < 2500; x += 16) for (let z = 3500; z < 4500; z += 16) cells.push([x + 8, z + 8]);
+    const { areas, leftOut } = exportAreas(path, webmap(cells));
+    expect(leftOut).toBe(0);
+    expect(areas.length).toBeGreaterThan(1);
+    for (const [x, z] of cells) expect(areas.some((a) => within(a, x, z))).toBe(false);
+  });
+
+  it('leaves out the stretch that crosses another trail, and exports the rest', () => {
+    const path = [{ x: 0, z: 0 }, { x: 8000, z: 0 }];
+    // A trail 320 blocks wide running north to south across the path at x = 4000.
+    const cells: [number, number][] = [];
+    for (let x = 3840; x < 4160; x += 16) for (let z = -3000; z < 3000; z += 16) cells.push([x + 8, z + 8]);
+    const { areas, leftOut } = exportAreas(path, webmap(cells));
+    expect(leftOut).toBeGreaterThan(0);
+    expect(leftOut).toBeLessThan(2000);
+    expect(areas.length).toBe(2);
+    // Whatever of the trail falls inside an exported rectangle is under the path, where the export has terrain of its own.
+    for (const [x, z] of cells) if (areas.some((a) => within(a, x, z))) expect(fromPath(path, x, z)).toBeLessThanOrEqual(144);
+  });
+
+  it('keeps an export to a size Xaero can write', () => {
+    const { areas } = exportAreas([{ x: 0, z: 0 }, { x: 20000, z: 0 }, { x: 40000, z: 300 }], webmap([]));
+    expect(areas.length).toBeGreaterThan(1);
+    for (const a of areas) expect(Math.max(a.x1 - a.x0, a.z1 - a.z0)).toBeLessThanOrEqual(20000 + 400);
+  });
+});
