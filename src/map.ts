@@ -434,17 +434,31 @@ export class EndMap {
       (filters.around
         ? Math.max(Math.abs(filters.around.x), Math.abs(filters.around.z)) + filters.around.radius
         : filters.maxDist) * this.scale;
+    // Only the stretch of each line that is on screen is drawn. A search far from End Spawn makes these
+    // lines millions of pixels long, and dashing all of that on every frame made the map drag.
     ctx.lineWidth = 1;
     ctx.strokeStyle = '#2a2340';
     ctx.beginPath();
-    ctx.moveTo(ox - reach, oy); ctx.lineTo(ox + reach, oy);
-    ctx.moveTo(ox, oy - reach); ctx.lineTo(ox, oy + reach);
+    if (oy >= 0 && oy <= h && ox + reach >= 0 && ox - reach <= w) {
+      ctx.moveTo(Math.max(ox - reach, 0), oy); ctx.lineTo(Math.min(ox + reach, w), oy);
+    }
+    if (ox >= 0 && ox <= w && oy + reach >= 0 && oy - reach <= h) {
+      ctx.moveTo(ox, Math.max(oy - reach, 0)); ctx.lineTo(ox, Math.min(oy + reach, h));
+    }
     ctx.stroke();
     ctx.setLineDash([4, 6]);
-    ctx.beginPath();
-    ctx.moveTo(ox - reach, oy - reach); ctx.lineTo(ox + reach, oy + reach);
-    ctx.moveTo(ox - reach, oy + reach); ctx.lineTo(ox + reach, oy - reach);
-    ctx.stroke();
+    // Along a diagonal, t is how far from End Spawn in each direction: clamp it to where the line is in view.
+    for (const dir of [1, -1]) {
+      const from = Math.max(-reach, -ox, dir > 0 ? -oy : oy - h);
+      const to = Math.min(reach, w - ox, dir > 0 ? h - oy : oy);
+      if (!(from < to)) continue;
+      // Start the dashes where they would have fallen, so they do not slide as the map moves.
+      ctx.lineDashOffset = (from * Math.SQRT2) % 10;
+      ctx.beginPath();
+      ctx.moveTo(ox + from, oy + dir * from); ctx.lineTo(ox + to, oy + dir * to);
+      ctx.stroke();
+    }
+    ctx.lineDashOffset = 0;
     ctx.setLineDash([]);
 
     // Search band: the squares at the minimum and maximum distance.
