@@ -392,18 +392,6 @@
 
         </details>
 
-        <details id="webmapExport" class="aomc-only" hidden>
-          <summary>Add what you explored to the webmap</summary>
-          <ol class="steps">
-            <li>Turn off resource packs and shaders: with them on, the colours come out wrong.</li>
-            <li>Copy the two corners below as waypoints, so that they show on Xaero's World Map.</li>
-            <li>On that map, select from one corner to the other and export. It does not need to be exact.</li>
-            <li>Upload the images with the upload button on the <a href="https://map.diorite.xyz/?dim=the_end" target="_blank" rel="noopener">community webmap</a>.</li>
-          </ol>
-          <ul id="webmapCorners"></ul>
-          <p id="webmapCornersNote" class="hint"></p>
-        </details>
-
         <p id="currentCity" class="current-city" hidden></p>
         <div class="row actions">
           <button id="nextCity" type="button" title="Mark the current ship as looted and move on to the next one">Next ship</button>
@@ -429,6 +417,17 @@
           <button id="orderReset" type="button" title="Put this route back in the order it was worked out in. Ships you added stay, at the end" hidden>Original order</button>
           <button id="endRoute" type="button" title="Stop this route where it is: the ships you looted are put away, and the ones you did not reach are grouped into new routes" hidden>End route here</button>
         </div>
+        <details id="webmapExport" class="aomc-only" hidden>
+          <summary>Add what you explored to the webmap</summary>
+          <ol class="steps">
+            <li>Turn off resource packs and shaders: with them on, the colours come out wrong.</li>
+            <li>Copy the two corners below as waypoints, so that they show on Xaero's World Map.</li>
+            <li>On that map, select from one corner to the other and export. It does not need to be exact.</li>
+            <li>Upload the images with the upload button on the <a href="https://map.diorite.xyz/?dim=the_end" target="_blank" rel="noopener">community webmap</a>.</li>
+          </ol>
+          <ul id="webmapCorners"></ul>
+          <p id="webmapCornersNote" class="hint"></p>
+        </details>
       </div>
     </section>
 

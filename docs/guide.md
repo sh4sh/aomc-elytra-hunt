@@ -141,7 +141,7 @@ end. Ships within 1,000 blocks of it count as possibly looted.
 ## Sharing
 
 - **Adding a route to the webmap:** once you have looted some of a route, **Add
-  what you explored to the webmap** in its panel gives the area to export
+  what you explored to the webmap**, under its list of ships, gives the area to export
   from Xaero's World Map as two corners, A and B, that you can copy as
   waypoints: Xaero shows no coordinates while you select, so the waypoints
   mark where to drag. The area need not be exact. Whatever you did not explore
