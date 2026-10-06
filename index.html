@@ -397,10 +397,20 @@
           <ol class="steps">
             <li>Turn off resource packs and shaders.</li>
             <li>In Xaero's World Map, select each area below from corner A to corner B, and export it.</li>
-            <li>Upload the images with the upload button on the <a href="https://map.diorite.xyz/?dim=the_end" target="_blank" rel="noopener">community webmap</a>.</li>
+            <li>Check the exported images here.</li>
+            <li>Upload them with the upload button on the <a href="https://map.diorite.xyz/?dim=the_end" target="_blank" rel="noopener">community webmap</a>.</li>
           </ol>
           <ol id="webmapAreas"></ol>
           <p id="webmapAreasNote" class="hint"></p>
+          <div class="row">
+            <button id="exportPick" type="button" title="Choose the images of an export, to see whether any would blank out terrain already on the webmap. They are only read: nothing is changed or sent anywhere">Check exported images</button>
+            <button id="exportPickFolder" type="button" title="Choose the folder of an export instead of its images">Check a folder</button>
+          </div>
+          <input id="exportFiles" type="file" accept=".png,image/png" multiple hidden />
+          <input id="exportFolder" type="file" webkitdirectory hidden />
+          <p id="exportCheckNote" class="hint" role="status"></p>
+          <ul id="exportCheckList" class="hint"></ul>
+          <button id="exportZip" type="button" hidden></button>
         </details>
 
         <p id="currentCity" class="current-city" hidden></p>

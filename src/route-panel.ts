@@ -4,7 +4,7 @@
 import { BEYOND_BLOCKS, MAPPED_NOTE, RENUMBERED_NOTE } from './constants';
 import { $, download, fmt } from './dom';
 import type { FoundCity } from './generation/worker';
-import { exportAreas } from './export-areas';
+import { exportAreas, exportImagePlace, wouldOverwrite } from './export-areas';
 import { chatLine, cleanUsername } from './journeymap';
 import { rebuildKeeping } from './map-actions';
 import { render, renderDetail } from './render';
@@ -14,6 +14,7 @@ import { DEFAULT_SEED, onUsername, type RouteEdit, save, type Saved, setUsername
 import { initSubmissions } from './submissions';
 import { type City, cityId } from './types';
 import { batchColor, shareLine, waypointFile, waypointLines, waypointName } from './xaero';
+import { zipStore } from './zip';
 
 // ---------- export ----------
 
@@ -195,6 +196,73 @@ export function renderWebmapExport(): void {
 }
 $('webmapExport').addEventListener('toggle', () => {
   if ($<HTMLDetailsElement>('webmapExport').open) renderWebmapExport();
+});
+
+// Checking an export before it is uploaded. The images are read in the browser and nothing else: no
+// file is changed and nothing is sent. Those that are black where the webmap has terrain would blank
+// it out, so they are listed to be left out; the rest can be taken away together as a zip.
+/** The images of the export last checked that are safe to upload. */
+let safeImages: File[] = [];
+async function checkExport(files: File[]): Promise<void> {
+  const note = $('exportCheckNote');
+  const list = $('exportCheckList');
+  const zip = $<HTMLButtonElement>('exportZip');
+  list.replaceChildren();
+  zip.hidden = true;
+  safeImages = [];
+  const images = files.filter((f) => exportImagePlace(f.name));
+  if (!images.length) {
+    note.textContent = files.length ? 'None of these are images from a Xaero export: their names end like "_x-3184_z8816.png".' : '';
+    return;
+  }
+  const mapped = session.explored;
+  if (!mapped) {
+    note.textContent = 'The webmap could not be checked just now, so these images cannot be either.';
+    return;
+  }
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+  const unsafe: File[] = [];
+  for (const [k, file] of images.entries()) {
+    if (k % 10 === 0) note.textContent = `Checking ${k + 1} of ${images.length}…`;
+    try {
+      const picture = await createImageBitmap(file);
+      [canvas.width, canvas.height] = [picture.width, picture.height];
+      ctx.drawImage(picture, 0, 0);
+      picture.close();
+      const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const image = { ...exportImagePlace(file.name)!, width: canvas.width, height: canvas.height, data };
+      (wouldOverwrite(image, mapped) ? unsafe : safeImages).push(file);
+    } catch {
+      // An image that cannot be read is not vouched for.
+      unsafe.push(file);
+    }
+  }
+  note.textContent = unsafe.length
+    ? `${fmt(images.length)} images checked. Leave ${unsafe.length === 1 ? 'this one' : `these ${fmt(unsafe.length)}`} out when you upload: ${unsafe.length === 1 ? 'it' : 'they'} would blank out terrain already on the webmap.`
+    : `${fmt(images.length)} images checked. All are safe to upload.`;
+  list.replaceChildren(...unsafe.map((f) => Object.assign(document.createElement('li'), { textContent: f.name })));
+  // Worth a zip only when there are some to leave out and some to keep.
+  zip.hidden = !unsafe.length || !safeImages.length;
+  zip.textContent = `Download the ${fmt(safeImages.length)} safe images as a zip`;
+}
+for (const [button, input] of [['exportPick', 'exportFiles'], ['exportPickFolder', 'exportFolder']]) {
+  const picker = $<HTMLInputElement>(input);
+  $(button).addEventListener('click', () => picker.click());
+  picker.addEventListener('change', async () => {
+    const files = [...(picker.files ?? [])];
+    picker.value = '';
+    await checkExport(files);
+  });
+}
+$('exportZip').addEventListener('click', async () => {
+  const files = await Promise.all(safeImages.map(async (f) => ({ name: f.name, data: new Uint8Array(await f.arrayBuffer()) })));
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(zipStore(files) as BlobPart[], { type: 'application/zip' }));
+  a.download = 'safe-to-upload.zip';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  $('exportCheckNote').textContent += ' Unpack the zip, then upload the images inside it.';
 });
 
 // Stop a route where it stands. The ships looted so far are put away for good and the ones not reached

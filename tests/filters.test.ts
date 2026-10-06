@@ -683,3 +683,53 @@ describe('areas to export for the webmap', async () => {
     for (const a of areas) expect(Math.max(a.x1 - a.x0, a.z1 - a.z0)).toBeLessThanOrEqual(20000 + 400);
   });
 });
+
+describe('checking an export against the webmap', async () => {
+  const { exportImagePlace, wouldOverwrite } = await import('../src/export-areas');
+  const { crc32, zipStore } = await import('../src/zip');
+  type Area = { x0: number; z0: number; x1: number; z1: number };
+  const webmap = (cells: [number, number][]) => ({
+    eachMapped(a: Area, visit: (x: number, z: number) => boolean | void) {
+      for (const [x, z] of cells) if (x >= a.x0 && x < a.x1 && z >= a.z0 && z < a.z1 && visit(x, z)) return;
+    },
+  });
+  /** A 64 by 64 image at 1,024, 2,048, explored (grey) in its left half and black in its right. */
+  const image = () => {
+    const data = new Uint8Array(64 * 64 * 4);
+    for (let z = 0; z < 64; z++) for (let x = 0; x < 32; x++) data.set([120, 120, 120, 255], (z * 64 + x) * 4);
+    return { x0: 1024, z0: 2048, width: 64, height: 64, data };
+  };
+
+  it('reads where an image sits from its name', () => {
+    expect(exportImagePlace('3_1_x-3184_z8816.png')).toEqual({ x0: -3184, z0: 8816 });
+    expect(exportImagePlace('notes.png')).toBeNull();
+  });
+
+  it('is safe where the webmap has nothing, or only what the image also has', () => {
+    expect(wouldOverwrite(image(), webmap([]))).toBe(false);
+    expect(wouldOverwrite(image(), webmap([[1024 + 8, 2048 + 8]]))).toBe(false);
+    // Terrain beside the image, not in it.
+    expect(wouldOverwrite(image(), webmap([[1024 + 64 + 8, 2048 + 8]]))).toBe(false);
+  });
+
+  it('would overwrite where the image is black and the webmap is not', () => {
+    expect(wouldOverwrite(image(), webmap([[1024 + 40, 2048 + 8]]))).toBe(true);
+  });
+
+  it('bundles files into a zip that lists them all', () => {
+    expect(crc32(new TextEncoder().encode('hello'))).toBe(0x3610a686);
+    const bytes = zipStore([
+      { name: 'a.png', data: new Uint8Array([1, 2, 3]) },
+      { name: 'b.png', data: new Uint8Array([4, 5]) },
+    ]);
+    const all = new Uint8Array(bytes.reduce((n, b) => n + b.length, 0));
+    bytes.reduce((at, b) => (all.set(b, at), at + b.length), 0);
+    const view = new DataView(all.buffer);
+    expect(view.getUint32(0, true)).toBe(0x04034b50);
+    const end = all.length - 22;
+    expect(view.getUint32(end, true)).toBe(0x06054b50);
+    expect(view.getUint16(end + 10, true)).toBe(2);
+    // The list of files starts where the end record says it does.
+    expect(view.getUint32(view.getUint32(end + 16, true), true)).toBe(0x02014b50);
+  });
+});

@@ -140,6 +140,9 @@ details.action > summary:hover { color: var(--text); background: color-mix(in sr
 #webmapAreas li span { margin-right: 6px; }
 #webmapAreas .chat { padding: 0 4px; margin-left: 4px; font-size: 11px; color: var(--muted); background: none; }
 #webmapAreas .chat:hover { color: var(--text); }
+#exportCheckList { margin: 0; padding-left: 18px; font-variant-numeric: tabular-nums; }
+#exportCheckList:empty, #exportCheckNote:empty { display: none; }
+#exportZip { align-self: flex-start; }
 /* Not a section: a note that unfolds its reasons. */
 #possibleWhy, #possibleWhy[open] { border: 0; padding: 0; }
 #possibleWhy > summary, #possibleWhy > summary:hover { color: var(--muted); font-size: 12px; font-weight: 400; }

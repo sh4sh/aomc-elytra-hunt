@@ -109,3 +109,40 @@ export function exportAreas(path: Point[], mapped: MappedLookup | null): { areas
   if (group.length) areas.push(around(group));
   return { areas, leftOut: Math.round(leftOut) };
 }
+
+/** An exported image: where its top-left pixel is in the world, and its pixels as RGBA, a block to a pixel. */
+export interface ExportImage {
+  x0: number;
+  z0: number;
+  width: number;
+  height: number;
+  data: Uint8Array | Uint8ClampedArray;
+}
+
+/** Where an export image sits, read from the name Xaero gives it ("3_1_x-3184_z8816.png"), or null for any other file. */
+export function exportImagePlace(name: string): { x0: number; z0: number } | null {
+  const m = name.match(/_x(-?\d+)_z(-?\d+)\.png$/i);
+  return m ? { x0: Number(m[1]), z0: Number(m[2]) } : null;
+}
+
+/**
+ * Whether uploading this image would blank out terrain the webmap has: true if it is black (unexplored)
+ * anywhere the webmap is mapped. The webmap is known in 16-block cells, and a cell with any black in
+ * it counts, which errs towards leaving an image out.
+ */
+export function wouldOverwrite(image: ExportImage, mapped: MappedLookup): boolean {
+  let hit = false;
+  const area = { x0: image.x0, z0: image.z0, x1: image.x0 + image.width, z1: image.z0 + image.height };
+  mapped.eachMapped(area, (cx, cz) => {
+    // The cell this spot is the middle of, clipped to the image.
+    const [left, top] = [Math.floor(cx / 16) * 16 - image.x0, Math.floor(cz / 16) * 16 - image.z0];
+    for (let z = Math.max(0, top); z < Math.min(image.height, top + 16); z++) {
+      for (let x = Math.max(0, left); x < Math.min(image.width, left + 16); x++) {
+        const i = (z * image.width + x) * 4;
+        if (!image.data[i] && !image.data[i + 1] && !image.data[i + 2]) return (hit = true);
+      }
+    }
+    return false;
+  });
+  return hit;
+}

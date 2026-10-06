@@ -147,7 +147,10 @@ end. Ships within 1,000 blocks of it count as possibly looted.
   so the areas are cut to avoid terrain the webmap already has; a stretch that
   crosses someone else's trail is left out. They are worked out from the
   app's hourly copy of the webmap, so check the webmap itself before
-  exporting.
+  exporting. **Check exported images** then reads the images of an export
+  (they are not changed or sent anywhere) and lists any that are black where
+  the webmap has terrain, to leave out when uploading; the safe ones can be
+  downloaded together as a zip.
 - **Webmap:** areas on the [community webmap](https://map.diorite.xyz/?dim=the_end)
   are left out of the routes once the app's copy of it refreshes (hourly).
 - **Looted list:** **Submit looted for everyone** sends your marks for review;
