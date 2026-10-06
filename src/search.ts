@@ -425,6 +425,7 @@ export function showPosition(pos: { x: number; z: number }): void {
 export function showNearPlaceholders(): void {
   nearX.placeholder = `x: ${session.viewCentre.x}`;
   nearZ.placeholder = `z: ${session.viewCentre.z}`;
+  showNearLabel();
 }
 /** "Clear position" is offered whenever there is one to clear: a marker on the map, or coordinates in the boxes. */
 export function showClearPosition(): void {
@@ -509,14 +510,17 @@ function searchAround(pos: { x: number; z: number }): void {
 
 // The main search button: the band around End Spawn, as set under Settings. Its label says how
 // far out that is, since the default leaves out the picked-over first 10,000 blocks.
-/** Under "Search near me": where its search is centred while one is showing, or what it will ask for. */
+/**
+ * Under "Search near me": where pressing Search would look. That is the coordinates in the boxes, or,
+ * while they are empty, the map's crosshair, followed as the map moves.
+ */
 function showNearLabel(): void {
   const empty = nearX.value.trim() === '' && nearZ.value.trim() === '';
-  const text = session.searchCentre
-    ? `around x: ${session.searchCentre.x}, z: ${session.searchCentre.z}`
-    : empty
-      ? "around the map's centre"
-      : 'around your coordinates';
+  const [x, z] = empty ? [session.viewCentre.x, session.viewCentre.z] : [Number(nearX.value), Number(nearZ.value)];
+  const known = empty || (nearX.value.trim() !== '' && nearZ.value.trim() !== '' && Number.isFinite(x) && Number.isFinite(z));
+  const text = known ? `around x: ${Math.round(x)}, z: ${Math.round(z)}` : 'around your coordinates';
+  // Called on every move of the map: only touch the page when the words change.
+  if (nearToggle.querySelector('small')?.textContent === text) return;
   nearToggle.replaceChildren('Search near me', Object.assign(document.createElement('small'), { textContent: text }));
 }
 /** Mark which of the two search buttons has its search showing. */
