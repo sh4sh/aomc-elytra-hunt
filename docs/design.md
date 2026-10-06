@@ -69,6 +69,10 @@ in the same change, so there is still only one way to do each thing.
   that the app cannot fully take back, or that reaches outside it (resetting
   looted marks, deleting a custom route, ending a route, changing the seed,
   sending something in), asks first and has no undo.
+- **Controls do not vanish when pressed.** A control with nothing to do just
+  now stays in place, faded or reworded as a note of the state it left
+  ("Following the crosshair"), so nobody wonders where it went. Hide a control
+  only when it can never apply (as on a custom route).
 - **One way to do each thing.** If a new control repeats an existing one,
   remove the old one or do not add the new one.
 - **Rare settings** go under Advanced. Tools for working on the app go under

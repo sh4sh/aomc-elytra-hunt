@@ -429,8 +429,12 @@ export function showNearPlaceholders(): void {
 }
 /** "Clear position" is offered whenever there is one to clear: a marker on the map, or coordinates in the boxes. */
 export function showClearPosition(): void {
-  // And "Use crosshair" whenever the boxes hold coordinates to let go of.
-  $('useCrosshair').hidden = nearX.value.trim() === '' && nearZ.value.trim() === '';
+  // "Use crosshair" lets go of coordinates in the boxes. With none there it stays, as a note that the
+  // crosshair is what a search will use, so pressing it never makes it vanish.
+  const following = nearX.value.trim() === '' && nearZ.value.trim() === '';
+  const useCrosshair = $<HTMLButtonElement>('useCrosshair');
+  useCrosshair.disabled = following;
+  useCrosshair.textContent = following ? 'Following the crosshair' : 'Use crosshair';
   $('mapReset').hidden = !session.you && !session.pin && nearX.value.trim() === '' && nearZ.value.trim() === '';
   // The line under "Search near me" says where it would look, which follows the boxes too.
   showNearLabel();
