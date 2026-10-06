@@ -183,7 +183,7 @@ export function renderWebmapExport(): void {
   $('webmapCorners').replaceChildren(...(area ? [row('A', area.x0, area.z0), row('B', area.x1 - 1, area.z1 - 1)] : []));
   $('webmapCornersNote').textContent = area
     ? 'The corners take in the ships you have looted so far on this route.'
-    : 'The two corners appear once you have looted a ship on this route: they take in the ships looted so far.';
+    : 'Mark a ship as looted first: the two corners take in the ships you have looted on this route.';
 }
 $('webmapExport').addEventListener('toggle', () => {
   if ($<HTMLDetailsElement>('webmapExport').open) renderWebmapExport();
