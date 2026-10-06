@@ -4,7 +4,7 @@
 import { BEYOND_BLOCKS, MAPPED_NOTE, RENUMBERED_NOTE } from './constants';
 import { $, download, fmt } from './dom';
 import type { FoundCity } from './generation/worker';
-import { exportAreas, exportImagePlace, wouldOverwrite } from './export-areas';
+import { exportArea } from './export-areas';
 import { chatLine, cleanUsername } from './journeymap';
 import { rebuildKeeping } from './map-actions';
 import { render, renderDetail } from './render';
@@ -14,7 +14,6 @@ import { DEFAULT_SEED, onUsername, type RouteEdit, save, type Saved, setUsername
 import { initSubmissions } from './submissions';
 import { type City, cityId } from './types';
 import { batchColor, shareLine, waypointFile, waypointLines, waypointName } from './xaero';
-import { zipStore } from './zip';
 
 // ---------- export ----------
 
@@ -150,16 +149,16 @@ $('customDelete').addEventListener('click', () => {
 
 // ---------- export for the webmap ----------
 
-// The areas to export from Xaero's World Map for the ships looted on the open route, each given as two
-// corners. A corner can be copied as a waypoint, the same way a ship is, so that it shows on Xaero's map
-// to select between. Worked out only while the section is open.
+// The area to export from Xaero's World Map for the ships looted on the open route, given as two
+// corners. Xaero shows no coordinates while an area is being selected, so each corner can be copied as
+// a waypoint, the same way a ship is, to show on its map. Worked out only while the section is open.
 export function renderWebmapExport(): void {
   const i = session.selected;
   if (i === null) return;
   // The path flown: the route's looted ships, in the order of the route.
-  const flown = session.batches[i].filter((c) => session.tracker.has(c));
-  const { areas, leftOut } = exportAreas(flown, session.explored);
-  const corner = (n: number, letter: 'A' | 'B', x: number, z: number): HTMLButtonElement => {
+  const area = exportArea(session.batches[i].filter((c) => session.tracker.has(c)));
+  if (!area) return;
+  const corner = (letter: 'A' | 'B', x: number, z: number): HTMLButtonElement => {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'chat';
@@ -167,102 +166,23 @@ export function renderWebmapExport(): void {
     btn.title = `Copy corner ${letter} as a chat line: paste it into Minecraft chat to make its waypoint`;
     btn.addEventListener('click', async () => {
       const at: City = { x, z, source: 'seed' };
-      const name = `Export ${n}${letter}`;
+      const name = `Export ${letter}`;
       const line = state.mapMod === 'xaero' ? shareLine(at, name, letter, 15, state.chatName) : chatLine(at, name, state.chatName);
       btn.textContent = (await copyText(line)) ? 'copied' : 'copy failed';
       setTimeout(() => (btn.textContent = `copy ${letter}`), 1500);
     });
     return btn;
   };
-  $('webmapAreas').replaceChildren(
-    ...areas.map((a, k) => {
-      const li = document.createElement('li');
-      // The far corner is the last block inside the area, so both corners can be stood on.
-      const text = Object.assign(document.createElement('span'), {
-        textContent: `${areas.length > 1 ? `Area ${k + 1}: ` : ''}A x: ${a.x0}, z: ${a.z0} · B x: ${a.x1 - 1}, z: ${a.z1 - 1}`,
-      });
-      li.append(text, corner(k + 1, 'A', a.x0, a.z0), corner(k + 1, 'B', a.x1 - 1, a.z1 - 1));
-      return li;
-    }),
+  // The far corner is the last block inside the area, so both corners can be stood on.
+  $('webmapArea').replaceChildren(
+    `A x: ${area.x0}, z: ${area.z0} `,
+    corner('A', area.x0, area.z0),
+    ` · B x: ${area.x1 - 1}, z: ${area.z1 - 1} `,
+    corner('B', area.x1 - 1, area.z1 - 1),
   );
-  const checked = session.explored ? new Date(session.explored.fetchedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '';
-  $('webmapAreasNote').textContent = [
-    areas.length ? '' : 'Nothing here can be exported without blanking out terrain the webmap already has.',
-    leftOut ? `About ${fmt(Math.round(leftOut / 100) * 100)} blocks of the flight are left out: they cross terrain already on the webmap, which an export would blank out.` : '',
-    session.explored ? `Checked against the webmap as of ${checked}. If the webmap shows newer terrain in an area, skip that area.` : 'The webmap could not be checked, so look at it before exporting: an export blanks out whatever it covers.',
-  ]
-    .filter(Boolean)
-    .join(' ');
 }
 $('webmapExport').addEventListener('toggle', () => {
   if ($<HTMLDetailsElement>('webmapExport').open) renderWebmapExport();
-});
-
-// Checking an export before it is uploaded. The images are read in the browser and nothing else: no
-// file is changed and nothing is sent. Those that are black where the webmap has terrain would blank
-// it out, so they are listed to be left out; the rest can be taken away together as a zip.
-/** The images of the export last checked that are safe to upload. */
-let safeImages: File[] = [];
-async function checkExport(files: File[]): Promise<void> {
-  const note = $('exportCheckNote');
-  const list = $('exportCheckList');
-  const zip = $<HTMLButtonElement>('exportZip');
-  list.replaceChildren();
-  zip.hidden = true;
-  safeImages = [];
-  const images = files.filter((f) => exportImagePlace(f.name));
-  if (!images.length) {
-    note.textContent = files.length ? 'None of these are images from a Xaero export: their names end like "_x-3184_z8816.png".' : '';
-    return;
-  }
-  const mapped = session.explored;
-  if (!mapped) {
-    note.textContent = 'The webmap could not be checked just now, so these images cannot be either.';
-    return;
-  }
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
-  const unsafe: File[] = [];
-  for (const [k, file] of images.entries()) {
-    if (k % 10 === 0) note.textContent = `Checking ${k + 1} of ${images.length}…`;
-    try {
-      const picture = await createImageBitmap(file);
-      [canvas.width, canvas.height] = [picture.width, picture.height];
-      ctx.drawImage(picture, 0, 0);
-      picture.close();
-      const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const image = { ...exportImagePlace(file.name)!, width: canvas.width, height: canvas.height, data };
-      (wouldOverwrite(image, mapped) ? unsafe : safeImages).push(file);
-    } catch {
-      // An image that cannot be read is not vouched for.
-      unsafe.push(file);
-    }
-  }
-  note.textContent = unsafe.length
-    ? `${fmt(images.length)} images checked. Leave ${unsafe.length === 1 ? 'this one' : `these ${fmt(unsafe.length)}`} out when you upload: ${unsafe.length === 1 ? 'it' : 'they'} would blank out terrain already on the webmap.`
-    : `${fmt(images.length)} images checked. All are safe to upload.`;
-  list.replaceChildren(...unsafe.map((f) => Object.assign(document.createElement('li'), { textContent: f.name })));
-  // Worth a zip only when there are some to leave out and some to keep.
-  zip.hidden = !unsafe.length || !safeImages.length;
-  zip.textContent = `Download the ${fmt(safeImages.length)} safe images as a zip`;
-}
-for (const [button, input] of [['exportPick', 'exportFiles'], ['exportPickFolder', 'exportFolder']]) {
-  const picker = $<HTMLInputElement>(input);
-  $(button).addEventListener('click', () => picker.click());
-  picker.addEventListener('change', async () => {
-    const files = [...(picker.files ?? [])];
-    picker.value = '';
-    await checkExport(files);
-  });
-}
-$('exportZip').addEventListener('click', async () => {
-  const files = await Promise.all(safeImages.map(async (f) => ({ name: f.name, data: new Uint8Array(await f.arrayBuffer()) })));
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob(zipStore(files) as BlobPart[], { type: 'application/zip' }));
-  a.download = 'safe-to-upload.zip';
-  a.click();
-  URL.revokeObjectURL(a.href);
-  $('exportCheckNote').textContent += ' Unpack the zip, then upload the images inside it.';
 });
 
 // Stop a route where it stands. The ships looted so far are put away for good and the ones not reached

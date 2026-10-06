@@ -623,113 +623,22 @@ describe('survey of the cities near End Spawn', async () => {
   });
 });
 
-describe('areas to export for the webmap', async () => {
-  const { exportAreas } = await import('../src/export-areas');
-  type Area = { x0: number; z0: number; x1: number; z1: number };
-  /** A webmap with terrain in the given 16-block cells. */
-  const webmap = (cells: [number, number][]) => ({
-    eachMapped(a: Area, visit: (x: number, z: number) => boolean | void) {
-      for (const [x, z] of cells) if (x >= a.x0 && x < a.x1 && z >= a.z0 && z < a.z1 && visit(x, z)) return;
-    },
-  });
-  const within = (a: Area, x: number, z: number) => x >= a.x0 && x < a.x1 && z >= a.z0 && z < a.z1;
-  const fromPath = (path: { x: number; z: number }[], x: number, z: number) =>
-    Math.min(
-      ...path.slice(1).map((b, k) => {
-        const a = path[k];
-        const [dx, dz] = [b.x - a.x, b.z - a.z];
-        const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.z) * dz) / (dx * dx + dz * dz)));
-        return Math.hypot(x - (a.x + t * dx), z - (a.z + t * dz));
-      }),
-    );
+describe('area to export for the webmap', async () => {
+  const { exportArea } = await import('../src/export-areas');
 
-  it('is one rectangle around the path, with room for what was explored, when the webmap has nothing there', () => {
-    const { areas, leftOut } = exportAreas([{ x: 1000, z: 1000 }, { x: 5000, z: 1000 }, { x: 5000, z: 4000 }], webmap([]));
-    expect(leftOut).toBe(0);
-    expect(areas).toHaveLength(1);
-    expect(areas[0].x0).toBeLessThanOrEqual(1000 - 168);
-    expect(areas[0].x1).toBeGreaterThanOrEqual(5000 + 168);
-    expect(areas[0].z1).toBeGreaterThanOrEqual(4000 + 168);
-    expect(areas[0].x0 % 16).toBe(0);
+  it('is one rectangle around the path, with room for what was explored either side', () => {
+    const area = exportArea([{ x: 1000, z: 1000 }, { x: 5000, z: 1000 }, { x: 5000, z: 4000 }])!;
+    expect(area.x0).toBeLessThanOrEqual(1000 - 168);
+    expect(area.z0).toBeLessThanOrEqual(1000 - 168);
+    expect(area.x1).toBeGreaterThanOrEqual(5000 + 168);
+    expect(area.z1).toBeGreaterThanOrEqual(4000 + 168);
+    // On chunk boundaries, as Xaero's exports are.
+    for (const v of Object.values(area)) expect(Math.abs(v % 16)).toBe(0);
   });
 
-  it('splits round terrain the webmap already has, so that none of it is exported blank', () => {
-    // An L-shaped path, with someone else's terrain in the corner of the L's rectangle that the path never goes near.
-    const path = [{ x: 1000, z: 1000 }, { x: 5000, z: 1000 }, { x: 5000, z: 5000 }];
-    const cells: [number, number][] = [];
-    for (let x = 1500; x < 2500; x += 16) for (let z = 3500; z < 4500; z += 16) cells.push([x + 8, z + 8]);
-    const { areas, leftOut } = exportAreas(path, webmap(cells));
-    expect(leftOut).toBe(0);
-    expect(areas.length).toBeGreaterThan(1);
-    for (const [x, z] of cells) expect(areas.some((a) => within(a, x, z))).toBe(false);
-  });
-
-  it('leaves out the stretch that crosses another trail, and exports the rest', () => {
-    const path = [{ x: 0, z: 0 }, { x: 8000, z: 0 }];
-    // A trail 320 blocks wide running north to south across the path at x = 4000.
-    const cells: [number, number][] = [];
-    for (let x = 3840; x < 4160; x += 16) for (let z = -3000; z < 3000; z += 16) cells.push([x + 8, z + 8]);
-    const { areas, leftOut } = exportAreas(path, webmap(cells));
-    expect(leftOut).toBeGreaterThan(0);
-    expect(leftOut).toBeLessThan(2000);
-    expect(areas.length).toBe(2);
-    // Whatever of the trail falls inside an exported rectangle is under the path, where the export has terrain of its own.
-    for (const [x, z] of cells) if (areas.some((a) => within(a, x, z))) expect(fromPath(path, x, z)).toBeLessThanOrEqual(144);
-  });
-
-  it('keeps an export to a size Xaero can write', () => {
-    const { areas } = exportAreas([{ x: 0, z: 0 }, { x: 20000, z: 0 }, { x: 40000, z: 300 }], webmap([]));
-    expect(areas.length).toBeGreaterThan(1);
-    for (const a of areas) expect(Math.max(a.x1 - a.x0, a.z1 - a.z0)).toBeLessThanOrEqual(20000 + 400);
-  });
-});
-
-describe('checking an export against the webmap', async () => {
-  const { exportImagePlace, wouldOverwrite } = await import('../src/export-areas');
-  const { crc32, zipStore } = await import('../src/zip');
-  type Area = { x0: number; z0: number; x1: number; z1: number };
-  const webmap = (cells: [number, number][]) => ({
-    eachMapped(a: Area, visit: (x: number, z: number) => boolean | void) {
-      for (const [x, z] of cells) if (x >= a.x0 && x < a.x1 && z >= a.z0 && z < a.z1 && visit(x, z)) return;
-    },
-  });
-  /** A 64 by 64 image at 1,024, 2,048, explored (grey) in its left half and black in its right. */
-  const image = () => {
-    const data = new Uint8Array(64 * 64 * 4);
-    for (let z = 0; z < 64; z++) for (let x = 0; x < 32; x++) data.set([120, 120, 120, 255], (z * 64 + x) * 4);
-    return { x0: 1024, z0: 2048, width: 64, height: 64, data };
-  };
-
-  it('reads where an image sits from its name', () => {
-    expect(exportImagePlace('3_1_x-3184_z8816.png')).toEqual({ x0: -3184, z0: 8816 });
-    expect(exportImagePlace('notes.png')).toBeNull();
-  });
-
-  it('is safe where the webmap has nothing, or only what the image also has', () => {
-    expect(wouldOverwrite(image(), webmap([]))).toBe(false);
-    expect(wouldOverwrite(image(), webmap([[1024 + 8, 2048 + 8]]))).toBe(false);
-    // Terrain beside the image, not in it.
-    expect(wouldOverwrite(image(), webmap([[1024 + 64 + 8, 2048 + 8]]))).toBe(false);
-  });
-
-  it('would overwrite where the image is black and the webmap is not', () => {
-    expect(wouldOverwrite(image(), webmap([[1024 + 40, 2048 + 8]]))).toBe(true);
-  });
-
-  it('bundles files into a zip that lists them all', () => {
-    expect(crc32(new TextEncoder().encode('hello'))).toBe(0x3610a686);
-    const bytes = zipStore([
-      { name: 'a.png', data: new Uint8Array([1, 2, 3]) },
-      { name: 'b.png', data: new Uint8Array([4, 5]) },
-    ]);
-    const all = new Uint8Array(bytes.reduce((n, b) => n + b.length, 0));
-    bytes.reduce((at, b) => (all.set(b, at), at + b.length), 0);
-    const view = new DataView(all.buffer);
-    expect(view.getUint32(0, true)).toBe(0x04034b50);
-    const end = all.length - 22;
-    expect(view.getUint32(end, true)).toBe(0x06054b50);
-    expect(view.getUint16(end + 10, true)).toBe(2);
-    // The list of files starts where the end record says it does.
-    expect(view.getUint32(view.getUint32(end + 16, true), true)).toBe(0x02014b50);
+  it('covers a single ship, and has nothing to say without one', () => {
+    const area = exportArea([{ x: -3000, z: 8 }])!;
+    expect(area.x1 - area.x0).toBeGreaterThanOrEqual(2 * 168);
+    expect(exportArea([])).toBeNull();
   });
 });
