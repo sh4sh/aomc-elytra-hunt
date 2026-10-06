@@ -181,6 +181,8 @@ export function renderWebmapExport(): void {
   };
   // The far corner is the last block inside the area, so both corners can be stood on.
   $('webmapCorners').replaceChildren(...(area ? [row('A', area.x0, area.z0), row('B', area.x1 - 1, area.z1 - 1)] : []));
+  // The steps are only worth reading once there is something to export.
+  $('webmapSteps').hidden = !area;
   $('webmapCornersNote').textContent = area
     ? 'The corners take in the ships you have looted so far on this route.'
     : 'Mark a ship as looted first.';

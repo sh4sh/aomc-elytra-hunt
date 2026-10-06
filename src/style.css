@@ -137,7 +137,7 @@ details.action > summary { padding: 8px 10px; border: 1px solid var(--accent); b
 details.action > summary:hover { color: var(--text); background: color-mix(in srgb, var(--accent) 24%, var(--panel)); }
 /* The corners of the area to export for the webmap, laid out like rows of the ship list. */
 #webmapCorners { margin: 0; padding: 2px 0; list-style: none; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-#webmapCorners:empty { display: none; }
+#webmapCorners:empty, #webmapSteps[hidden] { display: none; }
 #webmapCorners li { display: flex; align-items: center; gap: 6px; padding: 4px 6px; color: var(--text); font-size: 13px; font-variant-numeric: tabular-nums; }
 /* Not a section: a note that unfolds its reasons. */
 #possibleWhy, #possibleWhy[open] { border: 0; padding: 0; }
