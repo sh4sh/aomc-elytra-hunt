@@ -428,7 +428,11 @@ export function showNearPlaceholders(): void {
 }
 /** "Clear position" is offered whenever there is one to clear: a marker on the map, or coordinates in the boxes. */
 export function showClearPosition(): void {
+  // And "Use crosshair" whenever the boxes hold coordinates to let go of.
+  $('useCrosshair').hidden = nearX.value.trim() === '' && nearZ.value.trim() === '';
   $('mapReset').hidden = !session.you && !session.pin && nearX.value.trim() === '' && nearZ.value.trim() === '';
+  // The line under "Search near me" says where it would look, which follows the boxes too.
+  showNearLabel();
 }
 /** Put a position in those boxes, to stay there until the player changes it. */
 export function setNear(pos: { x: number; z: number }): void {
@@ -577,6 +581,16 @@ $('showOnMap').addEventListener('click', () => {
   mapNote.textContent = '';
   renderMap();
   map.goTo(pos.x, pos.z);
+});
+
+// Let go of the coordinates in the boxes, so a search follows the map's crosshair again. Nothing else
+// changes: the map stays where it is and the markers stay on it.
+$('useCrosshair').addEventListener('click', () => {
+  nearX.value = '';
+  nearZ.value = '';
+  nearX.setCustomValidity('');
+  showClearPosition();
+  showNearLabel();
 });
 
 // Clear the boxes and the markers a search or Show on map leaves, and put the view back at End Spawn.

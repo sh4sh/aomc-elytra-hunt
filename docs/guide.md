@@ -13,7 +13,8 @@ Everything the app can do, in more detail than the quick start.
   is; the boxes show that position in grey. Afterwards the place searched
   stays in the boxes, and a number appears under them: how far around it
   looked, which you can change. **Show on map** moves the map to the
-  coordinates without searching. **Clear position**, under the two buttons
+  coordinates without searching. **Use crosshair** empties the boxes without
+  moving the map, so the next search is wherever you are looking. **Clear position**, under the two buttons
   whenever there is a position to clear, empties the boxes, clears the markers
   and returns the map to End Spawn.
 - **Back to last search** returns to what you had before.
