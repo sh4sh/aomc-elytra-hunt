@@ -135,10 +135,10 @@ details.fold { border-top: 0; padding-top: 0; }
 /* A section that is its panel's main action: its title is that panel's main button, outlined the same way. */
 details.action > summary { padding: 8px 10px; border: 1px solid var(--accent); border-radius: 6px; background: color-mix(in srgb, var(--accent) 14%, var(--panel)); }
 details.action > summary:hover { color: var(--text); background: color-mix(in srgb, var(--accent) 24%, var(--panel)); }
-/* The area to export for the webmap: its two corners, each with a button to copy it as a waypoint. */
-#webmapArea { color: var(--text); font-variant-numeric: tabular-nums; }
-#webmapArea .chat { padding: 0 4px; font-size: 11px; color: var(--muted); background: none; }
-#webmapArea .chat:hover { color: var(--text); }
+/* The corners of the area to export for the webmap, laid out like rows of the ship list. */
+#webmapCorners { margin: 0; padding: 2px 0; list-style: none; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+#webmapCorners:empty { display: none; }
+#webmapCorners li { display: flex; align-items: center; gap: 6px; padding: 4px 6px; color: var(--text); font-size: 13px; font-variant-numeric: tabular-nums; }
 /* Not a section: a note that unfolds its reasons. */
 #possibleWhy, #possibleWhy[open] { border: 0; padding: 0; }
 #possibleWhy > summary, #possibleWhy > summary:hover { color: var(--muted); font-size: 12px; font-weight: 400; }
@@ -224,17 +224,17 @@ ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: col
 /* Where a dragged city would land. */
 #cities li.drop-before { box-shadow: 0 -2px 0 var(--accent); }
 #cities li.drop-after { box-shadow: 0 2px 0 var(--accent); }
-#cities .n { width: 1.6em; text-align: right; color: var(--muted); }
-#cities .xz { flex: 1; min-width: 0; }
+#cities .n, #webmapCorners .n { width: 1.6em; text-align: right; color: var(--muted); }
+#cities .xz, #webmapCorners .xz { flex: 1; min-width: 0; }
 #cities .xz span { white-space: nowrap; }
 #cities .hop[hidden] { display: none; }
-#cities .chat { flex: none; padding: 0 4px; font-size: 11px; color: var(--muted); background: none; }
+#cities .chat, #webmapCorners .chat { flex: none; padding: 0 4px; font-size: 11px; color: var(--muted); background: none; }
 /* In a narrow panel the distance from the last city gives way first, so the coordinates keep their line. */
 #cities { container-type: inline-size; scrollbar-width: thin; }
 @container (max-width: 300px) {
   #cities .hop:not(.start) { display: none; }
 }
-#cities .chat:hover { color: var(--text); }
+#cities .chat:hover, #webmapCorners .chat:hover { color: var(--text); }
 /* Already copied this visit: stays in the accent colour, to show how far down the list you are. */
 #cities .chat.was-copied { color: var(--accent); border-color: var(--accent); }
 #cities .chat.flash { animation: chat-flash 1.5s ease-out; }

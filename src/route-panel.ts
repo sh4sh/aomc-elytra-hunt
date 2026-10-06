@@ -157,29 +157,33 @@ export function renderWebmapExport(): void {
   if (i === null) return;
   // The path flown: the route's looted ships, in the order of the route.
   const area = exportArea(session.batches[i].filter((c) => session.tracker.has(c)));
-  if (!area) return;
-  const corner = (letter: 'A' | 'B', x: number, z: number): HTMLButtonElement => {
+  // Laid out like the rows of the ship list: a letter, the coordinates, and a button that copies the waypoint.
+  const row = (letter: 'A' | 'B', x: number, z: number): HTMLLIElement => {
+    const li = document.createElement('li');
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'chat';
-    btn.textContent = `copy ${letter}`;
+    btn.textContent = 'copy';
     btn.title = `Copy corner ${letter} as a chat line: paste it into Minecraft chat to make its waypoint`;
     btn.addEventListener('click', async () => {
       const at: City = { x, z, source: 'seed' };
       const name = `Export ${letter}`;
       const line = state.mapMod === 'xaero' ? shareLine(at, name, letter, 15, state.chatName) : chatLine(at, name, state.chatName);
       btn.textContent = (await copyText(line)) ? 'copied' : 'copy failed';
-      setTimeout(() => (btn.textContent = `copy ${letter}`), 1500);
+      setTimeout(() => (btn.textContent = 'copy'), 1500);
     });
-    return btn;
+    li.append(
+      Object.assign(document.createElement('span'), { className: 'n', textContent: letter }),
+      Object.assign(document.createElement('span'), { className: 'xz', textContent: `x: ${x}, z: ${z}` }),
+      btn,
+    );
+    return li;
   };
   // The far corner is the last block inside the area, so both corners can be stood on.
-  $('webmapArea').replaceChildren(
-    `A x: ${area.x0}, z: ${area.z0} `,
-    corner('A', area.x0, area.z0),
-    ` · B x: ${area.x1 - 1}, z: ${area.z1 - 1} `,
-    corner('B', area.x1 - 1, area.z1 - 1),
-  );
+  $('webmapCorners').replaceChildren(...(area ? [row('A', area.x0, area.z0), row('B', area.x1 - 1, area.z1 - 1)] : []));
+  $('webmapCornersNote').textContent = area
+    ? 'The corners take in the ships you have looted so far on this route.'
+    : 'The two corners appear once you have looted a ship on this route: they take in the ships looted so far.';
 }
 $('webmapExport').addEventListener('toggle', () => {
   if ($<HTMLDetailsElement>('webmapExport').open) renderWebmapExport();

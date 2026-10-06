@@ -319,10 +319,11 @@ export function renderDetail(): void {
   const complete = batch.length > 0 && batch.every((c) => session.tracker.has(c));
   $('routeDone').hidden = !complete;
   $('exportBox').hidden = complete;
-  // What was flown can go on the webmap once there is some of it, for the server's world.
+  // What was flown can go on the webmap at any point along a route, for the server's world. The section
+  // is always there; its corners fill in once a ship has been looted.
   const webmapExport = $<HTMLDetailsElement>('webmapExport');
-  webmapExport.hidden = looted(batch) === 0;
-  if (webmapExport.open && !webmapExport.hidden) renderWebmapExport();
+  webmapExport.hidden = false;
+  if (webmapExport.open) renderWebmapExport();
   // Which city the two buttons below act on: the first one not looted yet.
   const at = batch.findIndex((c) => !session.tracker.has(c));
   const currentCity = $('currentCity');
