@@ -144,7 +144,8 @@ end. Ships within 1,000 blocks of it count as possibly looted.
   what you explored to the webmap**, under its list of ships, gives the area to export
   from Xaero's World Map as two corners, A and B, that you can copy as
   waypoints: Xaero shows no coordinates while you select, so the waypoints
-  mark where to drag. The area need not be exact. Whatever you did not explore
+  mark where to drag. The area need not be exact. On Xaero's export
+  screen, set **Multiple Unscaled Images** to ON before confirming. Whatever you did not explore
   comes out black, and the webmap keeps what it already has there.
 - **Webmap:** areas on the [community webmap](https://map.diorite.xyz/?dim=the_end)
   are left out of the routes once the app's copy of it refreshes (hourly).
