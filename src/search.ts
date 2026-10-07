@@ -197,6 +197,7 @@ const nearToggle = $<HTMLButtonElement>('nearToggle');
 function showNearPanel(open: boolean): void {
   nearPanel.hidden = !open;
   nearToggle.setAttribute('aria-expanded', String(open));
+  showSearchChoice();
 }
 nearToggle.addEventListener('click', () => {
   showNearPanel(nearPanel.hidden);
@@ -537,10 +538,13 @@ function showNearLabel(): void {
   if (nearToggle.querySelector('small')?.textContent === text) return;
   nearToggle.replaceChildren('Search near me', Object.assign(document.createElement('small'), { textContent: text }));
 }
-/** Mark which of the two search buttons has its search showing. */
+/** Mark which of the two search buttons the player has picked. */
 function showSearchChoice(): void {
-  $('quickSpawn').classList.toggle('primary', !aroundMode());
-  nearToggle.classList.toggle('primary', aroundMode());
+  // "Search near me" is the one picked while its search is showing, and also from the moment its boxes
+  // are brought out, before anything has been searched: the mark follows the last button pressed.
+  const near = aroundMode() || !nearPanel.hidden;
+  $('quickSpawn').classList.toggle('primary', !near);
+  nearToggle.classList.toggle('primary', near);
   showNearLabel();
 }
 function showQuickSpawn(): void {
