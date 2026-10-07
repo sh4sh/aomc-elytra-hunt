@@ -428,30 +428,14 @@ export function showNearPlaceholders(): void {
   nearZ.placeholder = `z: ${session.viewCentre.z}`;
   showNearLabel();
 }
-/** The coordinates "Use crosshair" last emptied from the boxes, kept so that it can be undone. */
-let letGo: { x: number; z: number } | null = null;
 /** "Clear position" is offered whenever there is one to clear: a marker on the map, or coordinates in the boxes. */
 export function showClearPosition(): void {
-  // "Use crosshair" lets go of coordinates in the boxes. With none there it stays, as a note that the
-  // crosshair is what a search will use, so pressing it never makes it vanish.
-  const following = nearX.value.trim() === '' && nearZ.value.trim() === '';
-  const useCrosshair = $<HTMLButtonElement>('useCrosshair');
-  // While there are coordinates it let go of, pressing it again brings them back.
-  useCrosshair.disabled = following && !letGo;
-  useCrosshair.textContent = !following ? 'Use crosshair' : letGo ? 'Following the crosshair · undo' : 'Following the crosshair';
-  useCrosshair.title = !following
-    ? 'Empty the boxes, so the search goes back to wherever the middle of the map is. The map does not move'
-    : letGo
-      ? `Put x: ${letGo.x}, z: ${letGo.z} back in the boxes`
-      : 'With the boxes empty, a search looks wherever the middle of the map is';
   $('mapReset').hidden = !session.you && !session.pin && nearX.value.trim() === '' && nearZ.value.trim() === '';
   // The line under "Search near me" says where it would look, which follows the boxes too.
   showNearLabel();
 }
 /** Put a position in those boxes, to stay there until the player changes it. */
 export function setNear(pos: { x: number; z: number }): void {
-  // New coordinates in the boxes: there is nothing left for "Use crosshair" to undo.
-  letGo = null;
   showNearPanel(true);
   nearX.value = String(pos.x);
   nearZ.value = String(pos.z);
@@ -570,7 +554,6 @@ $('quickSpawn').addEventListener('click', () => {
 for (const el of [nearX, nearZ]) {
   el.addEventListener('input', () => {
     nearX.setCustomValidity('');
-    letGo = null;
     showClearPosition();
   });
 }
@@ -605,28 +588,20 @@ $('showOnMap').addEventListener('click', () => {
   map.goTo(pos.x, pos.z);
 });
 
-// Let go of the coordinates in the boxes, so a search follows the map's crosshair again. Nothing else
-// changes: the map stays where it is and the markers stay on it.
+// Take the middle of the map, where its crosshair is, as the player's position: the same as
+// right-clicking there and choosing "Set my position here".
 $('useCrosshair').addEventListener('click', () => {
-  if (nearX.value.trim() === '' && nearZ.value.trim() === '') {
-    // Already following: this press takes the last one back.
-    const back = letGo;
-    if (back) setNear(back);
-    return;
-  }
-  const [x, z] = [Number(nearX.value), Number(nearZ.value)];
-  letGo = nearX.value.trim() !== '' && nearZ.value.trim() !== '' && Number.isFinite(x) && Number.isFinite(z) ? { x: Math.round(x), z: Math.round(z) } : null;
-  nearX.value = '';
-  nearZ.value = '';
+  session.you = { ...session.viewCentre };
+  setNear(session.you);
   nearX.setCustomValidity('');
-  showClearPosition();
+  $('mapNote').textContent = '';
+  renderMap();
 });
 
 // Clear the boxes and the markers a search or Show on map leaves, and put the view back at End Spawn.
 $('mapReset').addEventListener('click', () => {
   session.you = null;
   session.pin = null;
-  letGo = null;
   nearX.value = '';
   nearZ.value = '';
   nearX.setCustomValidity('');
